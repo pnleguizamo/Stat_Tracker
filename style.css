@@ -1,0 +1,68 @@
+header {
+    background-color: #333;
+    color: #fff;
+    padding: 10px 0;
+}
+
+footer {
+    padding: 10px 0; /* Adjust padding as needed */
+    background-color: #333; /* Dark background like the header */
+    color: #fff; /* White text */
+}
+
+footer a {
+    text-decoration: none;
+    color: #fff; /* White links */
+}
+
+footer a:hover {
+    color: #0dcaf0; /* Light blue hover color */
+}
+
+
+nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: center;
+}
+
+nav li {
+    margin: 0 20px;
+}
+
+nav a {
+    text-decoration: none;
+    color: #fff;
+}
+
+.custom-btn {
+    background-color: #1DB954 !important; /* Spotify green */
+    color: white !important;
+    border: 2px solid #1DB954 !important;
+    padding: 10px 20px;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.custom-btn:hover {
+    background-color: #1aa34a !important; /* Darker green on hover */
+    border-color: #1aa34a !important;
+}
+
+.custom-card {
+    width: 25rem; /* Adjust this value to change the card size */
+    margin: 0 auto; /* Center the card */
+  }
+  
+  .custom-card img {
+    height: 300px; /* Adjust the image height to fit the smaller card */
+    object-fit: cover; /* Ensure the image fits nicely */
+  }
+  
+  .card-body {
+    padding: 10px; /* Adjust padding if necessary */
+  }
+
+
+  
