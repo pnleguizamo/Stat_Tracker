@@ -95,5 +95,7 @@ nav a {
     border-color: #1ed760;
 }
 
+html {
+    scroll-behavior: smooth;
+}
 
-  
