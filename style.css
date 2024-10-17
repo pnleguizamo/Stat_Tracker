@@ -1,3 +1,17 @@
+body {
+    background: linear-gradient(135deg, #1db954 0%, #191414 100%);
+    color: #fff;
+}
+
+.card {
+    background-color: #222;
+}
+
+.card-body {
+    color: #fff;
+}
+
+
 header {
     background-color: #333;
     color: #fff;
@@ -63,6 +77,23 @@ nav a {
   .card-body {
     padding: 10px; /* Adjust padding if necessary */
   }
+  .card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.custom-btn {
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.custom-btn:hover {
+    background-color: #1ed760; /* Spotify green */
+    border-color: #1ed760;
+}
 
 
   
