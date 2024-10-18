@@ -13,7 +13,7 @@
     
     <link rel="stylesheet" href="./style.css">
 
-    <title>Recently Played</title>
+    <title>Top Tracks</title>
 </head>
 
 <body class = "py-4">
@@ -31,10 +31,10 @@
                             <a class="nav-link" href="./index.html">Top Albums</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link active" href="./recently_played.html">Recently Played</a>
+                            <a class="nav-link" href="./recently_played.html">Recently Played</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="./top_tracks.html">Top Tracks</a>
+                            <a class="nav-link active" href="./top_tracks.html">Top Tracks</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="./album.html">Top Artists</a>
@@ -55,23 +55,21 @@
                     <th scope="col">Album Cover Icon</th>
                     <th scope="col">Title</th>
                     <th scope="col">Artist</th>
-                    <th scope="col">Time Played</th>
                     <th scope="col">Spotify Link</th>
                     <!-- <th scope="col">Header</th> -->
                 </tr>
             </thead>
-            <tbody id = "recently_played_body">
+            <tbody id = "top_tracks_body">
                 
             </tbody>
         </table>
     </div>
     </main>
-    
     <script type="module">
         import { fetchJSON, populateTableBody } from './track_util.js';
 
-        const tbody = document.getElementById('recently_played_body');
-        populateTableBody(tbody, "recently_played", true);
+        const tbody = document.getElementById('top_tracks_body');
+        populateTableBody(tbody, "top_tracks", false);
     </script>
 </body>
 
