@@ -16,7 +16,8 @@ fetch("top_albums.json")
                     <h5 class="card-title"> ${track.name}</h5>
                     <p class="card-text"> Artist: ${track.artists[0].name}</p>
                     <p class="card-text"><i class="fas fa-compact-disc"></i> Album: ${track.name}</p>
-                    <a href="${track.external_urls.spotify}" class="btn custom-btn" target="_blank">Listen on Spotify</a>
+                    <a href="${track.external_urls.spotify}" target="_blank" class="btn btn-success custom-btn">
+            <i class="fab fa-spotify"></i> Listen on Spotify</a>
                 </div>
             </div>
         </div>
