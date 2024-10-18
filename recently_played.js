@@ -1,7 +1,7 @@
 function fetchJSON() {
     
     return new Promise((resolve, reject) => {
-        fetch("./data.json")
+        fetch("./recently_played.json")
             .then((response) => { return response.json() })
             .then((data) => {resolve(data)})
             .catch((error) => { 
@@ -13,11 +13,8 @@ function fetchJSON() {
 
 const tbody = document.getElementById('recently_played_body');
 
-
-
 async function main(){
     const data = await fetchJSON();
-    console.log("Branc");
     for (let row of data){
         const newRow = document.createElement('tr');
         const albumCover = document.createElement('td');

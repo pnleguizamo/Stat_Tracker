@@ -10,12 +10,40 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
         crossorigin="anonymous"></script>
-
+    
+    <link rel="stylesheet" href="./style.css">
 
     <title>Document</title>
 </head>
 
-<body>
+<body class = "py-4">
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">StatTracker</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="./index.html">Top Albums</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="./recently_played.html">Top Tracks</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="./album.html">Top Artists</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="./dashboard.html">Listening Trends</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
     <h2>Recently Listened</h2>
     <div class="table-responsive small">
         <table class="table table-striped table-sm">
@@ -30,31 +58,6 @@
                 </tr>
             </thead>
             <tbody id = "recently_played_body">
-                <!-- <tr>
-                    <td><img src="https://i.scdn.co/image/ab67616d0000b27333c6b920eabcf4c00d7a1093" alt="Image 1" width="50"></td>
-                    <td>random</td>
-                    <td>data</td>
-                </tr>
-                <tr>
-                    <td>1,002</td>
-                    <td>placeholder</td>
-                    <td>irrelevant</td>
-                </tr>
-                <tr>
-                    <td>1,003</td>
-                    <td>data</td>
-                    <td>rich</td>
-                </tr>
-                <tr>
-                    <td>1,003</td>
-                    <td>information</td>
-                    <td>placeholder</td>
-                </tr>
-                <tr>
-                    <td>1,004</td>
-                    <td>text</td>
-                    <td>random</td>
-                </tr> -->
                 
             </tbody>
         </table>
