@@ -1,6 +1,6 @@
 import { fetchJSON } from "./track_util.js";
 
-const ctx = document.getElementById('myPieChart').getContext('2d');
+const ctx = document.getElementById('genreChart').getContext('2d');
 
 const artists = await fetchJSON("top_artists");
 

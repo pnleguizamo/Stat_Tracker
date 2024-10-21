@@ -13,11 +13,17 @@ export function fetchJSON(filepath) {
 
 const tbody = document.getElementById('recently_played_body');
 
-export async function populateTableBody(tbody, filepath, recent){
+export async function populateTableBody(tbody, filepath, recent, filter = ""){
     const data = await fetchJSON(filepath);
 
-    if (recent) {
-        for (let row of data){
+    tbody.innerHTML = "";
+    for (let row of data){
+        
+        
+
+        if(recent){
+            if(!(filter === "") && !(row.artistName.toLowerCase() === (filter)))
+                continue;
             const newRow = document.createElement('tr');
             const albumCover = document.createElement('td');
             const img = document.createElement('img');
@@ -45,9 +51,9 @@ export async function populateTableBody(tbody, filepath, recent){
         
             tbody.append(newRow);
         }
-    }
-    else{
-        for (let row of data){
+        else{
+            if(!(filter === "") && !(row.artists[0].name.toLowerCase() === (filter)))
+                continue;
             const newRow = document.createElement('tr');
             const albumCover = document.createElement('td');
             const img = document.createElement('img');
@@ -73,8 +79,12 @@ export async function populateTableBody(tbody, filepath, recent){
         
             tbody.append(newRow);
         }
-    
+            
     }
+    
+    
+    
+    
     
 
     

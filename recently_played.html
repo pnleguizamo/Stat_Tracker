@@ -11,7 +11,18 @@
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
         crossorigin="anonymous"></script>
     
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./styles/style.css">
+    <!-- <style>
+        #submit {
+          background-color: #4CAF50; /* Green */
+          color: white;
+          border: none;
+        }
+    
+        #submit:hover {
+          background-color: #45a049; /* Darker green */
+        }
+      </style> -->
 
     <title>Recently Played</title>
 </head>
@@ -42,17 +53,45 @@
                         <li class="nav-item">
                             <a class="nav-link" href="./genres.html">Genres</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="./about.html">About</a>
+                        </li>
                     </ul>
                 </div>
             </div>
         </nav>
     </header>
     <h2>Recently Listened</h2>
+    <!-- <div class="container-fluid">
+
+        <div class="mb-3">
+            <input type="text" placeholder="Filter by artist..." id="filterInput" class="form-control"  >
+        </div>
+        <div class="mb-3">
+            <button id = "submit" class="btn btn-primary mb-3">Filter</button>
+        </div>
+        
+    </div> -->
+
+    <div class="container">
+        <div class="row g-2">
+          <!-- Input column -->
+          <div class="col-md-8">
+            <input type="text" placeholder="Filter by artist..." id="filterInput" class="form-control"  >
+          </div>
+    
+          <!-- Button column -->
+          <div class="col-md-4">
+            <button id = "submit" class="btn btn-dark btn-primary mb-3">Filter</button>
+          </div>
+        </div>
+    </div>
+
     <div class="table-responsive small">
         <table class="table table-striped table-sm">
             <thead>
                 <tr>
-                    <th scope="col">Album Cover Icon</th>
+                    <th scope="col">Album Icon</th>
                     <th scope="col">Title</th>
                     <th scope="col">Artist</th>
                     <th scope="col">Time Played</th>
@@ -72,6 +111,12 @@
 
         const tbody = document.getElementById('recently_played_body');
         populateTableBody(tbody, "recently_played", true);
+
+        const filter = document.getElementById("filterInput");
+        const submit = document.getElementById("submit");
+        submit.addEventListener('click', () =>{
+            populateTableBody(tbody, "recently_played", true, filter.value.toLowerCase());
+        });
     </script>
 </body>
 
