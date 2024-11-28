@@ -4,28 +4,28 @@ const {getAccessToken, fetchProfile, storeVerifier, getVerifier} = require('../s
 const express = require('express');
 const router = express.Router();
 
-router.get("/auth/token/:code", async (req, res) => {
-    try {
-        res.json(await getAccessToken(req.params.code));
-    } catch (err) {
-        console.log(err);
-    }
-});
+// router.get("/auth/token/:code", async (req, res) => {
+//     try {
+//         res.json(await getAccessToken(req.params.code));
+//     } catch (err) {
+//         console.log(err);
+//     }
+// });
 
-router.post("/store_verifier", (req, res) => {
-    const { verifier } = req.body;
-    storeVerifier(verifier);
-    res.status(200).send("Verifier stored.");
-});
+// router.post("/store_verifier", (req, res) => {
+//     const { verifier } = req.body;
+//     storeVerifier(verifier);
+//     res.status(200).send("Verifier stored.");
+// });
 
-router.get("/auth/profile/:code", async (req, res) => {
-    try {
-        const accessToken = await getAccessToken(req.params.code)
-        res.json(await fetchProfile(accessToken));
-    } catch (err) {
-        console.log(err);
-    }
-});
+// router.get("/auth/profile/:code", async (req, res) => {
+//     try {
+//         const accessToken = await getAccessToken(req.params.code)
+//         res.json(await fetchProfile(accessToken));
+//     } catch (err) {
+//         console.log(err);
+//     }
+// });
 
 router.get("/currently_playing", async (req, res) => {
     try {

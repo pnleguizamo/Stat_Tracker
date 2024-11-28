@@ -14,21 +14,25 @@ function App() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
 
+      
+      await fetch('http://localhost:8081/login');
+
       if (!code) {
-        redirectToAuthCodeFlow();
+        // redirectToAuthCodeFlow();
       } else {
         // const accessToken = await getAccessToken(code);
         // const profile = await fetchProfile(accessToken);
 
-        const profile = await fetch(`http://localhost:8081/api/spotify/auth/profile/${code}`);
+        // const profile = await fetch(`http://localhost:8081/api/spotify/auth/profile/${code}`);
+
 
         // populateUI(profile);
-        setProfileName(profile.display_name);
+        // setProfileName(profile.display_name);
 
 
-        const response = await fetch("http://localhost:8081/api/spotify/currently_playing");
-        const track = await response.json();
-        setTrack(track);
+        // const response = await fetch("http://localhost:8081/api/spotify/currently_playing");
+        // const track = await response.json();
+        // setTrack(track);
 
       }
     }

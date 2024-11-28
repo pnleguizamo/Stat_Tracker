@@ -5,12 +5,12 @@ export async function redirectToAuthCodeFlow() {
     const verifier = generateCodeVerifier(128);
     const challenge = await generateCodeChallenge(verifier);
 
-    // localStorage.setItem("verifier", verifier);
-    const res = await fetch("http://localhost:8081/api/spotify/store_verifier", {
-        method: "POST",
-        body: JSON.stringify({ verifier }),
-        headers: { "Content-Type": "application/json" },
-    });
+    localStorage.setItem("verifier", verifier);
+    // const res = await fetch("http://localhost:8081/api/spotify/store_verifier", {
+    //     method: "POST",
+    //     body: JSON.stringify({ verifier }),
+    //     headers: { "Content-Type": "application/json" },
+    // });
 
     const params = new URLSearchParams();
     params.append("client_id", clientId);
@@ -42,6 +42,55 @@ async function generateCodeChallenge(codeVerifier) {
         .replace(/=+$/, '');
 }
 
+export async function getAccessToken(code) {
+
+    const verifier = localStorage.getItem("verifier");
+    const clientId = process.env.CLIENT_ID;
+
+    const params = new URLSearchParams();
+    params.append("client_id", clientId);
+    params.append("grant_type", "authorization_code");
+    params.append("code", code);
+    params.append("redirect_uri", "http://localhost:8080/callback");
+    params.append("code_verifier", verifier);
+
+    try {
+        const result = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params
+        });
+
+        if (!result.ok) {
+            const errorMessage = await result.text();
+            throw new Error(`Error ${result.status}: ${errorMessage}`);
+        }
+
+        const data = await result.json();
+
+        
+        if (!data.access_token) {
+            throw new Error("Access token not found in the response.");
+        }
+        // setStoredToken(data.access_token);
+        
+        console.log("Fresh Token");
+        return data.access_token;
+
+    } catch (error) {
+        // Handle any error that occurs during the fetch operation
+        console.error("Error during token exchange:", error);
+        throw new Error(`Failed to exchange code for token: ${error.message}`);
+    }
+}
+
+export async function fetchProfile(token) {
+    const result = await fetch("https://api.spotify.com/v1/me", {
+        method: "GET", headers: { Authorization: `Bearer ${token}` }
+    });
+
+    return await result.json();
+}
 
 // function populateUI(profile) {
 //     document.getElementById("displayName").innerText = profile.display_name;
