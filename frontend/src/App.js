@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyRedirectAuth.js";
+import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
 import { Button, Container, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -17,16 +17,23 @@ function App() {
       if (!code) {
         redirectToAuthCodeFlow();
       } else {
-        // const accessToken = await getAccessToken(code);
-        // const profile = await fetchProfile(accessToken);
+        const accessToken = await getAccessToken(code);
+        const profile = await fetchProfile(accessToken);
 
-        const profile = await fetch(`http://localhost:8081/api/spotify/auth/profile/${code}`);
+        // const profile = await fetch(`http://localhost:8081/api/spotify/auth/profile/${code}`);
 
         // populateUI(profile);
         setProfileName(profile.display_name);
 
 
-        const response = await fetch("http://localhost:8081/api/spotify/currently_playing");
+        const response = await fetch("http://localhost:8081/api/spotify/currently_playing", {
+          method: 'GET',  // Assuming you're making a GET request
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,  // Include the token in the Authorization header
+            'Content-Type': 'application/json'  // Optional, depending on your API's requirements
+          }
+        });
+
         const track = await response.json();
         setTrack(track);
 

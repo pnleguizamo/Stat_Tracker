@@ -1,36 +1,30 @@
 const { getCurrentlyPlayingTrack } = require('../services/spotifyServices.js');
-const {getAccessToken, fetchProfile, storeVerifier, getVerifier} = require('../services/spotifyAuthServices.js');
 
 const express = require('express');
 const router = express.Router();
 
-router.get("/auth/token/:code", async (req, res) => {
-    try {
-        res.json(await getAccessToken(req.params.code));
-    } catch (err) {
-        console.log(err);
+
+const verifyAccessToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader) {
+        return res.status(401).json({ error: 'Authorization header missing' });
     }
-});
 
-router.post("/store_verifier", (req, res) => {
-    const { verifier } = req.body;
-    storeVerifier(verifier);
-    res.status(200).send("Verifier stored.");
-});
+    const token = authHeader.split(' ')[1];
 
-router.get("/auth/profile/:code", async (req, res) => {
-    try {
-        const accessToken = await getAccessToken(req.params.code)
-        res.json(await fetchProfile(accessToken));
-    } catch (err) {
-        console.log(err);
+    if (!token) {
+        return res.status(401).json({ error: 'Token missing' });
     }
-});
 
-router.get("/currently_playing", async (req, res) => {
+    req.token = token; 
+    next();
+};
+
+router.get("/currently_playing", verifyAccessToken, async (req, res) => {
     try {
-        const accessToken = await getAccessToken(req.params.code)
-        const track = await getCurrentlyPlayingTrack(accessToken); 
+        const accessToken = req.token;
+        const track = await getCurrentlyPlayingTrack(accessToken);
         res.status(200).json(track);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });

@@ -1,9 +1,9 @@
 var express = require("express");
 var cors = require("cors");
-var fs = require("fs");
-var path = require("path");
 var bodyParser = require("body-parser");
 const { MongoClient } = require("mongodb");
+var fs = require("fs");
+var path = require("path");
 require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 
@@ -11,22 +11,24 @@ var app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
-app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
+// app.use(express.static("public"));
+// app.use("/uploads", express.static("uploads"));
 
 const port = process.env.PORT;
-console.log(port);
 const host = "localhost";
 
 // const url = "mongodb://localhost:27017";
 const url = process.env.URI;
-const dbName = "stat_tracker";
+const dbName = process.env.DB_NAME;
 const client = new MongoClient(url);
 const db = client.db(dbName);
-const collectionName = 'streamed_tracks';
+const collectionName = process.env.COLLECTION_NAME;
 
 
-
+app.use((req, res, next) => {
+    console.log('Request Type:', req.method, 'Time:', Date.now(), 'Request URL:', req.originalUrl);
+    next();
+});
 
 app.use('/api/spotify', spotifyRoutes);
 
