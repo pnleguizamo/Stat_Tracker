@@ -5,7 +5,7 @@ export async function redirectToAuthCodeFlow() {
     const verifier = generateCodeVerifier(128);
     const challenge = await generateCodeChallenge(verifier);
 
-    localStorage.setItem("verifier", verifier);
+    sessionStorage.setItem("verifier", verifier);
     // const res = await fetch("http://localhost:8081/api/spotify/store_verifier", {
     //     method: "POST",
     //     body: JSON.stringify({ verifier }),
@@ -43,12 +43,12 @@ async function generateCodeChallenge(codeVerifier) {
 }
 
 export async function getAccessToken(code) {
-    if(localStorage.getItem("access_token")){
+    if(sessionStorage.getItem("access_token")){
         console.log("Stored Token");
-        return localStorage.getItem("access_token");
+        return sessionStorage.getItem("access_token");
     }
 
-    const verifier = localStorage.getItem("verifier");
+    const verifier = sessionStorage.getItem("verifier");
     const clientId = process.env.REACT_APP_CLIENT_ID;
 
     const params = new URLSearchParams();
@@ -77,7 +77,7 @@ export async function getAccessToken(code) {
             throw new Error("Access token not found in the response.");
         }
         
-        localStorage.setItem("access_token", data.access_token);
+        sessionStorage.setItem("access_token", data.access_token);
         console.log("Fresh Token");
         return data.access_token;
 

@@ -1,4 +1,4 @@
-const { getCurrentlyPlayingTrack } = require('../services/spotifyServices.js');
+const { getCurrentlyPlayingTrack, getRecentlyPlayedSongs } = require('../services/spotifyServices.js');
 
 const express = require('express');
 const router = express.Router();
@@ -25,6 +25,18 @@ router.get("/currently_playing", verifyAccessToken, async (req, res) => {
     try {
         const accessToken = req.token;
         const track = await getCurrentlyPlayingTrack(accessToken);
+        res.status(200).json(track);
+    } catch (err) {
+        console.error({ error: "An unexpected error occurred" + err });
+        res.status(500).send({ error: "An unexpected error occurred" + err });
+    }
+
+});
+
+router.get("/recently_played", verifyAccessToken, async (req, res) => {
+    try {
+        const accessToken = req.token;
+        const track = await getRecentlyPlayedSongs(accessToken);
         res.status(200).json(track);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });

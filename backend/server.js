@@ -1,11 +1,11 @@
 var express = require("express");
 var cors = require("cors");
 var bodyParser = require("body-parser");
-const { MongoClient } = require("mongodb");
 var fs = require("fs");
 var path = require("path");
 require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
+const mongoRoutes = require('./routes/mongoRoutes.js');
 
 var app = express();
 app.use(cors());
@@ -17,12 +17,6 @@ app.use(express.json());
 const port = process.env.PORT;
 const host = "localhost";
 
-// const url = "mongodb://localhost:27017";
-const url = process.env.URI;
-const dbName = process.env.DB_NAME;
-const client = new MongoClient(url);
-const db = client.db(dbName);
-const collectionName = process.env.COLLECTION_NAME;
 
 
 app.use((req, res, next) => {
@@ -31,6 +25,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/spotify', spotifyRoutes);
+app.use('/api/mongo', mongoRoutes);
 
 app.listen(port, () => {
     console.log("App listening at http://%s:%s", host, port);

@@ -1,0 +1,41 @@
+.landing-page {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #1DB954;
+    color: white;
+    text-align: center;
+}
+
+.landing-header h1 {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.landing-header p {
+    font-size: 1.25rem;
+    margin-bottom: 30px;
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-btn {
+    padding: 15px 30px;
+    background-color: #1ed760;
+    color: white;
+    font-size: 1.25rem;
+    text-decoration: none;
+    border-radius: 50px;
+    border: none;
+    transition: background-color 0.3s ease;
+}
+
+.login-btn:hover {
+    background-color: #18ad4c;
+}
