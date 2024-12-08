@@ -70,5 +70,24 @@ export async function getRecentlyPlayedSongs(accessToken) {
     }
 }
 
+export async function getAlbumCover(accessToken, spotifyTrackUri) {
+    try {
+        const trackId = spotifyTrackUri.split(':')[2];
+        const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        const trackData = await response.json();
+
+        return trackData?.album?.images[0]?.url || null;
+    } catch (error) {
+        console.error("Error fetching album cover:", error.response?.data || error.message);
+        throw error;
+    }
+}
+
 
 

@@ -6,6 +6,7 @@ import { getAccessToken } from "./spotifyAuthorization.js";
 function RecentlyPlayed() {
 
     const [recentlyPlayed, setRecentlyPlayed] = useState([]);
+    const [testData, setTestData] = useState([]);
 
     useEffect(() => {
         async function init() {
@@ -13,16 +14,20 @@ function RecentlyPlayed() {
             const accessToken = await getAccessToken();
 
             const response = await fetch("http://localhost:8081/api/spotify/recently_played", {
-                method: 'GET', 
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`, 
-                    'Content-Type': 'application/json'  
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
                 }
             });
 
             const tracks = await response.json();
             setRecentlyPlayed(tracks);
 
+            // const test = await fetch("http://localhost:8081/api/mongo/test");
+
+            // const testData = await test.json();
+            // setTestData(testData);
 
         }
         init();
@@ -58,6 +63,21 @@ function RecentlyPlayed() {
                     )}
                 </tbody>
             </table>
+
+            <div>
+
+            {/* <h1>Song List</h1>
+            <ul>
+                {testData.map((artist, index) => (
+                    <li key={artist._id}>
+                        <strong>{index + 1}. {artist._id}</strong> - {artist.trackCount} plays, {artist.totalMinutesPlayed} minutes played <br/>
+                        <p>Track: {artist.master_metadata_track_name}, Artist: {artist.master_metadata_album_artist_name} Timestamp: {artist.ts}</p>
+                        <img src = {artist.image_url} style={{ width: "100px", height: "100px" }}></img>
+
+                    </li>
+                ))}
+            </ul> */}
+        </div>
         </div>
     );
 };

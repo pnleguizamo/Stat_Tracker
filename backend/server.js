@@ -6,6 +6,7 @@ var path = require("path");
 require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
+const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js')
 
 var app = express();
 app.use(cors());
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
 
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/mongo', mongoRoutes);
+app.use(streamHistoryRoutes);
 
 app.listen(port, () => {
     console.log("App listening at http://%s:%s", host, port);
