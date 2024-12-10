@@ -8,6 +8,7 @@ import './CurrentlyPlaying.css';
 function CurrentlyPlaying() {
 
   const [profileName, setProfileName] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
   const [track, setTrack] = useState(null);
 
   useEffect(() => {
@@ -15,9 +16,9 @@ function CurrentlyPlaying() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
 
-      if (!code) {
-        redirectToAuthCodeFlow();
-      } else {
+      // if (!code) {
+      //   redirectToAuthCodeFlow();
+      // } else {
         const accessToken = await getAccessToken(code);
         const profile = await fetchProfile(accessToken);
 
@@ -25,6 +26,7 @@ function CurrentlyPlaying() {
 
         // populateUI(profile);
         setProfileName(profile.display_name);
+        setProfilePicture(profile.images[0].url);
 
 
         const response = await fetch("http://localhost:8081/api/spotify/currently_playing", {
@@ -38,7 +40,7 @@ function CurrentlyPlaying() {
         const track = await response.json();
         setTrack(track);
 
-      }
+      // }
     }
     init();
   }, []);
@@ -46,6 +48,8 @@ function CurrentlyPlaying() {
   return (
     <div className="App">
       <h1>{profileName}</h1>
+      <img src = {profilePicture} style={{ width: "250px" }}></img>
+      <h2>Currently Playing</h2>
      
       {track ? (
         <Container className="py-4">
@@ -60,7 +64,7 @@ function CurrentlyPlaying() {
             <Col xs={12} md={9}>
               <h2 className="display-4">{track.name}</h2>
               <p className="lead">{track.artists}</p>
-              <p className="text-muted">{track.album}</p>
+              <p className="lead">{track.album}</p>
               <Button
                 href={track.url}
                 target="_blank"

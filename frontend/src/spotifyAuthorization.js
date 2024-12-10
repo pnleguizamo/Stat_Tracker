@@ -45,7 +45,7 @@ async function generateCodeChallenge(codeVerifier) {
 export async function getAccessToken(code) {
     if(sessionStorage.getItem("access_token")){
         console.log("Stored Token");
-        console.log(sessionStorage.getItem("access_token"));
+        // console.log(sessionStorage.getItem("access_token"));
         return sessionStorage.getItem("access_token");
     }
 
@@ -80,7 +80,7 @@ export async function getAccessToken(code) {
         
         sessionStorage.setItem("access_token", data.access_token);
         console.log("Fresh Token");
-        console.log(data.access_token);
+        // console.log(data.access_token);
         return data.access_token;
 
     } catch (error) {

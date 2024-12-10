@@ -11,8 +11,8 @@ import FileUpload from './FileUpload';
 function App() {
   return (
     <div>
-    <AppNavbar />
     <Router>
+        <AppNavbar />
         <Routes>
           <Route path="/" element={<LandingPage/>} />
           <Route path="/callback" element={<CurrentlyPlaying/>} />

@@ -1,0 +1,9 @@
+.nav-link {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+}
+
+.nav-link.active {
+  color: #ffffff;
+  font-weight: bold;
+}
