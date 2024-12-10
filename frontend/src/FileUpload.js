@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import './fileUpload.css'; // Import the CSS file
 
 function FileUpload() {
     const [files, setFiles] = useState(null);
@@ -40,14 +41,14 @@ function FileUpload() {
     };
 
     return (
-        <div>
+        <div className="file-upload-container">
             <h2>Upload Spotify JSON Files</h2>
             <form onSubmit={handleSubmit}>
                 <input type="file" multiple accept=".json" onChange={handleFileChange} />
                 <button type="submit">Upload</button>
             </form>
             {response && (
-                <div>
+                <div className="response-container">
                     <h3>Response from Server:</h3>
                     <pre>{JSON.stringify(response, null, 2)}</pre>
                 </div>

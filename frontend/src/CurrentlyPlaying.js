@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
 import { Button, Container, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import './CurrentlyPlaying.css';
 
 
 function CurrentlyPlaying() {
@@ -45,7 +46,7 @@ function CurrentlyPlaying() {
   return (
     <div className="App">
       <h1>{profileName}</h1>
-      <a href = "/recently_played">Recently Played Page</a>
+     
       {track ? (
         <Container className="py-4">
           <Row className="align-items-center">

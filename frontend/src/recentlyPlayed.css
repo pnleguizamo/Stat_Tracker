@@ -1,0 +1,71 @@
+/* General container */
+.recently-played-container {
+    background-color: #121212;
+    color: white;
+    padding: 20px;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Page title */
+  .page-title {
+    font-size: 1.5rem;
+    text-align: center;
+    margin-bottom: 20px;
+    color: #1DB954;
+  }
+  
+  /* No songs message */
+  .no-songs {
+    text-align: center;
+    color: #b3b3b3;
+    font-size: 1rem;
+  }
+  
+  /* Table styling */
+  .recently-played-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: white;
+    margin-top: 20px;
+    background-color: #1E1E1E;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  
+  /* Table header */
+  .recently-played-table thead {
+    background-color: #1DB954;
+    color: black;
+  }
+  
+  .recently-played-table th {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #333;
+    /* Prevent hover dimming */
+    pointer-events: none; /* Disable hover behavior on headers */
+  }
+  
+  /* Table data */
+  .recently-played-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #333;
+  }
+  
+  /* Highlight rows on hover, excluding the header */
+  .recently-played-table tbody tr:hover {
+    background-color: #333;
+  }
+  
+  /* Song title link */
+  .song-title {
+    color: #1DB954;
+    text-decoration: none;
+  }
+  
+  .song-title:hover {
+    text-decoration: underline;
+  }
+  

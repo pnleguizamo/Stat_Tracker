@@ -1,0 +1,132 @@
+/* General container for the Top Songs page */
+.top-songs-container {
+    background-color: #121212;
+    color: white;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  
+  /* Title of the page */
+  .page-title {
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 30px;
+    color: #1DB954;
+  }
+  
+  /* Card styling for each song */
+  .song-card {
+    background-color: #1E1E1E;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+  }
+  
+  /* Hover effect for the cards */
+  .song-card:hover {
+    transform: scale(1.05);
+  }
+  
+  /* Styling for the song image */
+  .song-img {
+    border-radius: 8px;
+    object-fit: cover;
+    height: 200px;
+    width: 100%;
+  }
+  
+  /* Styling for the song title */
+  .song-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #1DB954;
+    text-align: center;
+  }
+  
+  /* Styling for the artist name */
+  .song-artist {
+    text-align: center;
+    color: #b3b3b3;
+    font-size: 1rem;
+    margin-top: 5px;
+  }
+  
+  /* Styling for the play count */
+  .play-count {
+    text-align: center;
+    color: #b3b3b3;
+    font-size: 0.875rem;
+    margin-top: 10px;
+  }
+  
+/* General container for the Top Artists page */
+.top-artists-container {
+    background-color: #121212;
+    color: white;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex; /* Make the container a flexbox */
+    flex-direction: column; /* Align children vertically */
+    justify-content: center; /* Center content vertically */
+    align-items: center; /* Center content horizontally */
+}
+
+/* Title of the page */
+.page-title {
+    font-size: 2rem;
+    text-align: center;
+    margin-bottom: 30px;
+    color: #1DB954;
+}
+
+/* Wrapper for artist cards */
+.cards-wrapper {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping of cards */
+    justify-content: center; /* Center the cards horizontally */
+    gap: 20px; /* Add space between cards */
+}
+
+/* Card styling for each artist */
+.artist-card {
+    background-color: #1E1E1E;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+    width: 250px; /* Fixed width for the card */
+    margin: 10px; /* Space between cards */
+    display: inline-block; /* Align cards in a row */
+    vertical-align: top;
+    text-align: center; /* Center the content inside the card */
+}
+
+/* Hover effect for the cards */
+.artist-card:hover {
+    transform: scale(1.05);
+}
+
+/* Styling for the artist image */
+.artist-img {
+    border-radius: 8px;
+    object-fit: cover;
+    height: 200px;
+    width: 100%;
+}
+
+/* Styling for the artist name */
+.artist-name {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #1DB954;
+    padding: 10px 0;
+}
+
+/* Styling for the play count */
+.play-count {
+    text-align: center;
+    color: #b3b3b3;
+    font-size: 0.875rem;
+    margin-top: 5px;
+}

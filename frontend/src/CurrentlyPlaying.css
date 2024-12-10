@@ -1,0 +1,80 @@
+/* General Page Style */
+.App {
+    background-color: #121212; /* Dark background */
+    color: white;
+    min-height: 100vh;
+    padding: 20px;
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+  }
+  
+  /* Profile Name */
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+  }
+  
+  /* Link to Recently Played */
+  a {
+    color: #1DB954; /* Spotify green */
+    text-decoration: none;
+    font-size: 1.2rem;
+  }
+  
+  a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Main Content Container */
+  .container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 15px;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+  }
+  
+  /* Album Art */
+  .img-fluid {
+    width: 100%;
+    max-width: 200px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+  }
+  
+  /* Track Name */
+  .display-4 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  
+  /* Artist Name */
+  .lead {
+    font-size: 1.2rem;
+    color: #b3b3b3;
+    margin: 5px 0;
+  }
+  
+  /* Album Name */
+  .text-muted {
+    font-size: 1rem;
+    color: #808080;
+    margin-bottom: 15px;
+  }
+  
+  /* Spotify Button */
+  .btn-primary {
+    background-color: #1DB954; /* Spotify green */
+    border: none;
+    font-size: 1rem;
+    padding: 10px 20px;
+    border-radius: 5px;
+    text-transform: uppercase;
+  }
+  
+  .btn-primary:hover {
+    background-color: #17a34a; /* Slightly darker green */
+    color: white;
+  }
+  
