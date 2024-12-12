@@ -130,3 +130,20 @@
     font-size: 0.875rem;
     margin-top: 5px;
 }
+
+.btn-timeframe {
+  background-color: #1DB954; 
+  border: none;
+  color: white;
+  font-size: 1rem;
+  padding: 10px 20px;
+  border-radius: 5px;
+  margin: 5px;
+  text-transform: uppercase;
+  transition: background-color 0.3s ease;
+}
+
+.btn-timeframe:hover {
+  background-color: #17a34a;
+  color: white;
+}

@@ -1,0 +1,64 @@
+.App {
+    background-color: #121212;
+    color: white;
+    min-height: 100vh;
+    padding: 20px;
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+}
+
+h1 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+a {
+    color: #1DB954;
+    text-decoration: none;
+    font-size: 1.2rem;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.grid-container {
+    max-width: 1200px;
+    margin: 20px auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.grid-item {
+    padding: 15px;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    color: white;
+}
+
+.grid-item h3 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: #1DB954;
+}
+
+.grid-item p {
+    font-size: 1.2rem;
+    color: #b3b3b3;
+    margin: 10px 0;
+}
+
+.grid-item:hover {
+    background-color: #292929;
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .grid-container {
+        padding: 10px;
+    }
+}

@@ -8,10 +8,10 @@ const AppNavbar = () => {
 
   return (
     <Navbar bg="dark" variant="dark" expand="lg" sticky="top">
-      <Container>
+      <Container fluid>
         <Navbar.Brand>Stat Tracker</Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
-        <Navbar.Collapse id="basic-navbar-nav">
+        <Navbar.Collapse id="basic-navbar-nav" >
           <Nav className="me-auto">
             <Link
               key="1"
@@ -43,11 +43,26 @@ const AppNavbar = () => {
             </Link>
             <Link
               key="5"
+              className={currentPage === '/top_albums' ? 'nav-link active' : 'nav-link'}
+              to="/top_albums"
+            >
+              Top Albums
+            </Link>
+            <Link
+              key="6"
               className={currentPage === '/upload_history' ? 'nav-link active' : 'nav-link'}
               to="/upload_history"
             >
               Upload History
             </Link>
+            <Link
+              key="7"
+              className={currentPage === '/about' ? 'nav-link active' : 'nav-link'}
+              to="/about"
+            >
+              About
+            </Link>
+            
           </Nav>
         </Navbar.Collapse>
       </Container>
