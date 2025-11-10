@@ -1,4 +1,4 @@
-export async function getCurrentlyPlayingTrack(accessToken) {
+async function getCurrentlyPlayingTrack(accessToken) {
     const endpoint = "https://api.spotify.com/v1/me/player/currently-playing";
 
     try {
@@ -40,7 +40,7 @@ export async function getCurrentlyPlayingTrack(accessToken) {
     }
 }
 
-export async function getRecentlyPlayedSongs(accessToken) {
+async function getRecentlyPlayedSongs(accessToken) {
     try {
         const response = await fetch('https://api.spotify.com/v1/me/player/recently-played', {
             method: 'GET',
@@ -70,7 +70,7 @@ export async function getRecentlyPlayedSongs(accessToken) {
     }
 }
 
-export async function getAlbumCover(accessToken, spotifyTrackUri) {
+async function getAlbumCover(accessToken, spotifyTrackUri) {
     try {
         const trackId = spotifyTrackUri.split(':')[2];
         const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
@@ -91,3 +91,4 @@ export async function getAlbumCover(accessToken, spotifyTrackUri) {
 
 
 
+module.exports = {getRecentlyPlayedSongs, getAlbumCover, getCurrentlyPlayingTrack}
