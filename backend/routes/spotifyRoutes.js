@@ -1,4 +1,5 @@
 const { getCurrentlyPlayingTrack, getRecentlyPlayedSongs, getAlbumCover } = require('../services/spotifyServices.js');
+const { syncRecentStreams } = require('../services/mongoServices.js');
 
 const express = require('express');
 const router = express.Router();
@@ -57,5 +58,19 @@ router.get("/recently_played", verifyAccessToken, async (req, res) => {
 
 // });
 
+router.post("/sync_recent_streams", verifyAccessToken, async (req, res) => {
+    try {
+        const accessToken = req.token;
+        const recentTracks = await getRecentlyPlayedSongs(accessToken);
+        const newStreamsCount = await syncRecentStreams(recentTracks);
+        res.status(200).json({ 
+            message: `Successfully synced recent streams`,
+            newStreamsAdded: newStreamsCount
+        });
+    } catch (err) {
+        console.error({ error: "Failed to sync recent streams: " + err });
+        res.status(500).send({ error: "Failed to sync recent streams: " + err });
+    }
+});
 
 module.exports = router;

@@ -40,35 +40,90 @@ async function getCurrentlyPlayingTrack(accessToken) {
     }
 }
 
-async function getRecentlyPlayedSongs(accessToken) {
-    try {
-        const response = await fetch('https://api.spotify.com/v1/me/player/recently-played', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
+// TODO adapt new function to old UI
+async function getRecentlyPlayedSongs(accessToken, afterMs = null, limit = 50) {
+  let allTracks = [];
+  let maxPlayedAtMs = afterMs; // start from previous cursor
+  let url = new URL("https://api.spotify.com/v1/me/player/recently-played");
 
-        if (!response.ok) {
-            throw new Error(`Error fetching recently played songs: ${response.statusText}`);
-        }
+  if (afterMs != null && afterMs > 0) {
+    url.searchParams.set("after", String(afterMs));
+  }
+  url.searchParams.set("limit", String(limit));
 
-        const data = await response.json();
+  try {
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
 
-        const recentlyPlayedTracks = data.items.map(item => ({
-            trackName: item.track.name,
-            artistName: item.track.artists[0].name,
-            albumName: item.track.album.name,
-            trackUri: item.track.uri,
-            playedAt: item.played_at,
-        }));
-
-        return recentlyPlayedTracks;
-    } catch (error) {
-        console.error('Error:', error.message);
-        return null;
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Error fetching recently played songs: ${response.status} ${text}`);
     }
+
+    const data = await response.json();
+    const items = data.items || [];
+
+    const pageTracks = items.map(item => {
+      const playedAtDate = new Date(item.played_at);
+      const playedAtMs = playedAtDate.getTime();
+      if (maxPlayedAtMs === null || playedAtMs > maxPlayedAtMs) {
+        maxPlayedAtMs = playedAtMs;
+      }
+
+      return {
+        trackName: item.track.name,
+        artistName: item.track.artists[0].name,
+        albumName: item.track.album.name,
+        trackUri: item.track.uri,
+        playedAt: item.played_at,          // ISO string
+        duration: item.track.duration_ms   // track duration, NOT ms_played
+      };
+    });
+
+    allTracks.push(...pageTracks);
+
+    return { tracks: allTracks, maxPlayedAtMs };
+  } catch (error) {
+    console.error("Error in getRecentlyPlayedSongs:", error.message);
+    return { tracks: [], maxPlayedAtMs: afterMs };
+  }
 }
+
+
+// async function getRecentlyPlayedSongs(accessToken) {
+//     try {
+//         const response = await fetch('https://api.spotify.com/v1/me/player/recently-played', {
+//             method: 'GET',
+//             headers: {
+//                 'Authorization': `Bearer ${accessToken}`
+//             }
+//         });
+
+//         if (!response.ok) {
+//             throw new Error(`Error fetching recently played songs: ${response.statusText}`);
+//         }
+
+//         const data = await response.json();
+
+//         const recentlyPlayedTracks = data.items.map(item => ({
+//             trackName: item.track.name,
+//             artistName: item.track.artists[0].name,
+//             albumName: item.track.album.name,
+//             trackUri: item.track.uri,
+//             playedAt: item.played_at,
+//             duration: item.track.duration_ms
+//         }));
+
+//         return recentlyPlayedTracks;
+//     } catch (error) {
+//         console.error('Error:', error.message);
+//         return [];
+//     }
+// }
 
 async function getAlbumCover(accessToken, spotifyTrackUri) {
     try {

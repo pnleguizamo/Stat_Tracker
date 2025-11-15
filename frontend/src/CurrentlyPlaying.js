@@ -108,6 +108,32 @@ function CurrentlyPlaying() {
     }
   };
 
+  const syncStreams = async () => {
+    try {
+      
+      const accessToken = await getAccessToken();
+
+      const response = await fetch("http://localhost:8081/api/spotify/sync_recent_streams", {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to sync stream");
+      }
+      
+      
+      const newStreams = await response.json();
+
+
+    } catch (err) {
+      console.error("Error sync stream:", err);
+    }
+  };
+
 
   return (
     <div className="App">
@@ -144,21 +170,21 @@ function CurrentlyPlaying() {
       ) : (
         <div>No track is currently playing.</div>
       )}
-        {/* <h1>Recently Listened Minutes</h1> */}
-        {error && <p>{error}</p>}
-        {loading && <p>Loading...</p>}
+      {/* <h1>Recently Listened Minutes</h1> */}
+      {error && <p>{error}</p>}
+      {loading && <p>Loading...</p>}
 
-        {/* Timeframes Grid */}
-        {!loading && !error && (
-          <div className="grid-container">
-            {timeframes.map(({ label, value }) => (
-              <div className="grid-item" key={value}>
-                <h3>{label}</h3>
-                <p>{data[value] !== undefined ? data[value].toFixed(2) : "--"} minutes streamed</p>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Timeframes Grid */}
+      {!loading && !error && (
+        <div className="grid-container">
+          {timeframes.map(({ label, value }) => (
+            <div className="grid-item" key={value}>
+              <h3>{label}</h3>
+              <p>{data[value] !== undefined ? data[value].toFixed(2) : "--"} minutes streamed</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Song of the Day Card */}
       {songOfTheDay && (
@@ -190,6 +216,9 @@ function CurrentlyPlaying() {
           </Card.Body>
         </Card>
       )}
+      <Button variant="primary" onClick={syncStreams} className="mt-2">
+                Sync streams
+      </Button>
     </div>
   );
 }

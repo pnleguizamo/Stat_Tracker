@@ -403,9 +403,113 @@ mongoService.updateSongOfTheDay = async (rating) => {
 }
 
 
+mongoService.syncRecentStreams = async (recentTracks, userId) => {
+    try {
+        await client.connect();
+        const collection = db.collection(collectionName);
+
+        // console.log("SYNC: USER ID ", userId)
+        
+        // let newStreams = [];
+        // for (const track of recentTracks) {
+        //     // Convert Spotify track to our format
+        //     const streamEntry = {
+        //         ts: new Date(track.playedAt).toISOString(),
+        //         userId : userId,
+        //         master_metadata_track_name: track.trackName,
+        //         master_metadata_album_artist_name: track.artistName,
+        //         master_metadata_album_album_name: track.albumName,
+        //         spotify_track_uri: track.trackUri,
+        //         ms_played: track.duration, // This is the full duration since we can't know if it was fully played
+        //         reason_end: "trackdone", // Assuming completed since it's in recent history
+        //     };
+            
+        //     // Check if this stream already exists
+        //     const exists = await collection.findOne({
+        //         ts: streamEntry.ts,
+        //         spotify_track_uri: streamEntry.spotify_track_uri
+        //     });
+
+        //     if (!exists) {
+        //         newStreams.push(streamEntry);
+        //     }
+        // }
+
+        // if (newStreams.length > 0) {
+        //     // console.log(newStreams);
+        //     await collection.insertMany(newStreams);
+        //     return newStreams.length;
+        // }
+
+
+        
+        const ops = recentTracks.map(track => {
+            return {
+                updateOne: {
+                    filter: {
+                        userId,
+                        ts : new Date(track.playedAt).toISOString(),
+                        spotify_track_uri: track.trackUri
+                    },
+                    update: {
+                        $setOnInsert: {
+                            ts: new Date(track.playedAt).toISOString(),
+                            userId,
+                            master_metadata_track_name: track.trackName,
+                            master_metadata_album_artist_name: track.artistName,
+                            master_metadata_album_album_name: track.albumName,
+                            spotify_track_uri: track.trackUri,
+                            ms_played: track.duration, // This is the full duration since we can't know if it was fully played
+                            reason_end: "trackdone", // Assuming completed since it's in recent history
+                        }
+                    },
+                    upsert: true
+                }
+            };
+        });
+
+        if (!ops.length) return 0;
+
+        const res = await collection.bulkWrite(ops, { ordered: false });
+        // upsertedCount = number of brand-new docs
+        return res.upsertedCount || 0;
+    } catch (error) {
+        console.error('Error syncing recent streams:', error);
+        throw error;
+    } finally {
+        await client.close();
+    }
+};
+
+mongoService.storeToken = async (accessToken, refreshToken, expiresIn, spotifyUser ) => {
+    try {
+        const accountId = spotifyUser.id;
+        const tokensCol = db.collection("oauth_tokens");
+        // TODO fix MongoNotConnectedError on store token
+        await tokensCol.updateOne(
+            { accountId },
+            {
+                $set: {
+                    accountId: spotifyUser.id,
+                    accessToken,
+                    accessTokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),
+                    refreshToken,
+                    updatedAt: new Date()
+                }
+            },
+            { upsert: true }
+        );
+        return 0;
+    } catch (error) {
+        console.error('Error syncing recent streams:', error);
+        throw error;
+    } finally {
+        await client.close();
+    }
+};
+
 mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
     try {
-        // Fetch all albums from the collection
         // const albums = await db.collection(collectionName).find({}).toArray();
         const uniqueTrackUris = await db.collection(collectionName).distinct('spotify_track_uri');
 
@@ -413,7 +517,6 @@ mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
             spotify_track_uri: { $in: uniqueTrackUris }
         }).toArray();
 
-        // Iterate over each album
         for (let uri of uniqueTrackUris) {
             // if (!album.image_url && album.spotify_track_uri) {
             const album = albums.find(a => a.spotify_track_uri === uri);
@@ -422,7 +525,6 @@ mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
                 const trackId = uri.split(':')[2];
 
                 try {
-                    // Fetch track data from Spotify API to get image URL
                     const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
                         method: 'GET',
                         headers: {
@@ -435,7 +537,6 @@ mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
                     if (trackData.album && trackData.album.images && trackData.album.images.length > 0) {
                         const url = trackData.album.images[0].url;
 
-                        // Update the database with the new image URL
                         await db.collection(collectionName).updateMany(
                             { spotify_track_uri: uri },
                             { $set: { image_url: url } }
