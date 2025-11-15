@@ -1,12 +1,9 @@
 const multer = require('multer');
-const { MongoClient } = require('mongodb');
+const { initDb, client } = require('../mongo.js');
 const fs = require('fs');
 
-const url = process.env.URI;
-const dbName = process.env.DB_NAME;
-const client = new MongoClient(url);
-const db = client.db(dbName);
-const collectionName = "test_collection";
+const collectionName = process.env.COLLECTION_NAME;
+let db;
 
 const upload = multer({ dest: 'uploads/' }); 
 
@@ -21,7 +18,7 @@ router.post('/api/upload', upload.array('files'), async (req, res) => {
             return res.status(400).send('No files uploaded.');
         }
 
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
 
         for (const file of req.files) {
@@ -35,8 +32,6 @@ router.post('/api/upload', upload.array('files'), async (req, res) => {
     } catch (error) {
         console.error('Error processing upload:', error);
         res.status(500).send('Error processing upload');
-    } finally {
-        await client.close();
     }
 });
 

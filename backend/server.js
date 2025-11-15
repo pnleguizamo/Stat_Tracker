@@ -7,7 +7,12 @@ require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
 const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js')
-require('./services/pollingService.js')
+
+const { initDb } = require("./mongo.js");
+(async () => {
+  await initDb();
+  require('./services/pollingService.js');
+})();
 
 var app = express();
 app.use(cors());

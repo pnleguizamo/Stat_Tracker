@@ -1,18 +1,14 @@
-const { MongoClient } = require("mongodb");
 const { getAlbumCover } = require('../services/spotifyServices.js');
+const { initDb, client } = require('../mongo.js');
 
-const url = process.env.URI;
-const dbName = process.env.DB_NAME;
-const client = new MongoClient(url);
-const db = client.db(dbName);
 const collectionName = process.env.COLLECTION_NAME;
-
+let db;
 
 const mongoService = module.exports = {};
 
 mongoService.getTrackdoneDocuments = async function () {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
         const query = { reason_end: "trackdone" };
         // const query ={ ts: {
@@ -24,14 +20,12 @@ mongoService.getTrackdoneDocuments = async function () {
         return documents;
     } catch (err) {
         console.error("Error fetching documents:", err);
-    } finally {
-        await client.close();
     }
 }
 
 mongoService.getTopAlbums = async function (accessToken, timeframe = "lifetime") {
     try {
-        await client.connect();
+        db = await initDb();
 
         let startDate = null;
         if (timeframe === "month") {
@@ -104,7 +98,7 @@ mongoService.getTopAlbums = async function (accessToken, timeframe = "lifetime")
 
 mongoService.getQuery = async function () {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
 
 
@@ -176,15 +170,13 @@ mongoService.getQuery = async function () {
     } catch (error) {
         console.error("Error fetching top played artists:", error);
         throw error;
-    } finally {
-        await client.close();
     }
 }
 
 
 mongoService.getTopPlayedArtists = async function (accessToken, timeframe = "lifetime") {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
 
         let startDate = null;
@@ -266,14 +258,12 @@ mongoService.getTopPlayedArtists = async function (accessToken, timeframe = "lif
     } catch (error) {
         console.error("Error fetching top played artists:", error);
         throw error;
-    } finally {
-        await client.close();
     }
 }
 
 mongoService.getTopPlayedSongs = async function (access_token) {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
 
         const pipeline = [
@@ -319,14 +309,12 @@ mongoService.getTopPlayedSongs = async function (access_token) {
     } catch (error) {
         console.error("Error fetching top played songs:", error);
         throw error;
-    } finally {
-        await client.close();
     }
 };
 
 mongoService.getTotalMinutesStreamed = async function (timeframe = "lifetime") {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);
 
         let startDate = null;
@@ -362,14 +350,12 @@ mongoService.getTotalMinutesStreamed = async function (timeframe = "lifetime") {
         return totalMinutesStreamed;
     } catch (err) {
         console.error("Error fetching documents:", err);
-    } finally {
-        await client.close();
     }
 };
 
 mongoService.getSongOfTheDay = async (accessToken) =>{
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection("rating");
     
         const sotd = await collection.findOne({});
@@ -378,14 +364,12 @@ mongoService.getSongOfTheDay = async (accessToken) =>{
     
       } catch (error) {
         console.error('Error fetching song of the day:', error);
-      } finally {
-        await client.close();
       }
 }
 
 mongoService.updateSongOfTheDay = async (rating) => {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection("rating");
     
 
@@ -397,15 +381,13 @@ mongoService.updateSongOfTheDay = async (rating) => {
       } catch (error) {
         console.error('Error updating track rating:', error);
         res.status(500).json({ error: 'Internal server error' });
-      } finally {
-        await client.close();
       }
 }
 
 
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
-        await client.connect();
+        db = await initDb();
         const collection = db.collection(collectionName);        
         const ops = recentTracks.map(track => {
             return {
@@ -440,13 +422,12 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
     } catch (error) {
         console.error('Error syncing recent streams:', error);
         throw error;
-    } finally {
-        await client.close();
     }
 };
 
 mongoService.storeToken = async (accessToken, refreshToken, expiresIn, spotifyUser ) => {
     try {
+        db = await initDb();
         const accountId = spotifyUser.id;
         const tokensCol = db.collection("oauth_tokens");
         // TODO fix MongoNotConnectedError on store token
@@ -467,13 +448,12 @@ mongoService.storeToken = async (accessToken, refreshToken, expiresIn, spotifyUs
     } catch (error) {
         console.error('Error syncing recent streams:', error);
         throw error;
-    } finally {
-        await client.close();
     }
 };
 
 mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
     try {
+        db = await initDb();
         // const albums = await db.collection(collectionName).find({}).toArray();
         const uniqueTrackUris = await db.collection(collectionName).distinct('spotify_track_uri');
 

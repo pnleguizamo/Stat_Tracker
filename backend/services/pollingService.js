@@ -1,13 +1,10 @@
-const { MongoClient } = require("mongodb");
+const { initDb, client } = require('../mongo.js');
 const cron = require('node-cron');
 const { syncRecentStreams } = require('../services/mongoServices.js');
 const { getRecentlyPlayedSongs } = require('../services/spotifyServices.js');
 
-const url = process.env.URI;
-const dbName = process.env.DB_NAME;
-const client = new MongoClient(url);
-const db = client.db(dbName);
 const collectionName = process.env.COLLECTION_NAME;
+let db;
 
 // db.collection(collectionName).createIndex(
 //   { userId: 1, ts: 1, spotify_track_uri: 1 },
