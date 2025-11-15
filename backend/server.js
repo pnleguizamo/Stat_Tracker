@@ -7,6 +7,7 @@ require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
 const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js')
+require('./services/pollingService.js')
 
 var app = express();
 app.use(cors());
@@ -17,8 +18,6 @@ app.use(express.json());
 
 const port = process.env.PORT;
 const host = "localhost";
-
-
 
 app.use((req, res, next) => {
     console.log('Request Type:', req.method, 'Time:', Date.now(), 'Request URL:', req.originalUrl);

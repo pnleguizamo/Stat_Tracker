@@ -406,43 +406,7 @@ mongoService.updateSongOfTheDay = async (rating) => {
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         await client.connect();
-        const collection = db.collection(collectionName);
-
-        // console.log("SYNC: USER ID ", userId)
-        
-        // let newStreams = [];
-        // for (const track of recentTracks) {
-        //     // Convert Spotify track to our format
-        //     const streamEntry = {
-        //         ts: new Date(track.playedAt).toISOString(),
-        //         userId : userId,
-        //         master_metadata_track_name: track.trackName,
-        //         master_metadata_album_artist_name: track.artistName,
-        //         master_metadata_album_album_name: track.albumName,
-        //         spotify_track_uri: track.trackUri,
-        //         ms_played: track.duration, // This is the full duration since we can't know if it was fully played
-        //         reason_end: "trackdone", // Assuming completed since it's in recent history
-        //     };
-            
-        //     // Check if this stream already exists
-        //     const exists = await collection.findOne({
-        //         ts: streamEntry.ts,
-        //         spotify_track_uri: streamEntry.spotify_track_uri
-        //     });
-
-        //     if (!exists) {
-        //         newStreams.push(streamEntry);
-        //     }
-        // }
-
-        // if (newStreams.length > 0) {
-        //     // console.log(newStreams);
-        //     await collection.insertMany(newStreams);
-        //     return newStreams.length;
-        // }
-
-
-        
+        const collection = db.collection(collectionName);        
         const ops = recentTracks.map(track => {
             return {
                 updateOne: {

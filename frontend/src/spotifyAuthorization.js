@@ -72,11 +72,42 @@ export async function getAccessToken(code) {
         }
 
         const data = await result.json();
+        console.log(data);
+        const { access_token, refresh_token, expires_in } = data;
 
         
         if (!data.access_token) {
             throw new Error("Access token not found in the response.");
         }
+
+        
+        const meRes = await fetch('https://api.spotify.com/v1/me', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${access_token}`
+            }
+        });
+
+        if (!meRes.ok) {
+            throw new Error(`Error fetching recently played songs: ${meRes.statusText}`);
+        }
+        const me = await meRes.json(); 
+
+        const storeTokenRes = await fetch('http://localhost:8081/api/mongo/store_token', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                accessToken: access_token,
+                refreshToken: refresh_token,  
+                expiresIn: expires_in,
+                spotifyUser: me
+            })
+        });
+
+        const storeToken = await storeTokenRes.json();
         
         sessionStorage.setItem("access_token", data.access_token);
         console.log("Fresh Token");

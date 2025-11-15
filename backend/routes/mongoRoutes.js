@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTrackdoneDocuments, getTopPlayedArtists, getTotalMinutesStreamed, getTopPlayedSongs, getQuery, getTopAlbums, updateAlbumsWithImageUrls, getSongOfTheDay, updateSongOfTheDay } = require('../services/mongoServices.js');
+const { getTrackdoneDocuments, getTopPlayedArtists, getTotalMinutesStreamed, getTopPlayedSongs, getQuery, getTopAlbums, updateAlbumsWithImageUrls, getSongOfTheDay, updateSongOfTheDay, storeToken } = require('../services/mongoServices.js');
 
 const verifyAccessToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -104,6 +104,23 @@ router.get("/minutes_streamed/:timeframe", async (req, res) => {
         res.status(500).send({ error: "An unexpected error occurred" + err });
     }
 
+});
+
+router.post("/store_token", async (req, res) => {
+    try {
+        const { accessToken, refreshToken, expiresIn, spotifyUser } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({ error: "No refresh token from Spotify" });
+        }
+
+        const resp = await storeToken(accessToken, refreshToken, expiresIn, spotifyUser);
+        res.status(200).json(resp);
+
+    } catch (err) {
+        console.error({ error: "An unexpected error occurred" + err });
+        res.status(500).send({ error: "An unexpected error occurred" + err });
+    }
 });
 
 

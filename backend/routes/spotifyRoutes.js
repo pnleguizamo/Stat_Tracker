@@ -58,6 +58,7 @@ router.get("/recently_played", verifyAccessToken, async (req, res) => {
 
 // });
 
+// TODO remove
 router.post("/sync_recent_streams", verifyAccessToken, async (req, res) => {
     try {
         const accessToken = req.token;
