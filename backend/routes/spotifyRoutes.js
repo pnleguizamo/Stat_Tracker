@@ -37,8 +37,8 @@ router.get("/currently_playing", verifyAccessToken, async (req, res) => {
 router.get("/recently_played", verifyAccessToken, async (req, res) => {
     try {
         const accessToken = req.token;
-        const track = await getRecentlyPlayedSongs(accessToken);
-        res.status(200).json(track);
+        const resp = await getRecentlyPlayedSongs(accessToken);
+        res.status(200).json(resp.tracks);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
         res.status(500).send({ error: "An unexpected error occurred" + err });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card } from 'react-bootstrap';
-import { getAccessToken } from "./spotifyAuthorization.js";
+import api from './lib/api.js';
 import './cards.css';
 
 function TopSongs() {
@@ -8,21 +8,14 @@ function TopSongs() {
 
   useEffect(() => {
     async function init() {
-      const accessToken = await getAccessToken();
-  
-      const response = await fetch("http://localhost:8081/api/mongo/top_songs", {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-  
-      const songsRes = await response.json();
-      console.log(songsRes); // Log the data to check the structure
-  
-      // Ensure songsRes is an array before setting the state
-      setSongs(Array.isArray(songsRes) ? songsRes : []);
+      try {
+        const songsRes = await api.get('/api/mongo/top_songs');
+        console.log(songsRes); // Log the data to check the structure
+        // Ensure songsRes is an array before setting the state
+        setSongs(Array.isArray(songsRes) ? songsRes : []);
+      } catch (err) {
+        console.error('Error fetching top songs:', err);
+      }
     }
     init();
   }, []);

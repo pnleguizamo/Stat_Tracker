@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './fileUpload.css';
+import api from './lib/api.js';
 
 function FileUpload() {
     const [files, setFiles] = useState(null);
@@ -23,17 +24,8 @@ function FileUpload() {
         }
 
         try {
-            const res = await fetch('http://localhost:8081/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (res.ok) {
-                const responseData = await res.json();
-                setResponse(responseData);
-            } else {
-                throw new Error('Failed to upload files');
-            }
+            const responseData = await api.post('/api/upload', formData);
+            setResponse(responseData);
         } catch (error) {
             console.error('Error uploading files:', error);
             alert('Error uploading files. Please try again.');

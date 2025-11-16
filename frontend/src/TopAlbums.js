@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAccessToken } from "./spotifyAuthorization.js";
+import api from './lib/api.js';
 import './cards.css';
 
 function TopArtists() {
@@ -8,17 +8,12 @@ function TopArtists() {
 
     useEffect(() => {
         async function init() {
-            const accessToken = await getAccessToken();
-            const response = await fetch(`http://localhost:8081/api/mongo/top_albums/${timeframe}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const albumData = await response.json();
-            setAlbums(albumData);
+            try {
+                const albumData = await api.get(`/api/mongo/top_albums/${timeframe}`);
+                setAlbums(albumData || []);
+            } catch (err) {
+                console.error('Error fetching top albums:', err);
+            }
         }
         init();
     }, [timeframe]);

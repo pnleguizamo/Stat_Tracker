@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAccessToken } from "./spotifyAuthorization.js";
+import api from './lib/api.js';
 import './recentlyPlayed.css'; // Updated CSS file for styling
 
 function RecentlyPlayed() {
@@ -7,18 +7,12 @@ function RecentlyPlayed() {
 
   useEffect(() => {
     async function init() {
-      const accessToken = await getAccessToken();
-
-      const response = await fetch("http://localhost:8081/api/spotify/recently_played", {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const tracks = await response.json();
-      setRecentlyPlayed(tracks);
+      try {
+        const tracks = await api.get('/api/spotify/recently_played');
+        setRecentlyPlayed(tracks || []);
+      } catch (err) {
+        console.error('Error fetching recently played tracks:', err);
+      }
     }
     init();
   }, []);

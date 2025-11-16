@@ -13,6 +13,8 @@ let db;
 
 cron.schedule('*/3 * * * *', async () => {
     try {
+        db = await initDb();
+        
         const start = Date.now();
         console.log("Cron started at:", new Date(start).toISOString());
 

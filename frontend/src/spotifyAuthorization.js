@@ -15,7 +15,7 @@ export async function redirectToAuthCodeFlow() {
     const params = new URLSearchParams();
     params.append("client_id", clientId);
     params.append("response_type", "code");
-    params.append("redirect_uri", "http://localhost:8080/callback");
+    params.append("redirect_uri", `${process.env.REACT_APP_BASE_URL}/callback`);
     params.append("scope", "user-read-private user-read-email user-read-playback-state user-read-recently-played user-top-read");
     params.append("code_challenge_method", "S256");
     params.append("code_challenge", challenge);
@@ -56,7 +56,7 @@ export async function getAccessToken(code) {
     params.append("client_id", clientId);
     params.append("grant_type", "authorization_code");
     params.append("code", code);
-    params.append("redirect_uri", "http://localhost:8080/callback");
+    params.append("redirect_uri", `${process.env.REACT_APP_BASE_URL}/callback`);
     params.append("code_verifier", verifier);
 
     try {
@@ -80,20 +80,10 @@ export async function getAccessToken(code) {
             throw new Error("Access token not found in the response.");
         }
 
-        
-        const meRes = await fetch('https://api.spotify.com/v1/me', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${access_token}`
-            }
-        });
+        const me = await fetchProfile(access_token); 
 
-        if (!meRes.ok) {
-            throw new Error(`Error fetching recently played songs: ${meRes.statusText}`);
-        }
-        const me = await meRes.json(); 
-
-        const storeTokenRes = await fetch('http://localhost:8081/api/mongo/store_token', {
+        // Can't use API wrapper here. Infinite recursion
+        const storeTokenRes = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/mongo/store_token`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${access_token}`,

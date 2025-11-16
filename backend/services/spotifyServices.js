@@ -40,7 +40,6 @@ async function getCurrentlyPlayingTrack(accessToken) {
     }
 }
 
-// TODO adapt new function to old UI
 async function getRecentlyPlayedSongs(accessToken, afterMs = null, limit = 50) {
   let allTracks = [];
   let maxPlayedAtMs = afterMs; // start from previous cursor

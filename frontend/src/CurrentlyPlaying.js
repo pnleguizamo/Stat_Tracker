@@ -3,6 +3,7 @@ import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyA
 import { Button, Container, Row, Col, Card, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './CurrentlyPlaying.css';
+import api from './lib/api.js';
 
 
 function CurrentlyPlaying() {
@@ -35,16 +36,12 @@ function CurrentlyPlaying() {
       setProfilePicture(profile.images[0].url);
 
 
-      const response = await fetch("http://localhost:8081/api/spotify/currently_playing", {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const track = await response.json();
-      setTrack(track);
+      try {
+        const track = await api.get('/api/spotify/currently_playing');
+        setTrack(track);
+      } catch (err) {
+        console.error('Error fetching currently playing track:', err);
+      }
 
       setLoading(true);
       setError(null);
@@ -52,11 +49,7 @@ function CurrentlyPlaying() {
       try {
         const results = {};
         for (const timeframe of timeframes) {
-          const response = await fetch(`http://localhost:8081/api/mongo/minutes_streamed/${timeframe.value}`);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch for timeframe: ${timeframe.value}`);
-          }
-          const minutes = await response.json();
+          const minutes = await api.get(`/api/mongo/minutes_streamed/${timeframe.value}`);
           results[timeframe.value] = minutes;
         }
         setData(results);
@@ -68,11 +61,7 @@ function CurrentlyPlaying() {
       }
 
       try {
-        const response = await fetch("http://localhost:8081/api/mongo/song-of-the-day");
-        if (!response.ok) {
-          throw new Error("Failed to fetch song of the day");
-        }
-        const song = await response.json();
+        const song = await api.get('/api/mongo/song-of-the-day');
         setSongOfTheDay(song);
       } catch (err) {
         console.error("Error fetching song of the day:", err);
@@ -91,17 +80,7 @@ function CurrentlyPlaying() {
 
   const updateRating = async () => {
     try {
-      const response = await fetch("http://localhost:8081/api/mongo/update-rating", {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ rating: newRating }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update rating");
-      }
+      await api.put('/api/mongo/update-rating', { rating: newRating });
       setSongOfTheDay(prevSong => ({ ...prevSong, rating: newRating }));
     } catch (err) {
       console.error("Error updating rating:", err);
@@ -110,27 +89,10 @@ function CurrentlyPlaying() {
 
   const syncStreams = async () => {
     try {
-      
-      const accessToken = await getAccessToken();
-
-      const response = await fetch("http://localhost:8081/api/spotify/sync_recent_streams", {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to sync stream");
-      }
-      
-      
-      const newStreams = await response.json();
-
-
+      const result = await api.post('/api/spotify/sync_recent_streams', {});
+      console.log('Streams synced:', result);
     } catch (err) {
-      console.error("Error sync stream:", err);
+      console.error("Error syncing streams:", err);
     }
   };
 
