@@ -1,22 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from './lib/api.js';
 import './cards.css';
+import { useQuery } from '@tanstack/react-query';
 
-function TopArtists() {
-    const [albums, setAlbums] = useState([]);
+function TopAlbums() {
     const [timeframe, setTimeframe] = useState('lifetime');
-
-    useEffect(() => {
-        async function init() {
-            try {
-                const albumData = await api.get(`/api/mongo/top_albums/${timeframe}`);
-                setAlbums(albumData || []);
-            } catch (err) {
-                console.error('Error fetching top albums:', err);
-            }
-        }
-        init();
-    }, [timeframe]);
+    const { data: albums = [], isLoading, isError, error } = useQuery({
+        queryKey : ['topAlbums', timeframe], 
+        queryFn: () => api.get(`/api/mongo/top_albums/${timeframe}`)
+    });
 
     return (
         <div className="top-artists-container">
@@ -28,18 +20,22 @@ function TopArtists() {
                 <button className="btn-timeframe" onClick={() => setTimeframe('year')}>Last Year</button>
                 <button className="btn-timeframe" onClick={() => setTimeframe('lifetime')}>All Time</button>
             </div>
+            {isLoading && <p>Loading top albums…</p>}
+            {isError && <p>Error loading albums: {String(error?.message || '')}</p>}
             <div className="cards-wrapper">
-                {albums.map((album) => (
+                {!isLoading && !isError && albums?.map((album) => (
                     <div key={album._id} className="artist-card">
                         <img src={album.image_url} alt={album._id} className="artist-img" />
                         <h3 className="artist-name">
-                            <a
+                            {/* <a
                                 href={`https://open.spotify.com/artist/${album.spotify_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
                                 {album._id}
-                            </a>
+                            </a> */}
+                            
+                            {album._id}
                         </h3>
                         <p>{album.artist}</p>
                         <p className="play-count">{album.play_count} plays</p>
@@ -50,4 +46,4 @@ function TopArtists() {
     );
 }
 
-export default TopArtists;
+export default TopAlbums;

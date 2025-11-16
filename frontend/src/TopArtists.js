@@ -1,22 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from './lib/api.js';
 import './cards.css';
 
 function TopArtists() {
-    const [artists, setArtists] = useState([]);
     const [timeframe, setTimeframe] = useState('lifetime');
-
-    useEffect(() => {
-        async function init() {
-            try {
-                const artistsData = await api.get(`/api/mongo/top_artists/${timeframe}`);
-                setArtists(artistsData || []);
-            } catch (err) {
-                console.error('Error fetching top artists:', err);
-            }
-        }
-        init();
-    }, [timeframe]);
+    const { data: artists = [], isLoading, isError, error } = useQuery({
+        queryKey: ['topArtists', timeframe],
+        queryFn: () => api.get(`/api/mongo/top_artists/${timeframe}`)
+    });
 
     return (
         <div className="top-artists-container">
@@ -28,18 +20,21 @@ function TopArtists() {
                 <button className="btn-timeframe" onClick={() => setTimeframe('year')}>Last Year</button>
                 <button className="btn-timeframe" onClick={() => setTimeframe('lifetime')}>All Time</button>
             </div>
+            {isLoading && <p>Loading top artists…</p>}
+            {isError && <p>Error loading artists: {String(error?.message || '')}</p>}
             <div className="cards-wrapper">
-                {artists.map((artist) => (
+                {!isLoading && !isError && artists?.map((artist) => (
                     <div key={artist._id} className="artist-card">
                         <img src={artist.image_url} alt={artist._id} className="artist-img" />
                         <h3 className="artist-name">
-                            <a 
+                            {/* <a 
                                 href={`https://open.spotify.com/artist/${artist.spotify_id}`} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
                             >
                                 {artist._id}
-                            </a>
+                            </a> */}
+                            {artist._id}
                         </h3>
                         <p className="play-count">{artist.play_count} plays</p>
                     </div>
