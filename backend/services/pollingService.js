@@ -6,10 +6,14 @@ const { getRecentlyPlayedSongs } = require('../services/spotifyServices.js');
 const collectionName = process.env.COLLECTION_NAME;
 let db;
 
-// db.collection(collectionName).createIndex(
-//   { userId: 1, ts: 1, spotify_track_uri: 1 },
-//   { unique: true, name: "uniq_play_per_user" }
-// );
+async function createIndex(){
+    db = await initDb();
+
+    db.collection(collectionName).createIndex(
+    { userId: 1, ts: 1, spotify_track_uri: 1 },
+    { unique: true, name: "uniq_play_per_user" }
+    );
+}
 
 cron.schedule('*/3 * * * *', async () => {
     try {

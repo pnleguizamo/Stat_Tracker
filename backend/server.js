@@ -36,34 +36,3 @@ app.use(streamHistoryRoutes);
 app.listen(port, () => {
     console.log("App listening at http://%s:%s", host, port);
 });
-
-
-
-// const folderPath = '/mnt/c/Users/legui/Documents/Spotify Data/my_spotify_data/Mongo Data';
-// async function importJSONFiles(db, collectionName, folderPath) {
-//     const collection = db.collection(collectionName);
-
-//     const files = fs.readdirSync(folderPath);
-//     console.log("Branch");
-
-//     if (files){
-//         // console.log("files: " + files);
-
-//     }
-//     for (const file of files) {
-//         console.log("Enter loop");
-//         if (file.endsWith('.json')) {
-//             const filePath = path.join(folderPath, file);
-//             const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-//             // console.log(data);
-//             await collection.insertMany(data); // Insert into collection
-//             console.log("Done");
-//         }
-//         else{
-//             console.log("Not JSON");
-//         }
-//     }
-//     console.log("Branch 2");
-
-//     await client.close();
-// }

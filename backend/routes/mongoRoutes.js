@@ -74,7 +74,6 @@ router.get("/top_artists/:timeframe", verifyAccessToken, async (req, res) => {
 router.get("/top_songs", verifyAccessToken, async (req, res) => {
     try {
         const songs = await getTopPlayedSongs(req.token);
-        console.log(songs);
         res.status(200).json(songs);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
@@ -86,7 +85,6 @@ router.get("/top_songs", verifyAccessToken, async (req, res) => {
 router.get("/top_albums/:timeframe", verifyAccessToken, async (req, res) => {
     try {
         const albums = await getTopAlbums(req.token, req.params.timeframe);
-        console.log(albums);
         res.status(200).json(albums);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });

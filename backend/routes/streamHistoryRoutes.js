@@ -1,38 +1,139 @@
 const multer = require('multer');
 const { initDb, client } = require('../mongo.js');
 const fs = require('fs');
-
-const collectionName = process.env.COLLECTION_NAME;
-let db;
-
-const upload = multer({ dest: 'uploads/' }); 
-
 const express = require('express');
 const router = express.Router();
 
+const collectionName = process.env.COLLECTION_NAME;
+
+// const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 } // 15MB max per file
+});
 
 router.post('/api/upload', upload.array('files'), async (req, res) => {
-    try {
-        
-        if (!req.files || req.files.length === 0) {
-            return res.status(400).send('No files uploaded.');
-        }
-
-        db = await initDb();
-        const collection = db.collection(collectionName);
-
-        for (const file of req.files) {
-            const fileData = JSON.parse(fs.readFileSync(file.path, 'utf8'));
-            
-            const result = await collection.insertMany(fileData);
-            
-        }
-
-        res.status(200).json({ message: 'Files uploaded and data saved successfully' });
-    } catch (error) {
-        console.error('Error processing upload:', error);
-        res.status(500).send('Error processing upload');
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded.' });
     }
+
+    const userId = req.body.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId / auth.' });
+    }
+
+    const db = await initDb();
+    const collection = db.collection(collectionName);
+
+    const summary = {
+      userId,
+      totalFilesReceived: req.files.length,
+      totalFilesProcessed: 0,
+      totalRows: 0,
+      totalInserted: 0,
+      totalDuplicatesOrExisting: 0,
+      totalInvalidRows: 0,
+      files: []
+    };
+
+    for (const file of req.files) {
+      const fileReport = {
+        originalName: file.originalname,
+        processed: false,
+        reasonSkipped: null,
+        totalRows: 0,
+        inserted: 0,
+        duplicatesOrExisting: 0,
+        invalidRows: 0,
+        error: null
+      };
+
+      try {
+        if (!file.originalname.startsWith('Streaming_History_Audio') || !file.originalname.endsWith('.json')) {
+          fileReport.reasonSkipped = 'Filename does not look like a Spotify extended history file (Streaming_History_Audio_*.json).';
+          summary.files.push(fileReport);
+          continue;
+        }
+
+        const text = file.buffer.toString('utf8');
+        const json = JSON.parse(text);
+
+        if (!Array.isArray(json)) {
+          fileReport.reasonSkipped = 'File JSON is not an array.';
+          summary.files.push(fileReport);
+          continue;
+        }
+
+        fileReport.totalRows = json.length;
+        summary.totalRows += json.length;
+
+        const operations = [];
+        let invalidRows = 0;
+        const perFileSeen = new Set(); 
+
+        for (const row of json) {
+          if (!row.ts || !row.ms_played || !row.spotify_track_uri) {
+            invalidRows++;
+            continue;
+          }
+
+          const dedupeKey = `${row.ts}|${row.spotify_track_uri}`;
+          if (perFileSeen.has(dedupeKey)) continue;
+          perFileSeen.add(dedupeKey);
+
+          operations.push({
+            updateOne: {
+              filter: {
+                userId,
+                ts : row.ts,
+                spotify_track_uri : row.spotify_track_uri
+              },
+              update: {
+                $setOnInsert: {
+                  ...row,
+                  userId 
+                }
+              },
+              upsert: true
+            }
+          });
+        }
+
+        fileReport.invalidRows = invalidRows;
+        summary.totalInvalidRows += invalidRows;
+
+        if (operations.length > 0) {
+          const bulkResult = await collection.bulkWrite(operations, { ordered: false });
+
+          const inserted = bulkResult.upsertedCount || 0;
+          const totalCandidates = operations.length;
+          const duplicatesOrExisting = totalCandidates - inserted; // upserts that found existing docs
+
+          fileReport.inserted = inserted;
+          fileReport.duplicatesOrExisting = duplicatesOrExisting;
+
+          summary.totalInserted += inserted;
+          summary.totalDuplicatesOrExisting += duplicatesOrExisting;
+        }
+
+        fileReport.processed = true;
+        summary.totalFilesProcessed++;
+
+      } catch (err) {
+        console.error(`Error processing file ${file.originalname}:`, err);
+        fileReport.error = err.message;
+      }
+
+      summary.files.push(fileReport);
+    }
+
+    return res.status(200).json(summary);
+
+  } catch (error) {
+    console.error('Error processing upload:', error);
+    return res.status(500).json({ error: 'Error processing upload' });
+  }
 });
 
 

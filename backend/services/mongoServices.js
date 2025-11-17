@@ -164,7 +164,6 @@ mongoService.getQuery = async function () {
         ];
 
         const topSongsAndArtists = await collection.aggregate(pipeline).toArray();
-        console.log(topSongsAndArtists);
 
         return topSongsAndArtists;
     } catch (error) {
