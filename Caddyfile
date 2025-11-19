@@ -1,0 +1,13 @@
+:8080 {
+    encode gzip
+
+    # API routes -> backend container
+    handle /api/* {
+        reverse_proxy api:8081
+    }
+
+    # Everything else -> frontend container
+    handle {
+        reverse_proxy frontend:80
+    }
+}
