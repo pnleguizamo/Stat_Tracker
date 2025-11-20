@@ -1,37 +1,28 @@
-name: Deploy to Raspberry Pi
+name: Deploy to Raspberry Pi (self-hosted)
 
 on:
   push:
     branches:
-      - main  
+      - main
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Check out repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Deploy to Raspberry Pi over SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PI_HOST }}
-          username: ${{ secrets.PI_USER }}
-          key: ${{ secrets.PI_SSH_KEY }}
-          port: ${{ secrets.PI_SSH_PORT || 22 }}
-          script: |
-            cd ${{ secrets.PI_PROJECT_PATH }}
+      - name: Deploy with Docker Compose
+        working-directory: /home/pnleguizamo/Stat_Tracker
+        run: |
+          echo "Updating repo..."
+          git fetch origin
+          git reset --hard origin/main
 
-            # Make sure repo is up to date
-            git fetch origin
-            git reset --hard origin/main
+          echo "Rebuilding and restarting containers..."
+          docker compose pull || true
+          docker compose up -d --build
 
-            # Pull images
-            docker compose pull
-
-            # Rebuild and restart containers with latest code
-            docker compose up -d --build
-
-            # Clean up old dangling images
-            docker image prune -f
+          echo "Cleaning up old images..."
+          docker image prune -f
