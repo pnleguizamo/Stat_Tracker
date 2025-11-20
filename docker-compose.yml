@@ -23,7 +23,7 @@ services:
     image: caddy:2-alpine
     container_name: caddy
     ports:
-      - "8080:8080"
+      - "80"
       # if you’re NOT using Cloudflare Tunnel and can port-forward:
       # - "443:443"
     volumes:
@@ -35,16 +35,16 @@ services:
       - frontend
 
   # Optional: Cloudflare tunnel as a container (if you don’t want to port-forward)
-  # cloudflared:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: cloudflared
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - caddy
-  #   command: tunnel run
-  #   environment:
-  #     # From Cloudflare dashboard → Zero Trust → Access → Tunnels → Create tunnel → "Docker" → copy token
-  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    depends_on:
+      - caddy
+    command: tunnel run
+    environment:
+      # From Cloudflare dashboard → Zero Trust → Access → Tunnels → Create tunnel → "Docker" → copy token
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 
 volumes:
   caddy_data:

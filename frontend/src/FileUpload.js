@@ -29,13 +29,20 @@ function FileUpload() {
 
     try {
       setIsUploading(true);
-    //   const res = await fetch('http://localhost:8081/api/upload', {
-    //     method: 'POST',
-    //     body: formData
-    //   });
+      const res = await fetch('http://localhost:8081/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-      const data = await api.post('/api/upload', formData);
-      setResponse(data);
+      if (res.ok) {
+        const responseData = await res.json();
+        setResponse(responseData);
+      } else {
+        throw new Error('Failed to upload files');
+      }
+
+      // const data = await api.post('/api/upload', formData);
+      // setResponse(data);
       
     } catch (error) {
       console.error('Error uploading files:', error);
