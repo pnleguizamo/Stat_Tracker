@@ -12,6 +12,31 @@ function FileUpload() {
     setResponse(null);
   };
 
+  const MAX_BATCH_BYTES = 80 * 1024 * 1024; // 80 MB limit because Cloudflare has a 100mb limit :(
+
+  function chunkFilesBySize(files) {
+    const batches = [];
+    let currentBatch = [];
+    let currentSize = 0;
+
+    for (const file of files) {
+      if (currentBatch.length > 0 && currentSize + file.size > MAX_BATCH_BYTES) {
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentSize = 0;
+      }
+      currentBatch.push(file);
+      currentSize += file.size;
+    }
+
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    return batches;
+  }
+
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     const { id : userId } = await api.get('https://api.spotify.com/v1/me');
@@ -20,35 +45,41 @@ function FileUpload() {
       alert('Please select files to upload');
       return;
     }
-
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    if (userId) {
-      formData.append('userId', userId);
-    }
+    // const formData = new FormData();
+    // files.forEach((file) => formData.append('files', file));
+    // if (userId) {
+    //   formData.append('userId', userId);
+    // }
 
     try {
       setIsUploading(true);
-      const res = await fetch('http://localhost:8081/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const batches = chunkFilesBySize(files);
+      const allSummaries = [];
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        const formData = new FormData();
+        batch.forEach((file) => formData.append('files', file));
+        if (userId) formData.append('userId', userId);
 
-      if (res.ok) {
-        const responseData = await res.json();
-        setResponse(responseData);
-      } else {
-        throw new Error('Failed to upload files');
+        const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (res.ok) {
+          const responseData = await res.json();
+          allSummaries.push(responseData);
+          setResponse(responseData);
+        } else {
+          throw new Error('Failed to upload files');
+        }
       }
-
-      // const data = await api.post('/api/upload', formData);
-      // setResponse(data);
-      
     } catch (error) {
       console.error('Error uploading files:', error);
       alert(error.message || 'Error uploading files. Please try again.');
     } finally {
       setIsUploading(false);
+      console.log(allSummaries);
     }
   };
 
