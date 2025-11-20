@@ -6,13 +6,14 @@ function FileUpload() {
   const [files, setFiles] = useState([]);
   const [response, setResponse] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState({ currentBatch: 0, totalBatches: 0, percent: 0 });
 
   const handleFileChange = (event) => {
     setFiles(Array.from(event.target.files));
     setResponse(null);
   };
 
-  const MAX_BATCH_BYTES = 80 * 1024 * 1024; // 80 MB limit because Cloudflare has a 100mb limit :(
+  const MAX_BATCH_BYTES = 35 * 1024 * 1024; // 40 MB limit because Cloudflare has a 100mb limit :(
 
   function chunkFilesBySize(files) {
     const batches = [];
@@ -45,16 +46,23 @@ function FileUpload() {
       alert('Please select files to upload');
       return;
     }
-    // const formData = new FormData();
-    // files.forEach((file) => formData.append('files', file));
-    // if (userId) {
-    //   formData.append('userId', userId);
-    // }
+
+    const merged = {
+      userId,
+      totalFilesReceived: 0,
+      totalFilesProcessed: 0,
+      totalRows: 0,
+      totalInserted: 0,
+      totalDuplicatesOrExisting: 0,
+      totalInvalidRows: 0,
+      files: []
+    };
 
     try {
       setIsUploading(true);
       const batches = chunkFilesBySize(files);
-      const allSummaries = [];
+      setProgress({ currentBatch: 0, totalBatches: batches.length, percent: 0 });
+
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
         const formData = new FormData();
@@ -66,20 +74,32 @@ function FileUpload() {
           body: formData,
         });
 
-        if (res.ok) {
-          const responseData = await res.json();
-          allSummaries.push(responseData);
-          setResponse(responseData);
-        } else {
-          throw new Error('Failed to upload files');
+        if (!res.ok) {
+          throw new Error(`Failed to upload batch ${i + 1} (status ${res.status})`);
         }
+
+        const responseData = await res.json();
+
+        merged.totalFilesReceived += responseData.totalFilesReceived || 0;
+        merged.totalFilesProcessed += responseData.totalFilesProcessed || 0;
+        merged.totalRows += responseData.totalRows || 0;
+        merged.totalInserted += responseData.totalInserted || 0;
+        merged.totalDuplicatesOrExisting += responseData.totalDuplicatesOrExisting || 0;
+        merged.totalInvalidRows += responseData.totalInvalidRows || 0;
+        merged.files = merged.files.concat(responseData.files || []);
+
+        const currentBatch = i + 1;
+        const percent = batches.length ? Math.round((currentBatch / batches.length) * 100) : 100;
+        setProgress({ currentBatch, totalBatches: batches.length, percent });
       }
+
+      setResponse(merged);
     } catch (error) {
       console.error('Error uploading files:', error);
       alert(error.message || 'Error uploading files. Please try again.');
     } finally {
       setIsUploading(false);
-      console.log(allSummaries);
+      setTimeout(() => setProgress({ currentBatch: 0, totalBatches: 0, percent: 0 }), 800);
     }
   };
 
@@ -109,6 +129,26 @@ function FileUpload() {
           {isUploading ? 'Uploading…' : 'Upload'}
         </button>
       </form>
+
+      {progress.totalBatches > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ height: 24, background: '#eee', borderRadius: 6, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${progress.percent}%`,
+                  height: '100%',
+                  background: '#4caf50',
+                  transition: 'width 240ms ease'
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 8, fontSize: 14 }}>
+              {isUploading
+                ? `Uploading batch ${progress.currentBatch} of ${progress.totalBatches} — ${progress.percent}%`
+                : `Last upload: ${progress.currentBatch} of ${progress.totalBatches} — ${progress.percent}%`}
+            </div>
+          </div>
+        )}
 
       {response && (
         <div className="response-container">

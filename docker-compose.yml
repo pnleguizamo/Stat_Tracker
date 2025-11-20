@@ -4,8 +4,6 @@ services:
     container_name: api
     environment:
       - NODE_ENV=production
-      # Put your Atlas connection string here (or in an .env file)
-      # Something like: mongodb+srv://user:pass@cluster-url/dbname?retryWrites=true&w=majority
       - MONGO_URI=${MONGO_URI}
       - PORT=8081
     expose:
@@ -24,8 +22,6 @@ services:
     container_name: caddy
     ports:
       - "80"
-      # if you’re NOT using Cloudflare Tunnel and can port-forward:
-      # - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -34,7 +30,6 @@ services:
       - api
       - frontend
 
-  # Optional: Cloudflare tunnel as a container (if you don’t want to port-forward)
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -43,7 +38,6 @@ services:
       - caddy
     command: tunnel run
     environment:
-      # From Cloudflare dashboard → Zero Trust → Access → Tunnels → Create tunnel → "Docker" → copy token
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 
 volumes:

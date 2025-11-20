@@ -1,5 +1,4 @@
 {
-    # Needed because Caddy won't be doing public HTTPS
     auto_https off
 }
 :80 {
