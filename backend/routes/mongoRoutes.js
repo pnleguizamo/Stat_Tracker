@@ -61,7 +61,7 @@ router.get("/top_songs", authenticate, async (req, res) => {
     try {
         const accountId = req.accountId;
         const accessToken = await getAccessToken(accountId);
-        const songs = await getTopPlayedSongs(accessToken);
+        const songs = await getTopPlayedSongs(accessToken, accountId);
         res.status(200).json(songs);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
@@ -74,7 +74,7 @@ router.get("/top_albums/:timeframe", authenticate, async (req, res) => {
     try {
         const accountId = req.accountId;
         const accessToken = await getAccessToken(accountId);
-        const albums = await getTopAlbums(accessToken, req.params.timeframe);
+        const albums = await getTopAlbums(accessToken, accountId, req.params.timeframe);
         res.status(200).json(albums);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });

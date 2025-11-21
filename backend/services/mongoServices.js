@@ -23,7 +23,7 @@ mongoService.getTrackdoneDocuments = async function () {
     }
 }
 
-mongoService.getTopAlbums = async function (accessToken, timeframe = "lifetime") {
+mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "lifetime") {
     try {
         db = await initDb();
 
@@ -51,6 +51,7 @@ mongoService.getTopAlbums = async function (accessToken, timeframe = "lifetime")
         pipeline.push(
             {
                 "$match": {
+                    "userId" : `${userId}`,
                     "reason_end": "trackdone",
                     "master_metadata_album_artist_name": { "$ne": null }
                 }
@@ -307,7 +308,7 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
     }
 }
 
-mongoService.getTopPlayedSongs = async function (access_token) {
+mongoService.getTopPlayedSongs = async function (access_token, userId ) {
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
@@ -315,6 +316,7 @@ mongoService.getTopPlayedSongs = async function (access_token) {
         const pipeline = [
             {
                 "$match": {
+                    "userId" : `${userId}`,
                     "master_metadata_track_name": { "$ne": null },
                     "master_metadata_album_artist_name": { "$ne": null },
                     "reason_end": "trackdone"
