@@ -173,7 +173,7 @@ mongoService.getQuery = async function () {
 }
 
 
-mongoService.getTopPlayedArtists = async function (accessToken, timeframe = "lifetime") {
+mongoService.getTopPlayedArtists = async function (accessToken, userId, timeframe = "lifetime") {
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
@@ -202,6 +202,7 @@ mongoService.getTopPlayedArtists = async function (accessToken, timeframe = "lif
         pipeline.push(
             {
                 "$match": {
+                    "userId" : `${userId}`,
                     "master_metadata_album_artist_name": { "$ne": null },
                     "reason_end": "trackdone"
                 }
@@ -224,35 +225,81 @@ mongoService.getTopPlayedArtists = async function (accessToken, timeframe = "lif
 
         const topArtists = await collection.aggregate(pipeline).toArray();
 
-        // TODO Refactor getAlbumCover function
-        for (let artist of topArtists) {
-            if (artist.spotify_uri) {
-                const trackId = artist.spotify_uri.split(':')[2];
+        const trackIds = topArtists.map(a => a.spotify_uri?.split(':')[2]).filter(Boolean);
 
-                const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+        if (trackIds.length) {
+            const resp = await fetch(
+                `https://api.spotify.com/v1/tracks?ids=${trackIds.join(',')}`,
+                {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                }
+            );
+            if (!resp.ok) {
+                console.error('Spotify /tracks error', await resp.text());
+            } else {
+                const data = await resp.json();
+                const artistByTrackId = {};
+
+                const artistIds = data.tracks.map(a => a.artists[0].id);
+                const resp2 = await fetch(`https://api.spotify.com/v1/artists?ids=${artistIds.join(',')}`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
+                        Authorization: `Bearer ${accessToken}`,
+                    },
                 });
 
-                const trackData = await resp.json();
-                const artistId = trackData.artists[0].uri.split(':')[2];
-
-                const spotifyApiUrl = `https://api.spotify.com/v1/artists/${artistId}`;
-                const response = await fetch(spotifyApiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
+                for (const t of data.tracks || []) {
+                    if (t?.id && t.artists?.[0]?.id) {
+                        artistByTrackId[t.id] = t.artists?.[0]?.id;
                     }
-                });
-
-
-                const artistData = await response.json();
-                artist.image_url = artistData.images[0].url;
+                }
+                
+                const data2 = await resp2.json();
+                
+                const imageByArtistId = {};
+                for (const t of data2.artists || []) {
+                    if (t?.id && t.images?.[0]?.url) {
+                        imageByArtistId[t.id] = t.images[0].url;
+                    }
+                }
+                for (const artist of topArtists) {
+                    const trackId = artist.spotify_uri?.split(':')[2];
+                    artist.image_url = trackId ? imageByArtistId[artistByTrackId[trackId]] ?? null : null;
+                }
             }
         }
+        // TODO Refactor getAlbumCover function
+        // for (let artist of topArtists) {
+        //     if (artist.spotify_uri) {
+        //         const trackId = artist.spotify_uri.split(':')[2];
 
+        //         const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+        //             method: 'GET',
+        //             headers: {
+        //                 'Authorization': `Bearer ${accessToken}`
+        //             }
+        //         });
+
+        //         const trackData = await resp.json();
+        //         const artistId = trackData.artists[0].uri.split(':')[2];
+
+        //         const spotifyApiUrl = `https://api.spotify.com/v1/artists/${artistId}`;
+        //         const response = await fetch(spotifyApiUrl, {
+        //             method: 'GET',
+        //             headers: {
+        //                 'Authorization': `Bearer ${accessToken}`
+        //             }
+        //         });
+
+
+        //         const artistData = await response.json();
+        //         artist.image_url = artistData.images[0].url;
+        //     }
+        // }
+        // console.log(topArtists)
         return topArtists;
     } catch (error) {
         console.error("Error fetching top played artists:", error);

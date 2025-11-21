@@ -1,23 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getTrackdoneDocuments, getTopPlayedArtists, getTotalMinutesStreamed, getTopPlayedSongs, getQuery, getTopAlbums, updateAlbumsWithImageUrls, getSongOfTheDay, updateSongOfTheDay, storeToken } = require('../services/mongoServices.js');
-
-const verifyAccessToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-
-    if (!authHeader) {
-        return res.status(401).json({ error: 'Authorization header missing' });
-    }
-
-    const token = authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ error: 'Token missing' });
-    }
-
-    req.token = token;
-    next();
-};
+const { authenticate } = require('../middleware/authMiddleware.js');
+const { getAccessToken } = require('../services/authService.js');
 
 router.get("/completed_tracks", async (req, res) => {
     try {
@@ -48,7 +33,7 @@ router.put('/update-rating', async (req, res) => {
     res.json({ message: 'Track rating updated successfully.' });
 });
 
-router.get("/test", verifyAccessToken, async (req, res) => {
+router.get("/test", async (req, res) => {
     try {
         // const test = await updateAlbumsWithImageUrls(req.token);
         res.status(200).json(test);
@@ -59,10 +44,11 @@ router.get("/test", verifyAccessToken, async (req, res) => {
 
 });
 
-router.get("/top_artists/:timeframe", verifyAccessToken, async (req, res) => {
+router.get("/top_artists/:timeframe", authenticate, async (req, res) => {
     try {
-        const artists = await getTopPlayedArtists(req.token, req.params.timeframe);
-        // console.log(artists);
+        const accountId = req.accountId;
+        const accessToken = await getAccessToken(accountId);
+        const artists = await getTopPlayedArtists(accessToken, accountId, req.params.timeframe);
         res.status(200).json(artists);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
@@ -71,9 +57,11 @@ router.get("/top_artists/:timeframe", verifyAccessToken, async (req, res) => {
 
 });
 
-router.get("/top_songs", verifyAccessToken, async (req, res) => {
+router.get("/top_songs", authenticate, async (req, res) => {
     try {
-        const songs = await getTopPlayedSongs(req.token);
+        const accountId = req.accountId;
+        const accessToken = await getAccessToken(accountId);
+        const songs = await getTopPlayedSongs(accessToken);
         res.status(200).json(songs);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
@@ -82,9 +70,11 @@ router.get("/top_songs", verifyAccessToken, async (req, res) => {
 
 });
 
-router.get("/top_albums/:timeframe", verifyAccessToken, async (req, res) => {
+router.get("/top_albums/:timeframe", authenticate, async (req, res) => {
     try {
-        const albums = await getTopAlbums(req.token, req.params.timeframe);
+        const accountId = req.accountId;
+        const accessToken = await getAccessToken(accountId);
+        const albums = await getTopAlbums(accessToken, req.params.timeframe);
         res.status(200).json(albums);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });
@@ -104,22 +94,22 @@ router.get("/minutes_streamed/:timeframe", async (req, res) => {
 
 });
 
-router.post("/store_token", async (req, res) => {
-    try {
-        const { accessToken, refreshToken, expiresIn, spotifyUser } = req.body;
+// router.post("/store_token", async (req, res) => {
+//     try {
+//         const { accessToken, refreshToken, expiresIn, spotifyUser } = req.body;
 
-        if (!refreshToken) {
-            return res.status(400).json({ error: "No refresh token from Spotify" });
-        }
+//         if (!refreshToken) {
+//             return res.status(400).json({ error: "No refresh token from Spotify" });
+//         }
 
-        const resp = await storeToken(accessToken, refreshToken, expiresIn, spotifyUser);
-        res.status(200).json(resp);
+//         const resp = await storeToken(accessToken, refreshToken, expiresIn, spotifyUser);
+//         res.status(200).json(resp);
 
-    } catch (err) {
-        console.error({ error: "An unexpected error occurred" + err });
-        res.status(500).send({ error: "An unexpected error occurred" + err });
-    }
-});
+//     } catch (err) {
+//         console.error({ error: "An unexpected error occurred" + err });
+//         res.status(500).send({ error: "An unexpected error occurred" + err });
+//     }
+// });
 
 
 module.exports = router;

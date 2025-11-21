@@ -1,20 +1,9 @@
-import { getAccessToken } from "../spotifyAuthorization.js";
-
-
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 function joinUrl(path) {
   if (!path) return BASE_URL;
   if (path.startsWith('http')) return path;
   return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
-}
-
-async function getAuthToken() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get("code");
-
-  const token = await getAccessToken(code);
-  return token;
 }
 
 function timeoutFetch(resource, options = {}, timeout = 10000) {
@@ -44,17 +33,13 @@ function normalizeError(name, message, status, body) {
 async function request(path, { method = 'GET', headers = {}, body, timeout = 10000, raw = false } = {}) {
   const url = joinUrl(path);
   const defaultHeaders = { Accept: 'application/json' };
-  const token = await getAuthToken();
-  if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
-
-  let options = { method, headers: { ...defaultHeaders, ...headers } };
+  let options = { method, headers: { ...defaultHeaders, ...headers }, credentials: 'include' };
 
   if (body != null && !(body instanceof FormData) && typeof body !== 'string') {
     options.body = JSON.stringify(body);
     options.headers['Content-Type'] = 'application/json';
   } else if (body instanceof FormData) {
     options.body = body;
-    // let browser set Content-Type (including boundary)
   } else if (typeof body === 'string') {
     options.body = body;
   }

@@ -6,11 +6,6 @@ export async function redirectToAuthCodeFlow() {
     const challenge = await generateCodeChallenge(verifier);
 
     sessionStorage.setItem("verifier", verifier);
-    // const res = await fetch("http://localhost:8081/api/spotify/store_verifier", {
-    //     method: "POST",
-    //     body: JSON.stringify({ verifier }),
-    //     headers: { "Content-Type": "application/json" },
-    // });
 
     const params = new URLSearchParams();
     params.append("client_id", clientId);
@@ -43,14 +38,12 @@ async function generateCodeChallenge(codeVerifier) {
 }
 
 export async function getAccessToken(code) {
-    if(sessionStorage.getItem("access_token")){
-        console.log("Stored Token");
-        // console.log(sessionStorage.getItem("access_token"));
-        return sessionStorage.getItem("access_token");
-    }
-
     const verifier = sessionStorage.getItem("verifier");
     const clientId = process.env.REACT_APP_CLIENT_ID;
+
+    if (!verifier) {
+        throw new Error("Missing PKCE verifier in sessionStorage; user may have refreshed or opened callback directly.");
+    }
 
     const params = new URLSearchParams();
     params.append("client_id", clientId);
@@ -72,36 +65,37 @@ export async function getAccessToken(code) {
         }
 
         const data = await result.json();
-        console.log(data);
         const { access_token, refresh_token, expires_in } = data;
 
         
-        if (!data.access_token) {
+        if (!access_token) {
             throw new Error("Access token not found in the response.");
         }
 
-        const me = await fetchProfile(access_token); 
+        const me = await fetchProfile(access_token);
 
-        // Can't use API wrapper here. Infinite recursion
-        const storeTokenRes = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/mongo/store_token`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${access_token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                accessToken: access_token,
-                refreshToken: refresh_token,  
-                expiresIn: expires_in,
-                spotifyUser: me
-            })
-        });
+        const storeTokenRes = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/complete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    accessToken: access_token,
+                    refreshToken: refresh_token,
+                    expiresIn: expires_in,
+                    spotifyUser: me
+                })
+            }
+        );
 
-        const storeToken = await storeTokenRes.json();
+        if (!storeTokenRes.ok) {
+            const errText = await storeTokenRes.text();
+            throw new Error(`Failed to complete auth: ${errText}`);
+        }
         
-        sessionStorage.setItem("access_token", data.access_token);
-        console.log("Fresh Token");
-        // console.log(data.access_token);
+        const user = await storeTokenRes.json();
+        
         return data.access_token;
 
     } catch (error) {

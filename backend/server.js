@@ -3,10 +3,12 @@ var cors = require("cors");
 var bodyParser = require("body-parser");
 var fs = require("fs");
 var path = require("path");
+var cookieParser = require('cookie-parser');
 require('dotenv').config();
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
 const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js')
+const authRoutes = require('./routes/auth.js');
 
 const { initDb } = require("./mongo.js");
 (async () => {
@@ -15,7 +17,11 @@ const { initDb } = require("./mongo.js");
 })();
 
 var app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || true,
+  credentials: true,
+}));
+app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(express.json());
 // app.use(express.static("public"));
@@ -32,6 +38,7 @@ app.use((req, res, next) => {
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/mongo', mongoRoutes);
 app.use(streamHistoryRoutes);
+app.use('/api/auth', authRoutes);
 
 app.listen(port, () => {
     console.log("App listening at http://%s:%s", host, port);

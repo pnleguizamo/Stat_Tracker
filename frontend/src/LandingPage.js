@@ -1,6 +1,5 @@
-import React from 'react';
 import './LandingPage.css';
-import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
+import { redirectToAuthCodeFlow } from "./spotifyAuthorization.js";
 
 const LandingPage = () => {
   return (
