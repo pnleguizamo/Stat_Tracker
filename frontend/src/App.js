@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import LandingPage from './LandingPage';
 import CurrentlyPlaying from './CurrentlyPlaying';
@@ -8,7 +7,6 @@ import TopArtists from './TopArtists';
 import TopSongs from './TopSongs';
 import FileUpload from './FileUpload';
 import TopAlbums from './TopAlbums';
-import About from './About';
 
 function App() {
   return (
@@ -23,8 +21,6 @@ function App() {
           <Route path="/top_albums" element={<TopAlbums/>} />
           <Route path="/top_songs" element={<TopSongs/>} />
           <Route path="/upload_history" element={<FileUpload/>} />
-          <Route path="/about" element={<About/>} />
-          
         </Routes>
     </Router>
     </div>

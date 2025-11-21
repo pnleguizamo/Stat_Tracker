@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { redirectToAuthCodeFlow, getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
-import { Button, Container, Row, Col, Card, Form } from 'react-bootstrap';
+import { getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
+import { Button, Container, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './CurrentlyPlaying.css';
 import api from './lib/api.js';
@@ -20,9 +20,6 @@ function CurrentlyPlaying() {
   const [profileName, setProfileName] = useState("");
   const [profilePicture, setProfilePicture] = useState("");
   const [track, setTrack] = useState(null);
-
-  const [songOfTheDay, setSongOfTheDay] = useState(null);
-  const [newRating, setNewRating] = useState(0);
 
   useEffect(() => {
     async function init() {
@@ -59,43 +56,9 @@ function CurrentlyPlaying() {
       } finally {
         setLoading(false);
       }
-
-      try {
-        const song = await api.get('/api/mongo/song-of-the-day');
-        setSongOfTheDay(song);
-      } catch (err) {
-        console.error("Error fetching song of the day:", err);
-      }
     }
-
-
-
     init();
   }, []);
-
-
-  const handleRatingChange = (e) => {
-    setNewRating(parseFloat(e.target.value));
-  };
-
-  const updateRating = async () => {
-    try {
-      await api.put('/api/mongo/update-rating', { rating: newRating });
-      setSongOfTheDay(prevSong => ({ ...prevSong, rating: newRating }));
-    } catch (err) {
-      console.error("Error updating rating:", err);
-    }
-  };
-
-  const syncStreams = async () => {
-    try {
-      const result = await api.post('/api/spotify/sync_recent_streams', {});
-      console.log('Streams synced:', result);
-    } catch (err) {
-      console.error("Error syncing streams:", err);
-    }
-  };
-
 
   return (
     <div className="App">
@@ -147,40 +110,6 @@ function CurrentlyPlaying() {
           ))}
         </div>
       )}
-
-      {/* Song of the Day Card */}
-      {songOfTheDay && (
-        <Card className="mt-4">
-          <Card.Header as="h5">Song of the Day</Card.Header>
-          <Card.Body>
-            <Card.Title>{songOfTheDay.master_metadata_track_name}</Card.Title>
-            <Card.Text>
-              Artist: {songOfTheDay.master_metadata_album_artist_name}<br />
-              Album: {songOfTheDay.master_metadata_album_album_name}<br />
-              Current Rating: {songOfTheDay.rating}
-            </Card.Text>
-            <Form>
-              <Form.Group>
-                <Form.Label>Update Rating:</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="0"
-                  max="5"
-                  step="1"
-                  value={newRating}
-                  onChange={handleRatingChange}
-                />
-              </Form.Group>
-              <Button variant="primary" onClick={updateRating} className="mt-2">
-                Update Rating
-              </Button>
-            </Form>
-          </Card.Body>
-        </Card>
-      )}
-      <Button variant="primary" onClick={syncStreams} className="mt-2">
-                Sync streams
-      </Button>
     </div>
   );
 }

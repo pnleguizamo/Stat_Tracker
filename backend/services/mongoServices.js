@@ -1,27 +1,10 @@
 const { getAlbumCover } = require('../services/spotifyServices.js');
-const { initDb, client } = require('../mongo.js');
+const { initDb } = require('../mongo.js');
 
 const collectionName = process.env.COLLECTION_NAME;
 let db;
 
 const mongoService = module.exports = {};
-
-mongoService.getTrackdoneDocuments = async function () {
-    try {
-        db = await initDb();
-        const collection = db.collection(collectionName);
-        const query = { reason_end: "trackdone" };
-        // const query ={ ts: {
-        //     $gte: "2019-01-01T00:00:00Z",
-        //     $lt: "2020-02-01T00:00:00Z"
-        //   }
-        // }
-        const documents = await collection.find(query).toArray();
-        return documents;
-    } catch (err) {
-        console.error("Error fetching documents:", err);
-    }
-}
 
 mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "lifetime") {
     try {
@@ -96,83 +79,6 @@ mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "li
         throw err;
     }
 }
-
-mongoService.getQuery = async function () {
-    try {
-        db = await initDb();
-        const collection = db.collection(collectionName);
-
-
-        const pipeline = [
-            {
-                "$match": {
-                    "ts": {
-                        // $gte: "2020-01-01T00:00:00Z",
-                        $lte: "2016-11-01T00:00:00Z"
-                    },
-                    "reason_end": "trackdone",
-                    "master_metadata_album_artist_name": { "$ne": null }
-                }
-            },
-            {
-                "$project": {
-                    "master_metadata_track_name": 1,
-                    "master_metadata_album_artist_name": 1,
-                    "ts": 1
-                }
-            }
-            // {
-            //     "$group": {
-            //         "_id": "$master_metadata_album_artist_name", // Group by track name
-            //         "trackCount": { "$sum": 1 }, // Count the occurrences
-            //         "totalMinutesPlayed": { "$sum": "$ms_played" }
-            //     }
-            // }
-            // {
-            //     "$sort": { "totalMinutesPlayed": -1 } // Sort by track count in descending order
-            // },
-            // {
-            //     "$limit": 10 // Limit to top 10 tracks
-            // }
-
-
-
-            // {
-            //     "$group": {
-            //         "_id": "$master_metadata_track_name",
-            //         "totalMinutesPlayed": { "$sum": "$ms_played" },
-            //         "artist": { "$first": "$master_metadata_album_artist_name" } 
-            //     }
-            // },
-            // {
-            //     "$group": {
-            //         "_id": "$artist",
-            //         "totalMinutesPlayed": { "$sum": "$totalMinutesPlayed" },
-            //         "songs": {
-            //             "$push": {
-            //                 "track_name": "$_id",
-            //                 "minutes_played": "$totalMinutesPlayed"
-            //             }
-            //         }
-            //     }
-            // },
-            // {
-            //     "$sort": { "totalMinutesPlayed": -1 }
-            // },
-            // {
-            //     "$limit": 10
-            // }
-        ];
-
-        const topSongsAndArtists = await collection.aggregate(pipeline).toArray();
-
-        return topSongsAndArtists;
-    } catch (error) {
-        console.error("Error fetching top played artists:", error);
-        throw error;
-    }
-}
-
 
 mongoService.getTopPlayedArtists = async function (accessToken, userId, timeframe = "lifetime") {
     try {
@@ -401,38 +307,6 @@ mongoService.getTotalMinutesStreamed = async function (timeframe = "lifetime") {
     }
 };
 
-mongoService.getSongOfTheDay = async (accessToken) =>{
-    try {
-        db = await initDb();
-        const collection = db.collection("rating");
-    
-        const sotd = await collection.findOne({});
-
-        return sotd;
-    
-      } catch (error) {
-        console.error('Error fetching song of the day:', error);
-      }
-}
-
-mongoService.updateSongOfTheDay = async (rating) => {
-    try {
-        db = await initDb();
-        const collection = db.collection("rating");
-    
-
-        const result = await collection.updateOne(
-          {}, // Empty filter to match the single document
-          { $set: { rating: rating } }
-        );
-    
-      } catch (error) {
-        console.error('Error updating track rating:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-}
-
-
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         db = await initDb();
@@ -473,32 +347,7 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
     }
 };
 
-mongoService.storeToken = async (accessToken, refreshToken, expiresIn, spotifyUser ) => {
-    try {
-        db = await initDb();
-        const accountId = spotifyUser.id;
-        const tokensCol = db.collection("oauth_tokens");
-        // TODO fix MongoNotConnectedError on store token
-        await tokensCol.updateOne(
-            { accountId },
-            {
-                $set: {
-                    accountId: spotifyUser.id,
-                    accessToken,
-                    accessTokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),
-                    refreshToken,
-                    updatedAt: new Date()
-                }
-            },
-            { upsert: true }
-        );
-        return 0;
-    } catch (error) {
-        console.error('Error syncing recent streams:', error);
-        throw error;
-    }
-};
-
+// TODO
 mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
     try {
         db = await initDb();
