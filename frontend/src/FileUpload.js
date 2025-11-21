@@ -40,7 +40,7 @@ function FileUpload() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const { id : userId } = await api.get('https://api.spotify.com/v1/me');
+    const { accountId: userId } = await api.get('/api/auth/status');
 
     if (!files || files.length === 0) {
       alert('Please select files to upload');
