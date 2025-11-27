@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { getAccessToken, fetchProfile } from "./spotifyAuthorization.js";
-import { Button, Container, Row, Col } from 'react-bootstrap';
+import { useQuery } from '@tanstack/react-query';
+import { Button, Container, Row, Col, Spinner } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './CurrentlyPlaying.css';
 import api from './lib/api.js';
-
 
 function CurrentlyPlaying() {
   const timeframes = [
@@ -14,56 +13,48 @@ function CurrentlyPlaying() {
     { label: "Lifetime", value: "lifetime" },
   ];
 
-  const [data, setData] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [profileName, setProfileName] = useState("");
-  const [profilePicture, setProfilePicture] = useState("");
-  const [track, setTrack] = useState(null);
+  const statusQuery = useQuery({
+    queryKey: ['auth', 'status'],
+    queryFn: () => api.get('/api/auth/status'),
+    retry: false,
+  });
 
-  useEffect(() => {
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
+  const currentlyPlayingQuery = useQuery({
+    queryKey: ['spotify', 'currently_playing'],
+    queryFn: () => api.get('/api/spotify/currently_playing'),
+    retry: false,
+    refetchInterval: 15000,
+    staleTime: 10000,
+  });
 
-      const accessToken = await getAccessToken(code);
-      const profile = await fetchProfile(accessToken);
-
-      setProfileName(profile.display_name);
-      setProfilePicture(profile.images[0].url);
-
-
-      try {
-        const track = await api.get('/api/spotify/currently_playing');
-        setTrack(track);
-      } catch (err) {
-        console.error('Error fetching currently playing track:', err);
+  const minutesQuery = useQuery({
+    queryKey: ['mongo', 'minutes_streamed'],
+    queryFn: async () => {
+      const results = {};
+      for (const timeframe of timeframes) {
+        results[timeframe.value] = await api.get(`/api/mongo/minutes_streamed/${timeframe.value}`);
       }
+      return results;
+    },
+    retry: false,
+  });
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        const results = {};
-        for (const timeframe of timeframes) {
-          const minutes = await api.get(`/api/mongo/minutes_streamed/${timeframe.value}`);
-          results[timeframe.value] = minutes;
-        }
-        setData(results);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to fetch minutes streamed for some or all timeframes.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    init();
-  }, []);
+  const profileName = statusQuery.data?.displayName || '';
+  const profileFromStatus = statusQuery.data?.spotifyUser || statusQuery.data;
+  const profileImage = profileFromStatus?.images && profileFromStatus.images[0] ? profileFromStatus.images[0].url : '';
+  const track = currentlyPlayingQuery.data || null;
+  const data = minutesQuery.data || {};
+  const loading = statusQuery.isLoading || currentlyPlayingQuery.isLoading || minutesQuery.isLoading;
+  const error = statusQuery.isError || currentlyPlayingQuery.isError || minutesQuery.isError ? (statusQuery.error || currentlyPlayingQuery.error || minutesQuery.error) : null;
 
   return (
     <div className="App">
       <h1>{profileName}</h1>
-      <img src={profilePicture} style={{ width: "250px" }}></img>
+      {profileImage ? (
+        <img src={profileImage} alt="Profile" style={{ width: "250px", borderRadius: 8 }} />
+      ) : (
+        <div style={{ width: 250, height: 250, background: '#eee', borderRadius: 8 }} />
+      )}
       <h2>Currently Playing</h2>
 
       {track ? (
@@ -96,8 +87,14 @@ function CurrentlyPlaying() {
         <div>No track is currently playing.</div>
       )}
       {/* <h1>Recently Listened Minutes</h1> */}
-      {error && <p>{error}</p>}
-      {loading && <p>Loading...</p>}
+      {error && <p>{String(error?.message || error)}</p>}
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </Spinner>
+        </div>
+      )}
 
       {/* Timeframes Grid */}
       {!loading && !error && (

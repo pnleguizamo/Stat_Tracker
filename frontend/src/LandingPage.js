@@ -1,5 +1,17 @@
 import './LandingPage.css';
-import { redirectToAuthCodeFlow } from "./spotifyAuthorization.js";
+import api from './lib/api.js';
+
+async function redirectToAuthCodeFlow() {
+  try {
+    const json = await api.post('/api/auth/start');
+    if (!json || !json.url) throw new Error('No authorize URL returned from server');
+    document.location = json.url;
+  } catch (err) {
+    const message = err?.message || 'Failed to start auth flow';
+    console.error('redirectToAuthCodeFlow error', err);
+    throw new Error(message);
+  }
+}
 
 const LandingPage = () => {
   return (

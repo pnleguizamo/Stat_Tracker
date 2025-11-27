@@ -15,8 +15,8 @@ const AppNavbar = () => {
           <Nav className="me-auto">
             <Link
               key="1"
-              className={currentPage === '/callback' ? 'nav-link active' : 'nav-link'}
-              to="/callback"
+              className={currentPage === '/dashboard' ? 'nav-link active' : 'nav-link'}
+              to="/dashboard"
             >
               Dashboard
             </Link>

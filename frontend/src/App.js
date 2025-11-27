@@ -15,7 +15,7 @@ function App() {
         <AppNavbar />
         <Routes>
           <Route path="/" element={<LandingPage/>} />
-          <Route path="/callback" element={<CurrentlyPlaying/>} />
+          <Route path="/dashboard" element={<CurrentlyPlaying/>} />
           <Route path="/recently_played" element={<RecentlyPlayed/>} />
           <Route path="/top_artists" element={<TopArtists/>} />
           <Route path="/top_albums" element={<TopAlbums/>} />
