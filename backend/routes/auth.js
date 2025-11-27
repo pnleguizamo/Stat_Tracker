@@ -21,7 +21,6 @@ async function generateCodeChallenge(verifier) {
   return base64UrlEncode(hash);
 }
 
-// Add profile info
 router.get('/status', authenticate, async (req, res) => {
   try {
     const accountId = req.accountId;

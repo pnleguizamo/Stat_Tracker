@@ -7,6 +7,7 @@ import TopArtists from './TopArtists';
 import TopSongs from './TopSongs';
 import FileUpload from './FileUpload';
 import TopAlbums from './TopAlbums';
+import ProtectedRoute from './ProtectedRoute';
 
 function App() {
   return (
@@ -15,12 +16,12 @@ function App() {
         <AppNavbar />
         <Routes>
           <Route path="/" element={<LandingPage/>} />
-          <Route path="/dashboard" element={<CurrentlyPlaying/>} />
-          <Route path="/recently_played" element={<RecentlyPlayed/>} />
-          <Route path="/top_artists" element={<TopArtists/>} />
-          <Route path="/top_albums" element={<TopAlbums/>} />
-          <Route path="/top_songs" element={<TopSongs/>} />
-          <Route path="/upload_history" element={<FileUpload/>} />
+          <Route path="/dashboard" element={<ProtectedRoute><CurrentlyPlaying/></ProtectedRoute>} />
+          <Route path="/recently_played" element={<ProtectedRoute><RecentlyPlayed/></ProtectedRoute>} />
+          <Route path="/top_artists" element={<ProtectedRoute><TopArtists/></ProtectedRoute>} />
+          <Route path="/top_albums" element={<ProtectedRoute><TopAlbums/></ProtectedRoute>} />
+          <Route path="/top_songs" element={<ProtectedRoute><TopSongs/></ProtectedRoute>} />
+          <Route path="/upload_history" element={<ProtectedRoute><FileUpload/></ProtectedRoute>} />
         </Routes>
     </Router>
     </div>
