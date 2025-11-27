@@ -1,8 +1,8 @@
 import React from 'react';
 import { Container, Row, Col, Card } from 'react-bootstrap';
 import { useQuery } from '@tanstack/react-query';
-import api from './lib/api.js';
-import './cards.css';
+import api from '../lib/api.js';
+import '../styles/cards.css';
 
 function TopSongs() {
   const { data: songs = [], isLoading, isError, error } = useQuery({

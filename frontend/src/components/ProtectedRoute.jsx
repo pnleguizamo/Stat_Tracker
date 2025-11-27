@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import api from './lib/api';
+import api from '../lib/api';
 import { Spinner } from 'react-bootstrap';
 
 export default function ProtectedRoute({ children }) {

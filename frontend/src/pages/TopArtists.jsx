@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import api from './lib/api.js';
-import './cards.css';
+import api from '../lib/api.js';
+import '../styles/cards.css';
 
 function TopArtists() {
     const [timeframe, setTimeframe] = useState('lifetime');
@@ -26,16 +26,7 @@ function TopArtists() {
                 {!isLoading && !isError && artists?.map((artist) => (
                     <div key={artist._id} className="artist-card">
                         <img src={artist.image_url} alt={artist._id} className="artist-img" />
-                        <h3 className="artist-name">
-                            {/* <a 
-                                href={`https://open.spotify.com/artist/${artist.spotify_id}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                            >
-                                {artist._id}
-                            </a> */}
-                            {artist._id}
-                        </h3>
+                        <h3 className="artist-name">{artist._id}</h3>
                         <p className="play-count">{artist.play_count} plays</p>
                     </div>
                 ))}

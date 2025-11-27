@@ -1,13 +1,13 @@
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import LandingPage from './LandingPage';
-import CurrentlyPlaying from './CurrentlyPlaying';
-import RecentlyPlayed from './RecentlyPlayed';
-import AppNavbar from './NavBar';
-import TopArtists from './TopArtists';
-import TopSongs from './TopSongs';
-import FileUpload from './FileUpload';
-import TopAlbums from './TopAlbums';
-import ProtectedRoute from './ProtectedRoute';
+import LandingPage from './pages/LandingPage.jsx';
+import CurrentlyPlaying from './pages/CurrentlyPlaying.jsx';
+import RecentlyPlayed from './pages/RecentlyPlayed.jsx';
+import AppNavbar from './components/NavBar.jsx';
+import TopArtists from './pages/TopArtists.jsx';
+import TopSongs from './pages/TopSongs.jsx';
+import FileUpload from './pages/FileUpload.jsx';
+import TopAlbums from './pages/TopAlbums.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 function App() {
   return (

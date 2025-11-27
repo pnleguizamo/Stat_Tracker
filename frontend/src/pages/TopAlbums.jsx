@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import api from './lib/api.js';
-import './cards.css';
+import React, { useState } from 'react';
+import api from '../lib/api.js';
+import '../styles/cards.css';
 import { useQuery } from '@tanstack/react-query';
 
 function TopAlbums() {
@@ -26,17 +26,7 @@ function TopAlbums() {
                 {!isLoading && !isError && albums?.map((album) => (
                     <div key={album._id} className="artist-card">
                         <img src={album.image_url} alt={album._id} className="artist-img" />
-                        <h3 className="artist-name">
-                            {/* <a
-                                href={`https://open.spotify.com/artist/${album.spotify_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                {album._id}
-                            </a> */}
-                            
-                            {album._id}
-                        </h3>
+                        <h3 className="artist-name">{album._id}</h3>
                         <p>{album.artist}</p>
                         <p className="play-count">{album.play_count} plays</p>
                     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navbar, Nav, Container } from 'react-bootstrap';
 import { Link, useLocation } from "react-router-dom";
-import "./NavBar.css";
+import "../styles/NavBar.css";
 
 const AppNavbar = () => {
   const currentPage = useLocation().pathname;
@@ -55,14 +55,6 @@ const AppNavbar = () => {
             >
               Upload History
             </Link>
-            <Link
-              key="7"
-              className={currentPage === '/about' ? 'nav-link active' : 'nav-link'}
-              to="/about"
-            >
-              About
-            </Link>
-            
           </Nav>
         </Navbar.Collapse>
       </Container>

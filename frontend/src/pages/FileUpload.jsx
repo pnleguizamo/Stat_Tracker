@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import './fileUpload.css';
-import api from './lib/api.js';
+import '../styles/fileUpload.css';
+import api from '../lib/api.js';
 
 function FileUpload() { 
   const [files, setFiles] = useState([]);

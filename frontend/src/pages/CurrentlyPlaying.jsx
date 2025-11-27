@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from '@tanstack/react-query';
 import { Button, Container, Row, Col, Spinner } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import './CurrentlyPlaying.css';
-import api from './lib/api.js';
+import '../styles/CurrentlyPlaying.css';
+import api from '../lib/api.js';
 
 function CurrentlyPlaying() {
   const timeframes = [

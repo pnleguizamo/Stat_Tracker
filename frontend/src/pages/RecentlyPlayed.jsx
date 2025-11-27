@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import api from './lib/api.js';
-import './recentlyPlayed.css';
+import api from '../lib/api.js';
+import '../styles/recentlyPlayed.css';
 
 function RecentlyPlayed() {
   const { data: recentlyPlayed = [], isLoading, isError, error } = useQuery({
