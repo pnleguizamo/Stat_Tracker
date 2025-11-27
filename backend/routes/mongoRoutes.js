@@ -43,9 +43,10 @@ router.get("/top_albums/:timeframe", authenticate, async (req, res) => {
 
 });
 
-router.get("/minutes_streamed/:timeframe", async (req, res) => {
+router.get("/minutes_streamed/:timeframe", authenticate, async (req, res) => {
     try {
-        const minutes = await getTotalMinutesStreamed(req.params.timeframe);
+        const accountId = req.accountId;
+        const minutes = await getTotalMinutesStreamed(accountId, req.params.timeframe);
         res.status(200).json(minutes);
     } catch (err) {
         console.error({ error: "An unexpected error occurred" + err });

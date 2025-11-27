@@ -266,7 +266,7 @@ mongoService.getTopPlayedSongs = async function (access_token, userId ) {
     }
 };
 
-mongoService.getTotalMinutesStreamed = async function (timeframe = "lifetime") {
+mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "lifetime") {
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
@@ -291,12 +291,19 @@ mongoService.getTotalMinutesStreamed = async function (timeframe = "lifetime") {
                 }
             });
         }
-        pipeline.push({
-            $group: {
-                _id: null,
-                totalMsPlayed: { $sum: "$ms_played" }
+        pipeline.push(
+            {
+                $match: {
+                    userId
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalMsPlayed: { $sum: "$ms_played" }
+                }
             }
-        });
+        );
 
         const result = await collection.aggregate(pipeline).toArray();
         const totalMinutesStreamed = result.length > 0 ? result[0].totalMsPlayed / 60000 : 0;

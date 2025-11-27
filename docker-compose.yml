@@ -1,4 +1,16 @@
 services:
+  mongo:
+    image: mongo:4.4.18
+    container_name: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+
   api:
     build: ./backend
     container_name: api
@@ -8,6 +20,11 @@ services:
       - PORT=8081
     expose:
       - "8081"
+    depends_on:
+      - mongo
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   frontend:
     build: ./frontend
@@ -41,5 +58,6 @@ services:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
 
 volumes:
+  mongo_data:
   caddy_data:
   caddy_config:

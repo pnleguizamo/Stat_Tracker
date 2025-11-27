@@ -2,16 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install deps
 COPY package*.json ./
 RUN npm ci --only=production
 
-# Copy source
 COPY . .
 
-# You should have your Express app listen on process.env.PORT or 8080
-# app.listen(process.env.PORT || 8080, '0.0.0.0');
-ENV PORT=8081
 EXPOSE 8081
 
 CMD ["node", "server.js"]
