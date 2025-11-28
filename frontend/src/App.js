@@ -8,6 +8,7 @@ import TopSongs from './pages/TopSongs.jsx';
 import FileUpload from './pages/FileUpload.jsx';
 import TopAlbums from './pages/TopAlbums.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { GameLobby } from './pages/GameLobby.jsx';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/top_albums" element={<ProtectedRoute><TopAlbums/></ProtectedRoute>} />
           <Route path="/top_songs" element={<ProtectedRoute><TopSongs/></ProtectedRoute>} />
           <Route path="/upload_history" element={<ProtectedRoute><FileUpload/></ProtectedRoute>} />
+          <Route path="/lobby" element={<ProtectedRoute><GameLobby/></ProtectedRoute>} />
         </Routes>
     </Router>
     </div>
