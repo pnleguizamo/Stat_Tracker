@@ -1,15 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { socket } from '../socket';
 
+type Player = {
+  name: string;
+};
 
-export const GameLobby = () => {
-  const [displayName, setDisplayName] = useState('');
-  const [roomCodeInput, setRoomCodeInput] = useState('');
-  const [room, setRoom] = useState(null);
-  const [error, setError] = useState(null);
+type RoomState = {
+  roomCode: string;
+  players: Player[];
+};
+
+type CbResponse = {
+  ok: boolean;
+  roomCode?: string;
+  players?: Player[];
+  error?: string;
+};
+
+export const GameLobby: React.FC = () => {
+  const [displayName, setDisplayName] = useState<string>('');
+  const [roomCodeInput, setRoomCodeInput] = useState<string>('');
+  const [room, setRoom] = useState<RoomState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
-    function handleRoomUpdated(payload) {
+    function handleRoomUpdated(payload: RoomState) {
       setRoom(payload);
     }
 
@@ -30,14 +46,14 @@ export const GameLobby = () => {
     socket.emit(
       'createRoom',
       { displayName: displayName.trim() },
-      (response) => {
+      (response: CbResponse) => {
         if (!response.ok) {
           setError(response.error || 'Failed to create room');
           return;
         }
         setRoom({
-          roomCode: response.roomCode,
-          players: response.players,
+          roomCode: response.roomCode!,
+          players: response.players || [],
         });
       }
     );
@@ -60,7 +76,7 @@ export const GameLobby = () => {
         roomCode: roomCodeInput.trim().toUpperCase(),
         displayName: displayName.trim(),
       },
-      (response) => {
+      (response: CbResponse) => {
         if (!response.ok) {
           if (response.error === 'ROOM_NOT_FOUND') {
             setError('Room not found');
@@ -70,8 +86,8 @@ export const GameLobby = () => {
           return;
         }
         setRoom({
-          roomCode: response.roomCode,
-          players: response.players,
+          roomCode: response.roomCode!,
+          players: response.players || [],
         });
       }
     );
@@ -129,6 +145,8 @@ export const GameLobby = () => {
               <li key={idx}>{p.name}</li>
             ))}
           </ul>
+
+          <button>Start Game</button>
         </div>
       )}
 

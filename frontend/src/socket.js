@@ -1,8 +1,7 @@
-// src/socket.ts
 import { io } from 'socket.io-client';
 
 export const socket = io(
-  process.env.REACT_APP_API_BASE_URL || 'http://localhost:8081',
+  process.env.REACT_APP_API_BASE_URL,
   {
     withCredentials: true,
   }

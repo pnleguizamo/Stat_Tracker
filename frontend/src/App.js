@@ -8,7 +8,7 @@ import TopSongs from './pages/TopSongs.jsx';
 import FileUpload from './pages/FileUpload.jsx';
 import TopAlbums from './pages/TopAlbums.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-import { GameLobby } from './pages/GameLobby.jsx';
+import { GameLobby } from './pages/GameLobby.tsx';
 
 function App() {
   return (
