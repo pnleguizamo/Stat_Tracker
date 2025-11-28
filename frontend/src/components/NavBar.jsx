@@ -55,13 +55,6 @@ const AppNavbar = () => {
             >
               Upload History
             </Link>
-            <Link
-              key="7"
-              className={currentPage === '/lobby' ? 'nav-link active' : 'nav-link'}
-              to="/lobby"
-            >
-              Game Lobby
-            </Link>
           </Nav>
         </Navbar.Collapse>
       </Container>
