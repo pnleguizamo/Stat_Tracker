@@ -16,9 +16,14 @@ const { initDb } = require("./mongo.js");
   require('./services/pollingService.js');
 })();
 
-var app = express();
+const app = express();
+const allowed = [
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  process.env.FRONTEND_ORIGIN
+];
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || true,
+  origin: allowed,
   credentials: true,
 }));
 app.use(cookieParser());
@@ -28,7 +33,7 @@ app.use(express.json());
 // app.use("/uploads", express.static("uploads"));
 
 const port = process.env.PORT;
-const host = "localhost";
+const host = "127.0.0.1";
 
 app.use((req, res, next) => {
     console.log('Request Type:', req.method, 'Time:', Date.now(), 'Request URL:', req.originalUrl);

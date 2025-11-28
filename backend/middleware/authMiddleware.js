@@ -10,6 +10,7 @@ function authenticate(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.accountId = payload.sub;
+    req.authPayload = payload;
     next();
   } catch (err) {
     console.error('JWT verify error', err);

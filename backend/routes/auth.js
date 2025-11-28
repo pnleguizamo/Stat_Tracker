@@ -1,5 +1,5 @@
 const express = require('express');
-const { storeTokensAndCreateSession, getAccessToken } = require('../services/authService.js');
+const { storeTokensAndCreateSession, getAccessToken, createGuestSession } = require('../services/authService.js');
 const { authenticate } = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
@@ -32,6 +32,11 @@ router.get('/status', authenticate, async (req, res) => {
     });
     const spotifyUser = await profileRes.json();
 
+    if (req.authPayload && req.authPayload.guest){
+      spotifyUser.is_guest = true;
+      spotifyUser.display_name = "Guest";
+    }
+    
     res.json({ accountId, spotifyUser });
   } catch (err) {
     console.error('/api/auth/status error', err);
@@ -62,6 +67,24 @@ router.post('/start', async (req, res) => {
     return res.json({ url, state });
   } catch (err) {
     console.error('/api/auth/start error', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/guest', async (req, res) => {
+  try {
+    const { accountId, appToken } = await createGuestSession();
+
+    res.cookie('auth', appToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ accountId });
+  } catch (err) {
+    console.error('/api/auth/guest error', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

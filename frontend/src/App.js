@@ -13,7 +13,7 @@ function App() {
   return (
     <div>
     <Router>
-        <AppNavbar />
+        <ProtectedRoute><AppNavbar /></ProtectedRoute>
         <Routes>
           <Route path="/" element={<LandingPage/>} />
           <Route path="/dashboard" element={<ProtectedRoute><CurrentlyPlaying/></ProtectedRoute>} />

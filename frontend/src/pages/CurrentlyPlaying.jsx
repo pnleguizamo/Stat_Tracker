@@ -39,7 +39,7 @@ function CurrentlyPlaying() {
     retry: false,
   });
 
-  const profileName = statusQuery.data?.displayName || '';
+  const profileName = statusQuery.data?.spotifyUser?.display_name || '';
   const profileFromStatus = statusQuery.data?.spotifyUser || statusQuery.data;
   const profileImage = profileFromStatus?.images && profileFromStatus.images[0] ? profileFromStatus.images[0].url : '';
   const track = currentlyPlayingQuery.data || null;

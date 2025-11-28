@@ -3,6 +3,7 @@ const { initDb, client } = require('../mongo.js');
 const fs = require('fs');
 const express = require('express');
 const router = express.Router();
+const { authenticate } = require('../middleware/authMiddleware.js');
 
 const collectionName = process.env.COLLECTION_NAME;
 
@@ -12,15 +13,19 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 } // 15MB max per file
 });
 
-router.post('/api/upload', upload.array('files'), async (req, res) => {
+router.post('/api/upload', authenticate, upload.array('files'), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded.' });
     }
 
-    const userId = req.body.userId;
+    const userId = req.accountId;
     if (!userId) {
-      return res.status(400).json({ error: 'Missing userId / auth.' });
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (req.authPayload && req.authPayload.guest) {
+      return res.status(403).json({ error: 'Guest sessions are not allowed to upload files' });
     }
 
     const db = await initDb();

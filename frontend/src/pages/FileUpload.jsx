@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/fileUpload.css';
 import api from '../lib/api.js';
+import { useQuery } from '@tanstack/react-query';
 
 function FileUpload() { 
   const [files, setFiles] = useState([]);
   const [response, setResponse] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState({ currentBatch: 0, totalBatches: 0, percent: 0 });
+  const { data: authStatusResp, isLoading: authLoading } = useQuery({
+    queryKey: ['auth', 'status'],
+    queryFn: () => api.get('/api/auth/status'),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const authStatus = authStatusResp?.spotifyUser || null;
 
   const handleFileChange = (event) => {
     setFiles(Array.from(event.target.files));
@@ -40,7 +48,7 @@ function FileUpload() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const { accountId: userId } = await api.get('/api/auth/status');
+    const userId = authStatus?.id || null;
 
     if (!files || files.length === 0) {
       alert('Please select files to upload');
@@ -67,11 +75,11 @@ function FileUpload() {
         const batch = batches[i];
         const formData = new FormData();
         batch.forEach((file) => formData.append('files', file));
-        if (userId) formData.append('userId', userId);
 
         const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/upload`, {
           method: 'POST',
           body: formData,
+          credentials: 'include',
         });
 
         if (!res.ok) {
@@ -103,6 +111,18 @@ function FileUpload() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="file-upload-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 36, height: 36, borderRadius: 18, border: '4px solid #eee', borderTopColor: '#1DB954', margin: '0 auto', animation: 'spin 1s linear infinite' }} />
+          <div style={{ marginTop: 8 }}>Checking session...</div>
+          <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="file-upload-container">
       <h2>Upload Spotify Extended Streaming History</h2>
@@ -111,7 +131,16 @@ function FileUpload() {
         You can safely re-upload; duplicates will be ignored.
       </p>
 
-      <form onSubmit={handleSubmit}>
+      {authStatus?.is_guest && (
+        <div className="guest-cta-box" style={{ border: '1px solid #1DB954', padding: 12, borderRadius: 6, marginBottom: 12 }}>
+          <strong>Uploads are disabled for guest sessions.</strong>
+          <div style={{ marginTop: 10 }}>
+          </div>
+        </div>
+      )}
+
+      {!authStatus?.is_guest && (
+        <form onSubmit={handleSubmit}>
         <input
           type="file"
           multiple
@@ -128,7 +157,8 @@ function FileUpload() {
         <button type="submit" disabled={isUploading}>
           {isUploading ? 'Uploading…' : 'Upload'}
         </button>
-      </form>
+        </form>
+      )}
 
       {progress.totalBatches > 0 && (
           <div style={{ marginTop: 12 }}>

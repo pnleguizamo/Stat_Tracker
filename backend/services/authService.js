@@ -81,4 +81,20 @@ async function getAccessToken(accountId) {
   return newAccess;
 }
 
-module.exports = { getAccessToken, storeTokensAndCreateSession };
+async function createGuestSession() {
+  const impersonate = process.env.GUEST_IMPERSONATE_ACCOUNT
+
+  const claims = {
+    sub: impersonate,
+    guest: true,
+    displayName: "Guest",
+  };
+
+  const appToken = jwt.sign(claims, process.env.JWT_SECRET, {
+    expiresIn: '7d',
+  });
+
+  return { accountId: claims.sub, appToken };
+}
+
+module.exports = { getAccessToken, storeTokensAndCreateSession, createGuestSession };
