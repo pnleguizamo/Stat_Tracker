@@ -1,6 +1,7 @@
 const express = require('express');
-const { storeTokensAndCreateSession, getAccessToken, createGuestSession } = require('../services/authService.js');
+const { storeTokensAndCreateSession, createGuestSession } = require('../services/authService.js');
 const { authenticate } = require('../middleware/authMiddleware.js');
+const { initDb } = require('../mongo.js');
 
 const router = express.Router();
 
@@ -24,13 +25,17 @@ async function generateCodeChallenge(verifier) {
 router.get('/status', authenticate, async (req, res) => {
   try {
     const accountId = req.accountId;
-
-    const accessToken = await getAccessToken(accountId);
-    const profileRes = await fetch('https://api.spotify.com/v1/me', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const spotifyUser = await profileRes.json();
+    const db = await initDb();
+    const row = await db.collection('oauth_tokens').findOne({ accountId });
+    
+    spotifyUser = {
+      id: row.accountId,
+      display_name: row.display_name || null,
+      email: row.email || null,
+      images: row.avatar_url ? [{ url: row.avatar_url }] : [],
+      is_guest: false,
+    };
+    
 
     if (req.authPayload && req.authPayload.guest){
       spotifyUser.is_guest = true;

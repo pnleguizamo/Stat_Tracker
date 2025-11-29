@@ -12,6 +12,7 @@ async function storeTokensAndCreateSession(accessToken, refreshToken, expiresIn,
       $set: {
         accountId: spotifyUser.id,
         display_name: spotifyUser.display_name,
+        avatar_url: (spotifyUser.images && spotifyUser.images[0] && spotifyUser.images[0].url) || null,
         email: spotifyUser.email,
         accessToken,
         accessTokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),

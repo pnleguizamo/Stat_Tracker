@@ -12,10 +12,7 @@ const rooms = new Map();
 
 function initGameSockets(io) {
   io.on('connection', (socket) => {
-    console.log('Client connected', socket.id);
-
-    // Optional: you could get userId/displayName from auth here:
-    // const { userId, displayName } = socket.handshake.auth;
+    console.log('Client connected', socket.id, 'accountId:', socket.accountId);
 
     socket.on('createRoom', ({ displayName }, callback) => {
       let roomCode = generateRoomCode();
@@ -30,17 +27,20 @@ function initGameSockets(io) {
 
       rooms.set(roomCode, room);
 
-      // add creator as a player
+      const profile = socket.profile || {};
+      const chosenName = displayName || profile.displayName || 'Anonymous';
       room.players.set(socket.id, {
-        name: displayName || 'Anonymous',
-        // userId: optional if you have auth
+        name: chosenName,
+        userId: socket.accountId,
+        displayName: profile.displayName || chosenName,
+        avatar: profile.avatar || null,
       });
 
       socket.join(roomCode);
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.values()),
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
       };
 
       io.to(roomCode).emit('roomUpdated', payload);
@@ -56,17 +56,57 @@ function initGameSockets(io) {
       }
 
       socket.join(roomCode);
-      room.players.set(socket.id, {
-        name: displayName || 'Anonymous',
-      });
+        const profile = socket.profile || {};
+        const chosenName = displayName || profile.displayName || 'Anonymous';
+        room.players.set(socket.id, {
+          name: chosenName,
+          userId: socket.accountId,
+          displayName: profile.displayName || chosenName,
+          avatar: profile.avatar || null,
+        });
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.values()),
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
       };
 
       io.to(roomCode).emit('roomUpdated', payload);
       if (callback) callback({ ok: true, ...payload });
+    });
+
+    socket.on('updateProfile', async ({ avatar, displayName } = {}, callback) => {
+      try {
+        socket.profile = socket.profile || { displayName: null, avatar: null };
+        if (typeof displayName === 'string') socket.profile.displayName = displayName || null;
+        if (typeof avatar === 'string') socket.profile.avatar = avatar || null;
+
+        const affectedRooms = [];
+        for (const [roomCode, room] of rooms.entries()) {
+          if (room.players.has(socket.id)) {
+            const p = room.players.get(socket.id);
+            if (p) {
+              p.displayName = socket.profile.displayName || p.name;
+              p.avatar = socket.profile.avatar || null;
+            }
+            affectedRooms.push(roomCode);
+          }
+        }
+
+        for (const roomCode of affectedRooms) {
+          const room = rooms.get(roomCode);
+          if (!room) continue;
+          const payload = {
+            roomCode,
+            players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
+          };
+          io.to(roomCode).emit('roomUpdated', payload);
+        }
+
+        if (callback) callback({ ok: true });
+      } catch (err) {
+        console.error('updateProfile error', err);
+        if (callback) callback({ ok: false, error: 'update_failed' });
+      }
     });
 
     socket.on('leaveRoom', ({ roomCode } = {}) => {
@@ -84,13 +124,12 @@ function initGameSockets(io) {
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.values()),
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
       };
       io.to(roomCode).emit('roomUpdated', payload);
     });
 
     socket.on('disconnect', () => {
-      // clean up player from all rooms
       for (const [roomCode, room] of rooms.entries()) {
         if (room.players.delete(socket.id)) {
           if (room.players.size === 0) {
@@ -98,7 +137,7 @@ function initGameSockets(io) {
           } else {
             const payload = {
               roomCode,
-              players: Array.from(room.players.values()),
+              players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
             };
             io.to(roomCode).emit('roomUpdated', payload);
           }

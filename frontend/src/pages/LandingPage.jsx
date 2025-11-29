@@ -1,7 +1,7 @@
 import '../styles/LandingPage.css';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api.js';
 
 const LandingPage = () => {
@@ -12,6 +12,7 @@ const LandingPage = () => {
     retry: false,
     staleTime: 30_000
   });
+  const queryClient = useQueryClient();
   const [loadingGuest, setLoadingGuest] = useState(false);
 
   async function redirectToAuthCodeFlow() {
@@ -32,6 +33,7 @@ const LandingPage = () => {
       setLoadingGuest(true);
       const json = await api.post('/api/auth/guest');
       if (!json || !json.accountId) throw new Error('Guest login failed');
+      try { queryClient.invalidateQueries(['auth', 'status']); } catch (e) { /* ignore */ }
       navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error('Guest login error', err);
