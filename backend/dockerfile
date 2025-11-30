@@ -1,12 +1,33 @@
-FROM node:20-alpine
+# backend/Dockerfile
+FROM node:18-alpine AS deps
+WORKDIR /workspace
+# Copy root package metadata so npm can resolve workspaces
+COPY package.json package-lock.json ./
+# Copy the package.json for packages we need to install quick checks (optional)
+COPY backend/package.json backend/package.json
+COPY shared/package.json shared/package.json
+# Install workspace dependencies (dev deps needed to build shared)
+RUN npm ci --workspaces
 
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
+# Build stage: copy source and build shared if needed
+FROM node:18-alpine AS builder
+WORKDIR /workspace
+COPY --from=deps /workspace/node_modules ./node_modules
 COPY . .
+# Build shared package (generates shared/dist)
+RUN npm --workspace shared run build
 
+# Final runtime image (production)
+FROM node:18-alpine AS runner
+WORKDIR /app
+# install production deps only for backend (uses backend package.json)
+COPY backend/package.json ./package.json
+RUN npm ci --production
+# Copy backend source
+COPY --from=builder /workspace/backend ./ 
+# Copy compiled shared dist into node_modules so `require('@game/shared')` resolves
+RUN mkdir -p node_modules/@game && \
+    cp -r /workspace/shared/dist node_modules/@game/shared
+ENV NODE_ENV=production
 EXPOSE 8081
-
 CMD ["node", "server.js"]

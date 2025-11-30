@@ -12,7 +12,9 @@ services:
       - "127.0.0.1:27017:27017"
 
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
     container_name: api
     environment:
       - NODE_ENV=production
@@ -27,7 +29,9 @@ services:
       - 1.1.1.1
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
     container_name: frontend
     expose:
       - "80"
