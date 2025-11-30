@@ -23,7 +23,7 @@ type CbResponse = {
   error?: string;
 };
 
-export const GameLobby: React.FC = () => {
+const GameLobby: React.FC = () => {
   const status = useQuery({
     queryKey: ['auth', 'status'],
     queryFn: () => api.get('/api/auth/status'),
@@ -289,3 +289,5 @@ export const GameLobby: React.FC = () => {
     </div>
   );
 };
+
+export default GameLobby;

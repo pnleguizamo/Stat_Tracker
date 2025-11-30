@@ -9,7 +9,7 @@ import FileUpload from './pages/FileUpload.jsx';
 import TopAlbums from './pages/TopAlbums.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import GameLobby from './pages/GameLobby.tsx';
-import { StagePlanner } from './pages/StagePlanner.tsx';
+import StagePlanner from './pages/StagePlanner.tsx';
 
 function App() {
   return (

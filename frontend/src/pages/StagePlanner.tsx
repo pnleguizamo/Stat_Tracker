@@ -3,10 +3,22 @@ import { useQuery } from '@tanstack/react-query';
 import api from 'lib/api';
 import { socket } from '../socket';
 import { useNavigate, useParams } from 'react-router-dom';
-import { RoomState, StageConfig, MinigameId } from "@game/shared";
+
+type MinigameId =
+  | 'WHO_LISTENED_MOST'
+  | 'FIRST_PLAY'
+  | 'GENRE_GUESS'
+  | 'GRAPH_GUESS'
+  | 'OUTLIER_MODE';
+
+type StageConfig = {
+  index: number;
+  minigameId: MinigameId;
+  customOptions?: Record<string, unknown>;
+}
 
 
-export const StagePlanner: React.FC = () => {
+const StagePlanner: React.FC = () => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const [stagePlan, setStagePlan] = useState<StageConfig[]>([
@@ -45,3 +57,5 @@ export const StagePlanner: React.FC = () => {
     </div>
   );
 };
+
+export default StagePlanner;
