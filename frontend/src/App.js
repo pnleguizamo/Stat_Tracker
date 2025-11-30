@@ -8,7 +8,8 @@ import TopSongs from './pages/TopSongs.jsx';
 import FileUpload from './pages/FileUpload.jsx';
 import TopAlbums from './pages/TopAlbums.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
-import { GameLobby } from './pages/GameLobby.tsx';
+import GameLobby from './pages/GameLobby.tsx';
+import { StagePlanner } from './pages/StagePlanner.tsx';
 
 function App() {
   return (
@@ -24,6 +25,9 @@ function App() {
           <Route path="/top_songs" element={<ProtectedRoute><TopSongs/></ProtectedRoute>} />
           <Route path="/upload_history" element={<ProtectedRoute><FileUpload/></ProtectedRoute>} />
           <Route path="/lobby" element={<ProtectedRoute><GameLobby/></ProtectedRoute>} />
+          {/* <Route path="/game/:roomCode" element={<PlayerScreen />} /> */}
+          <Route path="/game/host/:roomCode/setup" element={<StagePlanner />} />
+          {/* <Route path="/game/host/:roomCode/play" element={<HostGameScreen />} /> */}
         </Routes>
     </Router>
     </div>

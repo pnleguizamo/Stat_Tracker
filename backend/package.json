@@ -21,7 +21,8 @@
     "sparse-bitfield": "^3.0.3",
     "tr46": "^4.1.1",
     "webidl-conversions": "^7.0.0",
-    "whatwg-url": "^13.0.0"
+    "whatwg-url": "^13.0.0",
+    "@game/shared": "file:../shared"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

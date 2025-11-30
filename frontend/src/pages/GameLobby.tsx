@@ -2,28 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from 'lib/api';
 import { socket } from '../socket';
+import type { Player, RoomView, CreateJoinResponse } from '@game/shared';
 
-type Player = {
-  socketId?: string;
-  name: string;
-  userId?: string | null;
-  displayName?: string | null;
-  avatar?: string | null;
-};
-
-type RoomState = {
-  roomCode: string;
-  players: Player[];
-};
-
-type CbResponse = {
-  ok: boolean;
-  roomCode?: string;
-  players?: Player[];
-  error?: string;
-};
-
-export const GameLobby: React.FC = () => {
+const GameLobby: React.FC = () => {
   const status = useQuery({
     queryKey: ['auth', 'status'],
     queryFn: () => api.get('/api/auth/status'),
@@ -32,18 +13,19 @@ export const GameLobby: React.FC = () => {
     
   const [displayName, setDisplayName] = useState<string>('');
   const [roomCodeInput, setRoomCodeInput] = useState<string>('');
-  const [room, setRoom] = useState<RoomState | null>(null);
+  const [room, setRoom] = useState<RoomView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const isGuest = !!status.data?.spotifyUser?.is_guest;
 
 
   useEffect(() => {
-    function handleRoomUpdated(payload: RoomState) {
+    function handleRoomUpdated(payload: RoomView) {
       setRoom(payload);
     }
 
     socket.on('roomUpdated', handleRoomUpdated);
+    handleUpdateProfile();
 
     return () => {
       socket.off('roomUpdated', handleRoomUpdated);
@@ -108,13 +90,14 @@ export const GameLobby: React.FC = () => {
     const createPayload: any = {};
     if (displayName.trim()) createPayload.displayName = displayName.trim();
 
-    socket.emit('createRoom', createPayload, (response: CbResponse) => {
+    socket.emit('createRoom', createPayload, (response: CreateJoinResponse) => {
         if (!response.ok) {
           setError(response.error || 'Failed to create room');
           return;
         }
         setRoom({
           roomCode: response.roomCode!,
+          hostSocketId: response.hostSocketId,
           players: response.players || [],
         });
       }
@@ -135,7 +118,7 @@ export const GameLobby: React.FC = () => {
     const payload: any = { roomCode: roomCodeInput.trim().toUpperCase() };
     if (displayName.trim()) payload.displayName = displayName.trim();
 
-    socket.emit('joinRoom', payload, (response: CbResponse) => {
+    socket.emit('joinRoom', payload, (response: CreateJoinResponse) => {
         if (!response.ok) {
           if (response.error === 'ROOM_NOT_FOUND') {
             setError('Room not found');
@@ -146,6 +129,7 @@ export const GameLobby: React.FC = () => {
         }
         setRoom({
           roomCode: response.roomCode!,
+          hostSocketId: response.hostSocketId,
           players: response.players || [],
         });
       }
@@ -195,9 +179,14 @@ export const GameLobby: React.FC = () => {
 
       {room && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3>Room: {room.roomCode}</h3>
-            <button onClick={handleLeaveRoom}>Leave</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ fontSize: 12, color: '#666' }}>
+                {room.hostSocketId === socket.id ? 'You are the host' : 'Player'}
+              </div>
+              <button onClick={handleLeaveRoom}>Leave</button>
+            </div>
           </div>
           <h4>Players</h4>
           <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -228,7 +217,7 @@ export const GameLobby: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <div style={{ fontWeight: 600 }}>{p.displayName || p.name}</div>
+                  <div style={{ fontWeight: 600 }}>{p.displayName || p.name} {p.isHost ? <span style={{ fontSize: 12, color: '#2b6cb0', marginLeft: 6 }}>(host)</span> : null}</div>
                   <div style={{ fontSize: 12, color: '#666' }}>{p.userId ? `ID: ${p.userId}` : 'Guest'}</div>
                 </div>
               </li>
@@ -277,7 +266,9 @@ export const GameLobby: React.FC = () => {
               </div>
             </div>
           </div>
-          <button>Start Game</button>
+          <button disabled={room.hostSocketId !== socket.id} style={{ background: room.hostSocketId === socket.id ? undefined : '#ccc' }}>
+            {room.hostSocketId === socket.id ? 'Start Game' : 'Waiting for host'}
+          </button>
         </div>
       )}
 
@@ -289,3 +280,5 @@ export const GameLobby: React.FC = () => {
     </div>
   );
 };
+
+export default GameLobby;

@@ -13,6 +13,49 @@ const rooms = new Map();
 function initGameSockets(io) {
   io.on('connection', (socket) => {
     console.log('Client connected', socket.id, 'accountId:', socket.accountId);
+    
+    socket.on('enterStageConfig', ({ roomCode }, cb) => {
+      const room = getRoom(roomCode);
+      if (!room) {
+        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
+        return;
+      }
+      room.phase = 'stageConfig';
+      io.to(room.hostSocketId).emit('stagePlanUpdated', {
+        stagePlan: room.stagePlan,
+      });
+      cb?.({ ok: true });
+    });
+
+    socket.on('updateStagePlan', ({ roomCode, stagePlan }, cb) => {
+      const updated = updateStagePlan(roomCode, stagePlan);
+      if (!updated) {
+        cb?.({ ok: false, error: 'INVALID_STAGE_PLAN' });
+        return;
+      }
+      io.to(updated.hostSocketId).emit('stagePlanUpdated', {
+        stagePlan: updated.stagePlan,
+      });
+      cb?.({ ok: true });
+    });
+
+    socket.on('lockStagePlanAndStart', ({ roomCode }, cb) => {
+      const room = startGame(roomCode);
+      if (!room) {
+        cb?.({ ok: false, error: 'CANT_START' });
+        return;
+      }
+
+      // Notify everyone we’re now in-game
+      io.to(roomCode).emit('gameStateUpdated', {
+        phase: room.phase,
+        currentStageIndex: room.currentStageIndex,
+        stagePlan: room.stagePlan,
+        // plus any initial state for stage 0
+      });
+
+      cb?.({ ok: true });
+    });
 
     socket.on('createRoom', ({ displayName }, callback) => {
       let roomCode = generateRoomCode();
@@ -23,6 +66,7 @@ function initGameSockets(io) {
       const room = {
         players: new Map(),
         createdAt: new Date(),
+        hostSocketId: socket.id,
       };
 
       rooms.set(roomCode, room);
@@ -40,7 +84,8 @@ function initGameSockets(io) {
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
+        hostSocketId: room.hostSocketId,
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p, isHost: socketId === room.hostSocketId })),
       };
 
       io.to(roomCode).emit('roomUpdated', payload);
@@ -67,7 +112,8 @@ function initGameSockets(io) {
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
+        hostSocketId: room.hostSocketId,
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p, isHost: socketId === room.hostSocketId })),
       };
 
       io.to(roomCode).emit('roomUpdated', payload);
@@ -117,14 +163,19 @@ function initGameSockets(io) {
       room.players.delete(socket.id);
       socket.leave(roomCode);
 
-      if (room.players.size === 0) {
-        rooms.delete(roomCode);
-        return;
+      if (socket.id === room.hostSocketId) {
+        if (room.players.size === 0) {
+          rooms.delete(roomCode);
+          return;
+        }
+        const first = room.players.keys().next().value;
+        room.hostSocketId = first;
       }
 
       const payload = {
         roomCode,
-        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
+        hostSocketId: room.hostSocketId,
+        players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p, isHost: socketId === room.hostSocketId })),
       };
       io.to(roomCode).emit('roomUpdated', payload);
     });
@@ -132,12 +183,22 @@ function initGameSockets(io) {
     socket.on('disconnect', () => {
       for (const [roomCode, room] of rooms.entries()) {
         if (room.players.delete(socket.id)) {
+          if (socket.id === room.hostSocketId) {
+            if (room.players.size === 0) {
+              rooms.delete(roomCode);
+              continue;
+            }
+            const first = room.players.keys().next().value;
+            room.hostSocketId = first;
+          }
+
           if (room.players.size === 0) {
             rooms.delete(roomCode);
           } else {
             const payload = {
               roomCode,
-              players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p })),
+              hostSocketId: room.hostSocketId,
+              players: Array.from(room.players.entries()).map(([socketId, p]) => ({ socketId, ...p, isHost: socketId === room.hostSocketId })),
             };
             io.to(roomCode).emit('roomUpdated', payload);
           }
