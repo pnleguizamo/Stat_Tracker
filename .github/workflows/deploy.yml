@@ -13,6 +13,20 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Build `shared` package and copy to services
+        working-directory: /home/pnleguizamo/Stat_Tracker
+        run: |
+          echo "Building shared package..."
+          (npm ci --workspace shared) || (npm install --workspace shared)
+          npm --workspace shared run build
+          echo "Copying built shared into service build contexts..."
+          mkdir -p backend/node_modules/@game/shared frontend/node_modules/@game/shared
+          rm -rf backend/node_modules/@game/shared/* || true
+          rm -rf frontend/node_modules/@game/shared/* || true
+          cp -r shared/dist/* backend/node_modules/@game/shared/ || true
+          cp -r shared/dist/* frontend/node_modules/@game/shared/ || true
+          echo "Shared package ready for Docker builds."
+
       - name: Deploy with Docker Compose
         working-directory: /home/pnleguizamo/Stat_Tracker
         run: |
