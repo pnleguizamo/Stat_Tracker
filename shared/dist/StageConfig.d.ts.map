@@ -1,0 +1,1 @@
+{"version":3,"file":"StageConfig.d.ts","sourceRoot":"","sources":["../src/StageConfig.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,UAAU,EAAE,MAAM,YAAY,CAAC;AAExC,MAAM,WAAW,WAAW;IAC1B,KAAK,EAAE,MAAM,CAAC;IACd,UAAU,EAAE,UAAU,CAAC;IACvB,aAAa,CAAC,EAAE,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,CAAC;CACzC"}
