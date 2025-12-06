@@ -92,19 +92,18 @@ async function getRecentlyPlayedSongs(accessToken, afterMs = null, limit = 50) {
   }
 }
 
-async function getAlbumCover(accessToken, spotifyTrackUri) {
+async function getAlbumCover(accessToken, trackIds) {
     try {
-        const trackId = spotifyTrackUri.split(':')[2];
-        const response = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+        const url = `https://api.spotify.com/v1/tracks?ids=${trackIds.join(',')}`;
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${accessToken}`
             }
         });
 
-        const trackData = await response.json();
-
-        return trackData?.album?.images[0]?.url || null;
+        const data = await response.json();
+        return data.tracks || [];
     } catch (error) {
         console.error("Error fetching album cover:", error.response?.data || error.message);
         throw error;

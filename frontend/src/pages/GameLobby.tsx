@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from 'lib/api';
 import { socket } from '../socket';
+import { useNavigate } from 'react-router-dom';
 
 type Player = {
   socketId?: string;
@@ -9,10 +10,12 @@ type Player = {
   userId?: string | null;
   displayName?: string | null;
   avatar?: string | null;
+  isHost?: boolean;
 };
 
 type RoomState = {
   roomCode: string;
+  hostSocketId?: string;
   players: Player[];
 };
 
@@ -20,6 +23,7 @@ type CbResponse = {
   ok: boolean;
   roomCode?: string;
   players?: Player[];
+  hostSocketId: string;
   error?: string;
 };
 
@@ -33,22 +37,15 @@ const GameLobby: React.FC = () => {
   const [displayName, setDisplayName] = useState<string>('');
   const [roomCodeInput, setRoomCodeInput] = useState<string>('');
   const [room, setRoom] = useState<RoomState | null>(null);
+  const roomRef = useRef<RoomState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const isGuest = !!status.data?.spotifyUser?.is_guest;
-
+  const navigate = useNavigate();
 
   useEffect(() => {
-    function handleRoomUpdated(payload: RoomState) {
-      setRoom(payload);
-    }
-
-    socket.on('roomUpdated', handleRoomUpdated);
-
-    return () => {
-      socket.off('roomUpdated', handleRoomUpdated);
-    };
-  }, []);
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     if (!room) return;
@@ -58,7 +55,45 @@ const GameLobby: React.FC = () => {
       if (me.displayName) setDisplayName(me.displayName);
       if (me.avatar) setSelectedAvatar(me.avatar);
     }
+    console.log("EFFECT ROOM ", room)
   }, [room]);
+
+
+  useEffect(() => {
+    function handleRoomUpdated(payload: RoomState) {
+      setRoom(payload);
+    }
+
+    socket.on('roomUpdated', handleRoomUpdated);
+
+    function handleGameStateUpdated(payload: any) {
+      console.log("GAME STATE UPDATED")
+      console.log(payload);
+      console.log("PRE CHECK ", room);
+      const currentRoom = roomRef.current;
+      // if the game has started, navigate non-host players to the player screen
+      if (!payload || payload.phase !== 'inGame') return;
+      if (!currentRoom) {
+        console.log("NOT ROOM")
+        console.log(room);
+        return; 
+      }
+      if (payload.roomCode && payload.roomCode !== currentRoom.roomCode) return;
+      if (currentRoom.hostSocketId === socket.id) return; // host stays with host flow
+      // navigate non-hosts to the player screen for this room
+      console.log("NAVIGATE");
+      navigate(`/game/${currentRoom.roomCode}`);
+    }
+
+    socket.on('gameStateUpdated', handleGameStateUpdated);
+    // handleUpdateProfile();
+
+    return () => {
+      socket.off('roomUpdated', handleRoomUpdated);
+      socket.off('gameStateUpdated', handleGameStateUpdated);
+    };
+  }, []);
+
 
   const AVATAR_BASE = "/gamerpics";
   const NUM_AVATARS = isGuest ? 21 : 20;
@@ -96,6 +131,7 @@ const GameLobby: React.FC = () => {
         setError(resp?.error || 'Failed to update profile');
       }
     });
+    console.log("Room update prof ", room)
   }
 
   const handleCreateRoom = () => {
@@ -115,6 +151,7 @@ const GameLobby: React.FC = () => {
         }
         setRoom({
           roomCode: response.roomCode!,
+          hostSocketId: response.hostSocketId,
           players: response.players || [],
         });
       }
@@ -144,8 +181,11 @@ const GameLobby: React.FC = () => {
           }
           return;
         }
+        console.log("SET ROOM")
+        console.log(response)
         setRoom({
           roomCode: response.roomCode!,
+          hostSocketId: response.hostSocketId,
           players: response.players || [],
         });
       }
@@ -195,9 +235,14 @@ const GameLobby: React.FC = () => {
 
       {room && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3>Room: {room.roomCode}</h3>
-            <button onClick={handleLeaveRoom}>Leave</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ fontSize: 12, color: '#666' }}>
+                {room.hostSocketId === socket.id ? 'You are the host' : 'Player'}
+              </div>
+              <button onClick={handleLeaveRoom}>Leave</button>
+            </div>
           </div>
           <h4>Players</h4>
           <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -228,7 +273,7 @@ const GameLobby: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <div style={{ fontWeight: 600 }}>{p.displayName || p.name}</div>
+                  <div style={{ fontWeight: 600 }}>{p.displayName || p.name} {p.isHost ? <span style={{ fontSize: 12, color: '#2b6cb0', marginLeft: 6 }}>(host)</span> : null}</div>
                   <div style={{ fontSize: 12, color: '#666' }}>{p.userId ? `ID: ${p.userId}` : 'Guest'}</div>
                 </div>
               </li>
@@ -277,8 +322,14 @@ const GameLobby: React.FC = () => {
               </div>
             </div>
           </div>
-          <button>Start Game</button>
+          <button onClick={() => navigate(`/game/host/${room.roomCode}/setup`)} disabled={room.hostSocketId !== socket.id} style={{ background: room.hostSocketId === socket.id ? undefined : '#ccc' }}>
+            {room.hostSocketId === socket.id ? 'Start Game' : 'Waiting for host'}
+          </button>
+          
+          <>{room?.hostSocketId}</>
+
         </div>
+        
       )}
 
       {error && (

@@ -1,26 +1,33 @@
 const { getAlbumCover } = require('../services/spotifyServices.js');
 const { initDb } = require('../mongo.js');
+const { cannotHaveAUsernamePasswordPort } = require('whatwg-url');
 
 const collectionName = process.env.COLLECTION_NAME;
 let db;
 
 const mongoService = module.exports = {};
 
+const getStartDate = (tf) => {
+    if (tf === "month") {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 1);
+        return d;
+    } else if (tf === "6months") {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 6);
+        return d;
+    } else if (tf === "year") {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 1);
+        return d;
+    }
+    return null;
+};
+
 mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "lifetime") {
     try {
         db = await initDb();
-
-        let startDate = null;
-        if (timeframe === "month") {
-            startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 1);
-        } else if (timeframe === "6months") {
-            startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 6);
-        } else if (timeframe === "year") {
-            startDate = new Date();
-            startDate.setFullYear(startDate.getFullYear() - 1);
-        }
+        const startDate = getStartDate(timeframe);
 
         const pipeline = [];
         if (startDate) {
@@ -56,24 +63,18 @@ mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "li
         );
 
         const topAlbums = await db.collection(collectionName).aggregate(pipeline).toArray();
-
-        for (let album of topAlbums) {
-            if (album.spotify_uri) {
-                const trackId = album.spotify_uri.split(':')[2];
-
-                const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                });
-
-                const trackData = await resp.json();
-                album.image_url = trackData.album.images[0].url;
-            }
-        }
-
-        return topAlbums;
+        const trackIds = topAlbums.map(album => album.spotify_uri.split(':')[2]);
+        const tracks = await getAlbumCover(accessToken, trackIds);
+        const trackMap = new Map(
+            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
+        );
+        return topAlbums.map(album => {
+            const trackId = album.spotify_uri.split(':')[2];
+            return {
+                ...album,
+                image_url: trackMap.get(trackId) || null
+            };
+        })
     } catch (err) {
         console.error("Error retrieving top albums:", err);
         throw err;
@@ -85,49 +86,28 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
         db = await initDb();
         const collection = db.collection(collectionName);
 
-        let startDate = null;
-        if (timeframe === "month") {
-            startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 1);
-        } else if (timeframe === "6months") {
-            startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 6);
-        } else if (timeframe === "year") {
-            startDate = new Date();
-            startDate.setFullYear(startDate.getFullYear() - 1);
-        }
-
-        const pipeline = [];
+        const startDate = getStartDate(timeframe);
+        const matchStage = {
+            userId,
+            master_metadata_album_artist_name: { $ne: null },
+            reason_end: "trackdone"
+        };
         if (startDate) {
-            pipeline.push({
-                $match: {
-                    ts: { $gte: startDate.toISOString() }
-                }
-            });
+            matchStage.ts = { $gte: startDate.toISOString() };
         }
 
-        pipeline.push(
+        const pipeline = [
+            { $match: matchStage },
             {
-                "$match": {
-                    "userId" : `${userId}`,
-                    "master_metadata_album_artist_name": { "$ne": null },
-                    "reason_end": "trackdone"
+                $group: {
+                    _id: "$master_metadata_album_artist_name",
+                    play_count: { $sum: 1 },
+                    spotify_uri: { $first: "$spotify_track_uri" }
                 }
             },
-            {
-                "$group": {
-                    "_id": "$master_metadata_album_artist_name",
-                    "play_count": { "$sum": 1 },
-                    "spotify_uri": { "$first": "$spotify_track_uri" }
-                }
-            },
-            {
-                "$sort": { "play_count": -1 }
-            },
-            {
-                "$limit": 25
-            }
-        );
+            { $sort: { play_count: -1 } },
+            { $limit: 25 }
+        ];
 
 
         const topArtists = await collection.aggregate(pipeline).toArray();
@@ -147,10 +127,10 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
             if (!resp.ok) {
                 console.error('Spotify /tracks error', await resp.text());
             } else {
-                const data = await resp.json();
+                const trackData = await resp.json();
                 const artistByTrackId = {};
 
-                const artistIds = data.tracks.map(a => a.artists[0].id);
+                const artistIds = trackData.tracks.map(a => a.artists[0].id);
                 const resp2 = await fetch(`https://api.spotify.com/v1/artists?ids=${artistIds.join(',')}`, {
                     method: 'GET',
                     headers: {
@@ -158,16 +138,16 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
                     },
                 });
 
-                for (const t of data.tracks || []) {
+                for (const t of trackData.tracks || []) {
                     if (t?.id && t.artists?.[0]?.id) {
                         artistByTrackId[t.id] = t.artists?.[0]?.id;
                     }
                 }
                 
-                const data2 = await resp2.json();
+                const artistsData = await resp2.json();
                 
                 const imageByArtistId = {};
-                for (const t of data2.artists || []) {
+                for (const t of artistsData.artists || []) {
                     if (t?.id && t.images?.[0]?.url) {
                         imageByArtistId[t.id] = t.images[0].url;
                     }
@@ -178,35 +158,6 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
                 }
             }
         }
-        // TODO Refactor getAlbumCover function
-        // for (let artist of topArtists) {
-        //     if (artist.spotify_uri) {
-        //         const trackId = artist.spotify_uri.split(':')[2];
-
-        //         const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-        //             method: 'GET',
-        //             headers: {
-        //                 'Authorization': `Bearer ${accessToken}`
-        //             }
-        //         });
-
-        //         const trackData = await resp.json();
-        //         const artistId = trackData.artists[0].uri.split(':')[2];
-
-        //         const spotifyApiUrl = `https://api.spotify.com/v1/artists/${artistId}`;
-        //         const response = await fetch(spotifyApiUrl, {
-        //             method: 'GET',
-        //             headers: {
-        //                 'Authorization': `Bearer ${accessToken}`
-        //             }
-        //         });
-
-
-        //         const artistData = await response.json();
-        //         artist.image_url = artistData.images[0].url;
-        //     }
-        // }
-        // console.log(topArtists)
         return topArtists;
     } catch (error) {
         console.error("Error fetching top played artists:", error);
@@ -248,18 +199,18 @@ mongoService.getTopPlayedSongs = async function (access_token, userId ) {
 
         const topSongs = await collection.aggregate(pipeline).toArray();
 
-        const enhancedSongs = await Promise.all(
-            topSongs.map(async (song) => {
-                const albumCover = await getAlbumCover(access_token, song.spotify_track_uri);
-                return {
-                    ...song,
-                    album_cover: albumCover
-                };
-            })
+        const trackIds = topSongs.map(song => song.spotify_track_uri.split(':')[2]);
+        const tracks = await getAlbumCover(access_token, trackIds);
+        const trackMap = new Map(
+            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
         );
-
-        return enhancedSongs;
-
+        return topSongs.map(song => {
+            const trackId = song.spotify_track_uri.split(':')[2];
+            return {
+                ...song,
+                album_cover: trackMap.get(trackId) || null
+            };
+        });
     } catch (error) {
         console.error("Error fetching top played songs:", error);
         throw error;
@@ -270,40 +221,22 @@ mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "life
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
+        const startDate = getStartDate(timeframe);
 
-        let startDate = null;
-        if (timeframe === "week") {
-            startDate = new Date();
-            startDate.setDate(startDate.getDate() - 7);
-        } else if (timeframe === "6months") {
-            startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 6);
-        } else if (timeframe === "year") {
-            startDate = new Date();
-            startDate.setFullYear(startDate.getFullYear() - 1);
-        }
-
-        const pipeline = [];
+        const matchStage = { userId };
         if (startDate) {
-            pipeline.push({
-                $match: {
-                    ts: { $gte: startDate.toISOString() }
-                }
-            });
+            matchStage.ts = { $gte: startDate.toISOString() };
         }
-        pipeline.push(
-            {
-                $match: {
-                    userId
-                }
-            },
+
+        const pipeline = [
+            { $match: matchStage },
             {
                 $group: {
                     _id: null,
                     totalMsPlayed: { $sum: "$ms_played" }
                 }
             }
-        );
+        ];
 
         const result = await collection.aggregate(pipeline).toArray();
         const totalMinutesStreamed = result.length > 0 ? result[0].totalMsPlayed / 60000 : 0;
@@ -404,5 +337,150 @@ mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
         }
     } catch (err) {
         console.error("Error updating albums with image URLs:", err);
+    }
+};
+
+mongoService.getListenCountsForSong = async function(userIds, trackName, artistName) {
+  try {
+    const db = await initDb();
+    const collection = db.collection(collectionName);
+
+    const pipeline = [
+      {
+        $match: {
+          userId: { $in: userIds },
+          master_metadata_track_name: trackName,
+          master_metadata_album_artist_name: artistName,
+          reason_end: "trackdone"
+        }
+      },
+      {
+        $group: {
+          _id: "$userId",
+          play_count: { $sum: 1 }
+        }
+      }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
+    console.log(results)
+
+    const listenCounts = {};
+    for (const result of results) {
+      listenCounts[result._id] = result.play_count;
+    }
+    
+    for (const userId of userIds) {
+      if (!listenCounts[userId]) {
+        listenCounts[userId] = 0;
+      }
+    }
+
+    console.log(listenCounts);
+    
+    return listenCounts;
+  } catch (error) {
+    console.error("Error fetching listen counts for song:", error);
+    throw error;
+  }
+}
+
+mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 1, sampleSize = 1) {
+    try {
+        if (!userIds || userIds.length === 0) {
+            throw new Error('userIds array cannot be empty');
+        }
+
+        db = await initDb();
+        const collection = db.collection(collectionName);
+        const minAccounts = Math.ceil(userIds.length * minAccountsPercentage);
+
+        const pipeline = [
+            {
+                $match: {
+                    userId: { $in: userIds },
+                    master_metadata_track_name: { $ne: null },
+                    master_metadata_album_artist_name: { $ne: null },
+                    reason_end: "trackdone"
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        track_name: "$master_metadata_track_name",
+                        artist_name: "$master_metadata_album_artist_name"
+                    },
+                    play_count: { $sum: 1 },
+                    unique_users: { $addToSet: "$userId" },
+                    spotify_track_uri: { $first: "$spotify_track_uri" }
+                }
+            },
+            {
+                $addFields: {
+                    user_count: { $size: "$unique_users" }
+                }
+            },
+            {
+                $match: {
+                    user_count: { $gte: minAccounts }
+                }
+            },
+            { 
+                $sample: { size: sampleSize } 
+            },
+            {
+                $sort: { play_count: -1 }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    play_count: 1,
+                    user_count: 1,
+                    spotify_track_uri: 1,
+                    listener_percentage: {
+                        $multiply: [
+                            { $divide: ["$user_count", userIds.length] },
+                            100
+                        ]
+                    }
+                }
+            }
+        ];
+
+        const sharedSongs = await collection.aggregate(pipeline).toArray();
+
+        const trackIds = sharedSongs.map(song => song.spotify_track_uri?.split(':')[2]).filter(Boolean);
+        const tracks = await getAlbumCover(accessToken, trackIds);
+        const trackMap = new Map(
+            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
+        );
+        sharedSongs.forEach(song => {
+            const trackId = song.spotify_track_uri?.split(':')[2];
+            song.imageUrl = trackMap.get(trackId) || null;
+        });
+        
+
+        // Enrich with album covers
+        // const enhancedSongs = await Promise.all(
+        //     sharedSongs.map(async (song) => {
+        //         let album_cover = null;
+        //         if (song.spotify_track_uri && accessToken) {
+        //             try {
+        //                 album_cover = await getAlbumCover(accessToken, song.spotify_track_uri);
+        //             } catch (err) {
+        //                 console.warn('Failed to fetch album cover for', song._id.track_name, err);
+        //             }
+        //         }
+        //         return {
+        //             ...song,
+        //             album_cover
+        //         };
+        //     })
+        // );
+
+        return sharedSongs;
+    } catch (error) {
+        console.error("Error fetching shared top songs:", error);
+        throw error;
     }
 };
