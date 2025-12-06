@@ -9,9 +9,9 @@ function safeRoomLookup(getRoom, roomCode) {
 
 async function pickPrompt(room, customPrompt) {
   if (customPrompt) return customPrompt;
-  const idx = Math.floor(Math.random() * SAMPLE_PROMPTS.length);
+  // const idx = Math.floor(Math.random() * SAMPLE_PROMPTS.length);
 
-  const userIds = ['31wxboit3bzjitqzphe2g65e2npa','m9rmdyfk4gk99wf9z1pe0jrdn']
+  const userIds = []
   room.players.forEach((player, socketId) => {
     if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
   });
@@ -173,7 +173,7 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       const idx = room.currentStageIndex || 0;
       const round = room.roundState?.[idx];
 
-      const userIds = ['31wxboit3bzjitqzphe2g65e2npa','m9rmdyfk4gk99wf9z1pe0jrdn']
+      const userIds = []
       room.players.forEach((player, socketId) => {
         if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
       });
