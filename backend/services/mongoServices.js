@@ -221,22 +221,41 @@ mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "life
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
-        const startDate = getStartDate(timeframe);
-
-        const matchStage = { userId };
-        if (startDate) {
-            matchStage.ts = { $gte: startDate.toISOString() };
+        
+        let startDate = null;
+        if (timeframe === "week") {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+        } else if (timeframe === "6months") {
+            startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 6);
+        } else if (timeframe === "year") {
+            startDate = new Date();
+            startDate.setFullYear(startDate.getFullYear() - 1);
         }
 
-        const pipeline = [
-            { $match: matchStage },
+        const pipeline = [];
+        if (startDate) {
+            pipeline.push({
+                $match: {
+                    ts: { $gte: startDate.toISOString() }
+                }
+            });
+        }
+        
+        pipeline.push(
+            {
+                $match: {
+                    userId
+                }
+            },
             {
                 $group: {
                     _id: null,
                     totalMsPlayed: { $sum: "$ms_played" }
                 }
             }
-        ];
+        );
 
         const result = await collection.aggregate(pipeline).toArray();
         const totalMinutesStreamed = result.length > 0 ? result[0].totalMsPlayed / 60000 : 0;
@@ -385,7 +404,7 @@ mongoService.getListenCountsForSong = async function(userIds, trackName, artistN
   }
 }
 
-mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 1, sampleSize = 1) {
+mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 1) {
     try {
         if (!userIds || userIds.length === 0) {
             throw new Error('userIds array cannot be empty');

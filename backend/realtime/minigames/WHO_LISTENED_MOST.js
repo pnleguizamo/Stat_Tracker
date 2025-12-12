@@ -188,7 +188,7 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
         round.revealedAt = Date.now();
       }
 
-      io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:revealResults', { results });
+      // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:revealResults', { results });
       broadcastGameState?.(roomCode);
       cb?.({ ok: true, results });
     } catch (err) {
