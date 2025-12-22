@@ -1,6 +1,6 @@
 import { FC, useMemo, useState } from "react";
 import { socket } from "socket";
-import { GameState, Player } from "types/game";
+import { GameState, Player, WhoListenedMostRoundState } from "types/game";
 
 type Props = {
   roomCode: string;
@@ -9,15 +9,18 @@ type Props = {
 };
 
 export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
-  const round = gameState.currentRoundState;
+  const round =
+    gameState.currentRoundState && gameState.currentRoundState.minigameId === "WHO_LISTENED_MOST"
+      ? (gameState.currentRoundState as WhoListenedMostRoundState)
+      : null;
   const players = gameState.players || [];
   const [actionBusy, setActionBusy] = useState<"prompt" | "reveal" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submissions = round ? Object.keys(round.answers || {}).length : 0;
   const voteTotals = round?.results?.tally || {};
-  const listenCounts = round?.results?.listenCounts || {};
-  const winners = round?.results?.winners || [];
+  const listenCounts = (round?.results?.listenCounts as Record<string, number> | undefined) || {};
+  const winners = (round?.results?.winners as string[] | undefined) || [];
   
   const sortedVoteBoard = useMemo(() => {
     return [...players].sort((a, b) => {
@@ -115,14 +118,13 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
           {sortedVoteBoard.map((player) => {
             const votes = player.socketId ? voteTotals[player.socketId] || 0 : 0;
             const isTop = player.socketId && player.socketId === round?.results?.topListenerSocketId;
-            const isWinner = player.socketId && winners.includes(player.socketId);
             const actualListens = player.userId ? listenCounts[player.userId] || 0 : 0;
             
             return (
               <div
                 key={player.socketId || player.name}
                 style={{
-                  border: `2px solid ${isTop ? "#48bb78" : isWinner ? "#4299e1" : "#2d3748"}`,
+                  border: `2px solid ${isTop ? "#48bb78" : "#2d3748"}`,
                   borderRadius: 8,
                   padding: "0.85rem",
                   background: isTop ? "#1d2738" : "#10131a",
@@ -131,17 +133,16 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
                 <div style={{ fontWeight: 600, color: "#ffffffff" }}>
                   {player.displayName || player.name}
                   {isTop && <span style={{ marginLeft: 6, color: "#48bb78" }}>🏆</span>}
-                  {isWinner && !isTop && <span style={{ marginLeft: 6, color: "#4299e1" }}>✓</span>}
                 </div>
                 <div style={{ fontSize: 13, color: "#9db2d0" }}>{votes} vote(s)</div>
                 {roundStatus === "revealed" && (
                   <div style={{ fontSize: 12, color: "#68d391", marginTop: 4 }}>
                     {actualListens} actual listens
-                  </div>
-                )}
               </div>
-            );
-          })}
+            )}
+          </div>
+        );
+      })}
         </div>
       </div>
 
@@ -149,7 +150,8 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
         <>
           {topListener && (
             <div style={{ padding: "1rem", borderRadius: 12, background: "#233044", color: "#ffffffff" }}>
-              <strong>{topListener.displayName || topListener.name}</strong> is the top listener with {listenCounts[topListener.userId || ""] || 0} plays!
+              <strong>{topListener.displayName || topListener.name}</strong> is the top listener with{" "}
+              {topListener.userId ? listenCounts[topListener.userId] || 0 : 0} plays!
             </div>
           )}
           
@@ -157,7 +159,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
             <div style={{ padding: "1rem", borderRadius: 12, background: "#1a365d", color: "#ffffffff" }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Winners (guessed correctly):</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {winners.map((socketId :any) => {
+                {winners.map((socketId) => {
                   const winner = players.find((p) => p.socketId === socketId);
                   return winner ? (
                     <span

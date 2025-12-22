@@ -40,6 +40,7 @@ async function createRoundState(room, params = {}) {
 
   const roundState = {
     id: params.roundId || `wlm-${Date.now()}`,
+    minigameId: 'WHO_LISTENED_MOST',
     prompt: await pickPrompt(room, params.prompt),
     answers: {},
     status: 'collecting',

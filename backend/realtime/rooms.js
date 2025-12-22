@@ -46,7 +46,7 @@ function createRoom(hostSocketId, profile = {}, displayName, userId) {
     roundState: {},
     stagePlan: [
       { index: 0, minigameId: 'WHO_LISTENED_MOST' },
-      { index: 1, minigameId: 'GENRE_GUESS' },
+      { index: 1, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
       { index: 2, minigameId: 'OUTLIER_MODE' },
     ],
   };
@@ -182,16 +182,35 @@ function getGameState(roomCode) {
     currentStageIndex,
     currentStageConfig,
     currentRoundState: currentRoundState
-      ? {
-          ...currentRoundState,
-          answers: { ...(currentRoundState.answers || {}) },
-          results: currentRoundState.results
-            ? {
-                ...currentRoundState.results,
-                tally: { ...(currentRoundState.results.tally || {}) },
+      ? (() => {
+          const clone = {
+            ...currentRoundState,
+            answers: { ...(currentRoundState.answers || {}) },
+            results: (() => {
+              if (!currentRoundState.results) return undefined;
+              const resClone = { ...currentRoundState.results };
+              if (currentRoundState.results.tally) {
+                resClone.tally = { ...currentRoundState.results.tally };
               }
-            : undefined,
-        }
+              if (currentRoundState.results.votes) {
+                resClone.votes = { ...currentRoundState.results.votes };
+              }
+              if (currentRoundState.results.listenCounts) {
+                resClone.listenCounts = { ...currentRoundState.results.listenCounts };
+              }
+              return resClone;
+            })(),
+          };
+          if (clone.status !== 'revealed') {
+            if (clone.ownerSocketId) clone.ownerSocketId = null;
+            if (clone.ownerProfile) clone.ownerProfile = null;
+            if (clone.results) {
+              if (clone.results.ownerSocketId) clone.results.ownerSocketId = null;
+              if (clone.results.ownerProfile) clone.results.ownerProfile = null;
+            }
+          }
+          return clone;
+        })()
       : null,
   };
 }

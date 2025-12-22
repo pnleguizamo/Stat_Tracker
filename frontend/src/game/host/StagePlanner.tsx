@@ -11,7 +11,7 @@ const StagePlanner: React.FC = () => {
   const navigate = useNavigate();
   const [stagePlan, setStagePlan] = useState<StageConfig[]>([
     { index: 0, minigameId: 'WHO_LISTENED_MOST' },
-    { index: 1, minigameId: 'GENRE_GUESS' },
+    { index: 1, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
     { index: 2, minigameId: 'OUTLIER_MODE' },
   ]);
 
@@ -47,6 +47,7 @@ const StagePlanner: React.FC = () => {
 
   const MINIGAMES: { id: MinigameId; name: string; desc?: string }[] = [
     { id: 'WHO_LISTENED_MOST', name: 'Who Listened Most' },
+    { id: 'GUESS_SPOTIFY_WRAPPED', name: 'Guess the Wrapped' },
     { id: 'FIRST_PLAY', name: 'First Play' },
     { id: 'GENRE_GUESS', name: 'Genre Guess' },
     { id: 'GRAPH_GUESS', name: 'Graph Guess' },
