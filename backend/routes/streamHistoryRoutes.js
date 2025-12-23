@@ -1,11 +1,12 @@
 const multer = require('multer');
-const { initDb, client } = require('../mongo.js');
+const { initDb, client, COLLECTIONS } = require('../mongo.js');
 const fs = require('fs');
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/authMiddleware.js');
+const { ingestNormalizedStreamEvents } = require('../services/streamNormalizationService.js');
 
-const collectionName = process.env.COLLECTION_NAME;
+const collectionName = COLLECTIONS.rawStreams;
 
 // const upload = multer({ dest: 'uploads/' });
 const upload = multer({
@@ -39,6 +40,9 @@ router.post('/api/upload', authenticate, upload.array('files'), async (req, res)
       totalInserted: 0,
       totalDuplicatesOrExisting: 0,
       totalInvalidRows: 0,
+      totalNormalized: 0,
+      totalNormalizedInserted: 0,
+      totalTrackStubsCreated: 0,
       files: []
     };
 
@@ -74,6 +78,7 @@ router.post('/api/upload', authenticate, upload.array('files'), async (req, res)
         summary.totalRows += json.length;
 
         const operations = [];
+        const normalizedRows = [];
         let invalidRows = 0;
         const perFileSeen = new Set(); 
 
@@ -103,6 +108,13 @@ router.post('/api/upload', authenticate, upload.array('files'), async (req, res)
               upsert: true
             }
           });
+
+          normalizedRows.push({
+            ts: row.ts,
+            ms_played: row.ms_played,
+            spotify_track_uri: row.spotify_track_uri,
+            reason_end: row.reason_end,
+          });
         }
 
         fileReport.invalidRows = invalidRows;
@@ -122,6 +134,18 @@ router.post('/api/upload', authenticate, upload.array('files'), async (req, res)
           summary.totalDuplicatesOrExisting += duplicatesOrExisting;
         }
 
+        if (normalizedRows.length) {
+          const normalizedStats = await ingestNormalizedStreamEvents(
+            normalizedRows,
+            userId,
+            { source: 'bulk-json-upload' }
+          );
+          fileReport.normalized = normalizedStats;
+          summary.totalNormalized += normalizedStats.normalized;
+          summary.totalNormalizedInserted += normalizedStats.inserted;
+          summary.totalTrackStubsCreated += normalizedStats.trackStubsCreated;
+        }
+
         fileReport.processed = true;
         summary.totalFilesProcessed++;
 
@@ -132,7 +156,7 @@ router.post('/api/upload', authenticate, upload.array('files'), async (req, res)
 
       summary.files.push(fileReport);
     }
-
+    console.log(summary);
     return res.status(200).json(summary);
 
   } catch (error) {

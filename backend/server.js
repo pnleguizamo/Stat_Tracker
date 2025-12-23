@@ -6,6 +6,7 @@ require('dotenv').config();
 const http = require('http');
 const { initDb } = require('./mongo.js');
 const { initSocket } = require('./realtime/socketServer');
+const { startMetadataCacheWorker } = require('./services/metadataCacheWorker.js');
 
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes);
 (async () => {
   await initDb();
   require('./services/pollingService.js');
+  startMetadataCacheWorker();
 })();
 
 server.listen(port, () => {

@@ -1,10 +1,10 @@
-const { initDb, client } = require('../mongo.js');
+const { initDb, client, COLLECTIONS } = require('../mongo.js');
 const cron = require('node-cron');
 const { syncRecentStreams } = require('../services/mongoServices.js');
 const { getRecentlyPlayedSongs } = require('../services/spotifyServices.js');
 const { getAccessToken } = require('./authService.js');
 
-const collectionName = process.env.COLLECTION_NAME;
+const collectionName = COLLECTIONS.rawStreams;
 let db;
 
 async function createIndex(){

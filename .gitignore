@@ -2,3 +2,4 @@ node_modules
 .env
 backend/uploads
 frontend/public/gamerpics
+backend/public/mongo.*

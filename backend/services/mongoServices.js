@@ -1,8 +1,9 @@
 const { getAlbumCover } = require('../services/spotifyServices.js');
-const { initDb } = require('../mongo.js');
+const { initDb, COLLECTIONS } = require('../mongo.js');
+const { ingestNormalizedStreamEvents } = require('./streamNormalizationService.js');
 const { cannotHaveAUsernamePasswordPort } = require('whatwg-url');
 
-const collectionName = process.env.COLLECTION_NAME;
+const collectionName = COLLECTIONS.rawStreams;
 let db;
 
 const mongoService = module.exports = {};
@@ -269,18 +270,19 @@ mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "life
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         db = await initDb();
-        const collection = db.collection(collectionName);        
+        const collection = db.collection(collectionName);
         const ops = recentTracks.map(track => {
+            const tsIso = new Date(track.playedAt).toISOString();
             return {
                 updateOne: {
                     filter: {
                         userId,
-                        ts : new Date(track.playedAt).toISOString(),
+                        ts: tsIso,
                         spotify_track_uri: track.trackUri
                     },
                     update: {
                         $setOnInsert: {
-                            ts: new Date(track.playedAt).toISOString(),
+                            ts: tsIso,
                             userId,
                             master_metadata_track_name: track.trackName,
                             master_metadata_album_artist_name: track.artistName,
@@ -295,11 +297,24 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
             };
         });
 
-        if (!ops.length) return 0;
+        let insertedCount = 0;
+        if (ops.length) {
+            const res = await collection.bulkWrite(ops, { ordered: false });
+            insertedCount = res.upsertedCount || 0;
+        }
 
-        const res = await collection.bulkWrite(ops, { ordered: false });
-        // upsertedCount = number of brand-new docs
-        return res.upsertedCount || 0;
+        await ingestNormalizedStreamEvents(
+            recentTracks.map(track => ({
+                ts: track.playedAt,
+                ms_played: track.duration,
+                spotify_track_uri: track.trackUri,
+                reason_end: 'trackdone',
+            })),
+            userId,
+            { source: 'recent-playback' }
+        );
+
+        return insertedCount;
     } catch (error) {
         console.error('Error syncing recent streams:', error);
         throw error;
