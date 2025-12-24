@@ -311,7 +311,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
             qualifiedPlays: doc.qualifiedPlays || 0,
             msPlayed: doc.msPlayed || 0,
             lastStreamTs: doc.lastStreamTs || day,
-            qualifiedMsThreshold,
+            // qualifiedMsThreshold,
             updatedAt: now,
           },
           $setOnInsert: { createdAt: now },
@@ -485,11 +485,11 @@ async function buildUserSnapshots(options = {}) {
       .map(w => w.key)
       .join(',')} thresholdMs=${qualifiedMsThreshold}`
   );
-  const minStart = bounds.reduce((acc, w) => {
-    if (!w.start) return acc;
-    if (!acc) return w.start;
-    return w.start < acc ? w.start : acc;
-  }, null);
+  // const minStart = bounds.reduce((acc, w) => {
+  //   if (!w.start) return acc;
+  //   if (!acc) return w.start;
+  //   return w.start < acc ? w.start : acc;
+  // }, null);
 
   const users =
     userIds && userIds.length ? userIds : await trackCol.distinct('userId');
@@ -498,9 +498,9 @@ async function buildUserSnapshots(options = {}) {
 
   for (const userId of users) {
     const statsMatch = { userId };
-    if (minStart) {
-      statsMatch.day = { $gte: minStart };
-    }
+    // if (minStart) {
+    //   statsMatch.day = { $gte: minStart };
+    // }
     const statDocs = await statsCol
       .find(statsMatch, { projection: { day: 1, totals: 1 } })
       .toArray();
@@ -531,9 +531,9 @@ async function buildUserSnapshots(options = {}) {
     }
 
     const baseMatch = { userId };
-    if (minStart) {
-      baseMatch.day = { $gte: minStart };
-    }
+    // if (minStart) {
+    //   baseMatch.day = { $gte: minStart };
+    // }
     const aggCursor = trackCol.aggregate([{ $match: baseMatch }, { $facet: facet }], {
       allowDiskUse: true,
     });
@@ -648,7 +648,7 @@ async function buildUserSnapshots(options = {}) {
             artistIds: meta.artistIds || [],
             artistNames: meta.artistNames || [],
             albumId: meta.albumId || null,
-            albumName: meta.albumName || null,
+            albumName: meta.albumName || meta.spotifyRaw.album.name || null,
             plays: counts.plays,
             qualifiedPlays: counts.qualifiedPlays,
             msPlayed: counts.msPlayed,
@@ -719,11 +719,11 @@ async function buildUserSnapshots(options = {}) {
           userId,
           windows: windowsDoc,
           generatedAt: now,
-          qualifiedMsThreshold,
-          topTrackLimit: SNAPSHOT_TOP_TRACKS,
-          topArtistLimit: SNAPSHOT_TOP_ARTISTS,
-          topAlbumLimit: SNAPSHOT_TOP_ALBUMS,
-          topGenreLimit: SNAPSHOT_TOP_GENRES,
+          // qualifiedMsThreshold,
+          // topTrackLimit: SNAPSHOT_TOP_TRACKS,
+          // topArtistLimit: SNAPSHOT_TOP_ARTISTS,
+          // topAlbumLimit: SNAPSHOT_TOP_ALBUMS,
+          // topGenreLimit: SNAPSHOT_TOP_GENRES,
           updatedAt: now,
         },
         $setOnInsert: { createdAt: now },
