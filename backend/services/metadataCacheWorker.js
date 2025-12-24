@@ -13,7 +13,7 @@ const ALBUM_REFRESH_MS = Number(process.env.ALBUM_REFRESH_DAYS || 30) * DAY_MS;
 const ACTIVE_DELAY_MS = Number(process.env.METADATA_ACTIVE_DELAY_MS || 2000);
 const IDLE_DELAY_MS = Number(process.env.METADATA_IDLE_DELAY_MS || 600000);
 const ERROR_DELAY_MS = Number(process.env.METADATA_ERROR_DELAY_MS || 15000);
-const ERROR_BACKOFF_MS = Number(process.env.METADATA_ERROR_BACKOFF_MS || 4 * 60 * 60 * 1000);
+const ERROR_BACKOFF_MS = Number(process.env.METADATA_ERROR_BACKOFF_MS || 4 * 60 * 1000);
 const MISSING_BACKOFF_MS = Number(process.env.METADATA_MISSING_BACKOFF_MS || 180 * DAY_MS);
 const LOCK_TIMEOUT_MS = Number(process.env.METADATA_LOCK_TIMEOUT_MS || 10 * 60 * 1000);
 

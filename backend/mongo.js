@@ -10,6 +10,9 @@ const COLLECTIONS = {
   tracks: process.env.TRACKS_COLLECTION || "tracks",
   artists: process.env.ARTISTS_COLLECTION || "artists",
   albums: process.env.ALBUMS_COLLECTION || "albums",
+  userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION || "user_track_daily",
+  userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION || "user_stats_daily",
+  userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION || "user_snapshots",
 };
 
 async function ensureIndexes(dbInstance) {
@@ -40,6 +43,27 @@ async function ensureIndexes(dbInstance) {
     dbInstance
       .collection(COLLECTIONS.albums)
       .createIndex({ lockedAt: 1 }, { name: "albums_locked_at" }),
+    dbInstance
+      .collection(COLLECTIONS.userTrackDaily)
+      .createIndex(
+        { userId: 1, day: 1, trackId: 1 },
+        { unique: true, name: "utd_user_day_track" }
+      ),
+    dbInstance
+      .collection(COLLECTIONS.userTrackDaily)
+      .createIndex({ day: 1 }, { name: "utd_day" }),
+    dbInstance
+      .collection(COLLECTIONS.userStatsDaily)
+      .createIndex(
+        { userId: 1, day: 1 },
+        { unique: true, name: "usd_user_day" }
+      ),
+    dbInstance
+      .collection(COLLECTIONS.userSnapshots)
+      .createIndex(
+        { userId: 1 },
+        { unique: true, name: "user_snapshots_user" }
+      ),
   ];
 
   await Promise.all(creations);
