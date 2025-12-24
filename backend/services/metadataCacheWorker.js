@@ -217,6 +217,7 @@ class MetadataCacheWorker {
     const missingIds = [];
     const albumIds = new Set();
     const artistIds = new Set();
+    const artistNames = new Set();
 
     for (const id of ids) {
       const track = trackMap.get(id);
@@ -233,6 +234,11 @@ class MetadataCacheWorker {
         .filter(Boolean);
       docArtistIds.forEach(id => artistIds.add(id));
 
+      const docArtistNames = (track.artists || [])
+        .map(artist => artist?.name)
+        .filter(Boolean);
+      docArtistNames.forEach(name => artistNames.add(name));
+
       updates.push({
         updateOne: {
           filter: { _id: track.id },
@@ -244,9 +250,11 @@ class MetadataCacheWorker {
               popularity: track.popularity ?? null,
               previewUrl: track.preview_url || null,
               albumId,
+              albumName: track.album?.name,
               artistIds: docArtistIds,
+              artistNames: docArtistNames,
               images: track.album?.images || [],
-              spotifyRaw: track,
+              // spotifyRaw: track,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + TRACK_REFRESH_MS),
@@ -332,10 +340,10 @@ class MetadataCacheWorker {
               releaseDatePrecision: album.release_date_precision,
               totalTracks: album.total_tracks,
               label: album.label,
-              genres: album.genres || [],
+              // genres: album.genres || [],
               artistIds: docArtistIds,
               images: album.images || [],
-              spotifyRaw: album,
+              // spotifyRaw: album,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + ALBUM_REFRESH_MS),
@@ -411,7 +419,7 @@ class MetadataCacheWorker {
               genres: artist.genres || [],
               images: artist.images || [],
               followers: artist.followers,
-              spotifyRaw: artist,
+              // spotifyRaw: artist,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + ARTIST_REFRESH_MS),

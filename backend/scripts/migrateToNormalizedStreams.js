@@ -16,8 +16,7 @@ async function run() {
         spotify_track_uri: 1,
         reason_end: 1,
         userId: 1,
-      },
-      sort: { ts: 1 },
+      }
     }
   );
 
