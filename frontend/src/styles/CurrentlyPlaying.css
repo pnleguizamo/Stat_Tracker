@@ -1,205 +1,288 @@
-/* General Page Style */
-.App {
-  background-color: #121212;
-  /* Dark background */
-  color: white;
+.currently-playing {
+  background: radial-gradient(circle at 20% 20%, #1a2138, #0d111c 45%) no-repeat fixed;
+  color: #f8fbff;
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Arial', sans-serif;
-  text-align: center;
+  font-family: 'Manrope', 'Inter', 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Profile Name */
-h1 {
+.currently-playing h1 {
   font-size: 2rem;
   margin-bottom: 20px;
 }
 
-/* Link to Recently Played */
-a {
-  color: #1DB954;
-  /* Spotify green */
-  text-decoration: none;
-  font-size: 1.2rem;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-/* Main Content Container */
-.container {
-  max-width: 800px;
+.currently-playing .container {
+  max-width: 1100px;
   margin: 20px auto;
   padding: 15px;
-  background-color: #1e1e1e;
-  border-radius: 8px;
 }
 
-/* Album Art */
-.img-fluid {
+.currently-playing .dashboard-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(72, 227, 191, 0.2), rgba(109, 130, 255, 0.2));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px 20px;
+  gap: 18px;
+}
+
+.currently-playing .hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.currently-playing .profile-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.currently-playing .profile-img.placeholder {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.currently-playing .dashboard-body {
+  padding-top: 20px;
+}
+
+.currently-playing .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #7bd7f1;
+  margin-bottom: 4px;
+}
+
+.currently-playing .page-title {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.currently-playing .subdued {
+  color: #c5cad7;
+  font-size: 0.95rem;
+}
+
+.currently-playing .hero-metrics {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.currently-playing .metric-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.currently-playing .minute-span:hover {
+  cursor : pointer
+}
+
+.currently-playing .metric-chip span {
+  font-size: 0.8rem;
+  color: #9fb3c8;
+}
+
+.currently-playing .metric-chip strong {
+  font-size: 1.1rem;
+  color: #f8fbff;
+}
+
+.currently-playing .section {
+  margin-top: 24px;
+  background: rgba(13, 17, 28, 0.6);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 18px;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
+}
+
+.currently-playing .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.currently-playing .section-title {
+  margin: 0;
+}
+
+.currently-playing .cta {
+  background: linear-gradient(135deg, #3ee7a9, #6d82ff);
+  border: none;
+  color: #0d111c;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 10px;
+}
+
+.currently-playing .img-fluid {
   width: 100%;
   max-width: 200px;
-  border-radius: 5px;
-  margin-bottom: 15px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
-/* Track Name */
-.display-4 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin: 10px 0;
+.currently-playing .display-4 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 8px 0;
 }
 
-/* Artist Name */
-.lead {
-  font-size: 1.2rem;
-  color: #b3b3b3;
-  margin: 5px 0;
-}
-
-/* Album Name */
-.text-muted {
+.currently-playing .lead {
   font-size: 1rem;
-  color: #808080;
-  margin-bottom: 15px;
+  color: #c5cad7;
+  margin: 3px 0;
 }
 
-/* Spotify Button */
-.btn-primary {
-  background-color: #1DB954;
-  /* Spotify green */
-  border: none;
-  font-size: 1rem;
-  padding: 10px 20px;
-  border-radius: 5px;
-  text-transform: uppercase;
+.currently-playing .stat-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #f8fbff;
+  height: 100%;
 }
 
-.btn-primary:hover {
-  background-color: #17a34a;
-  color: white;
+.currently-playing .stat-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
 }
 
-p {
-  font-size: 1.2rem;
-  color: #b3b3b3;
+.currently-playing .metric-detail {
+  color: #8de2c0;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
-.grid-container {
-  max-width: 1200px;
-  margin: 20px auto;
+.currently-playing .trend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.currently-playing .trend-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: 80px 1fr 80px;
+  align-items: center;
+  gap: 10px;
 }
 
-.grid-item {
-  padding: 15px;
-  background-color: #1e1e1e;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.currently-playing .trend-date {
+  color: #9fb3c8;
+  font-size: 0.9rem;
+}
+
+.currently-playing .trend-bar {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.currently-playing .trend-bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #3ee7a9, #6d82ff);
+  border-radius: 999px;
+}
+
+.currently-playing .trend-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+.currently-playing .top-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.currently-playing .top-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.currently-playing .top-list .rank {
+  color: #7bd7f1;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.currently-playing .top-list .title {
+  display: block;
+  font-weight: 700;
+}
+
+.currently-playing .top-list .subdued {
+  display: block;
+  margin-top: 2px;
+}
+
+.currently-playing .list-card .card-body {
+  padding: 18px;
+}
+
+.currently-playing .centered {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+
+.currently-playing .error-text {
+  color: #ff9f9f;
+}
+
+.currently-playing .empty-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
   text-align: center;
-  color: white;
+  color: #f8fbff
 }
 
-.grid-item h3 {
-  font-size: 1.2rem;
-  margin-bottom: 10px;
-}
-
-.grid-item p {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1DB954;
-}
-
-.grid-item:hover {
-  background-color: #292929;
-  transform: scale(1.05);
-  transition: all 0.3s ease;
-}
-
-@media (max-width: 768px) {
-  .grid-container {
-    padding: 10px;
+@media (max-width: 900px) {
+  .currently-playing .dashboard-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .currently-playing .hero-metrics {
+    justify-content: flex-start;
+  }
+  .currently-playing .trend-row {
+    grid-template-columns: 70px 1fr 70px;
   }
 }
 
-/* Existing styles... */
-
-/* Song of the Day Card */
-.card {
-  background-color: #1e1e1e;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  margin-top: 20px;
-}
-
-.card-header {
-  background-color: #282828;
-  border-bottom: 1px solid #333;
-  font-size: 1.2rem;
-  font-weight: bold;
-}
-
-.card-body {
-  padding: 20px;
-}
-
-.card-title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-.card-text {
-  font-size: 1rem;
-  color: #b3b3b3;
-  margin-bottom: 15px;
-}
-
-/* Form styles */
-.form-label {
-  color: #b3b3b3;
-  font-size: 1rem;
-  margin-bottom: 5px;
-}
-
-.form-control {
-  background-color: #333;
-  border: none;
-  color: white;
-  padding: 10px;
-  margin-bottom: 10px;
-}
-
-.form-control:focus {
-  background-color: #444;
-  box-shadow: none;
-  color: white;
-}
-
-/* Update Rating Button */
-.btn-primary {
-  background-color: #1DB954;
-  border: none;
-  font-size: 1rem;
-  padding: 10px 20px;
-  border-radius: 5px;
-  text-transform: uppercase;
-  margin-top: 10px;
-}
-
-.btn-primary:hover {
-  background-color: #17a34a;
-  color: white;
-}
-
-/* Responsive adjustments */
 @media (max-width: 768px) {
-  .card {
+  .currently-playing .container {
+    padding: 10px;
+  }
+  .currently-playing .section {
+    padding: 14px;
+  }
+}
+@media (max-width: 768px) {
+  .currently-playing .card {
     margin: 20px 10px;
   }
 }

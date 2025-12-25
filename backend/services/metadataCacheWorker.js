@@ -248,7 +248,6 @@ class MetadataCacheWorker {
               durationMs: track.duration_ms,
               explicit: track.explicit,
               popularity: track.popularity ?? null,
-              previewUrl: track.preview_url || null,
               albumId,
               albumName: track.album?.name,
               artistIds: docArtistIds,

@@ -48,7 +48,7 @@ app.use('/api/auth', authRoutes);
 (async () => {
   await initDb();
   // require('./services/pollingService.js');
-  startMetadataCacheWorker();
+  // startMetadataCacheWorker();
 })();
 
 server.listen(port, () => {

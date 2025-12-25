@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTopPlayedArtists, getTotalMinutesStreamed, getTopPlayedSongs, getTopAlbums } = require('../services/mongoServices.js');
+const { getTopPlayedArtists, getTotalMinutesStreamed, getTopPlayedSongs, getTopAlbums, getRollupDashboard } = require('../services/mongoServices.js');
 const { authenticate } = require('../middleware/authMiddleware.js');
 const { getAccessToken } = require('../services/authService.js');
 
@@ -43,6 +43,7 @@ router.get("/top_albums/:timeframe", authenticate, async (req, res) => {
 
 });
 
+// TODO remove
 router.get("/minutes_streamed/:timeframe", authenticate, async (req, res) => {
     try {
         const accountId = req.accountId;
@@ -53,6 +54,19 @@ router.get("/minutes_streamed/:timeframe", authenticate, async (req, res) => {
         res.status(500).send({ error: "An unexpected error occurred" + err });
     }
 
+});
+
+router.get("/dashboard", authenticate, async (req, res) => {
+    try {
+        const accountId = req.accountId;
+        const requested = parseInt(req.query.days, 10);
+        const days = Number.isFinite(requested) ? Math.min(Math.max(requested, 7), 120) : 30;
+        const overview = await getRollupDashboard(accountId, { days });
+        res.status(200).json(overview);
+    } catch (err) {
+        console.error({ error: "An unexpected error occurred" + err });
+        res.status(500).send({ error: "An unexpected error occurred" + err });
+    }
 });
 
 

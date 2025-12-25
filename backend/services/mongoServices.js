@@ -267,6 +267,66 @@ mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "life
     }
 };
 
+mongoService.getRollupDashboard = async function (userId, options = {}) {
+    function startOfUtcDay(value = new Date()) {
+        const d = new Date(value);
+        d.setUTCHours(0, 0, 0, 0);
+        return d;
+    }
+
+    const { days = 30 } = options;
+    const db = await initDb();
+    const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
+    const statsCol = db.collection(COLLECTIONS.userStatsDaily);
+
+    const snapshotsDoc = await snapshotsCol.findOne({ userId });
+
+    const end = startOfUtcDay(new Date());
+    end.setUTCDate(end.getUTCDate() + 1);
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - days);
+
+    const stats = await statsCol
+        .find(
+            { userId, day: { $gte: start, $lt: end } },
+            { projection: { userId: 0 } }
+        )
+        .sort({ day: 1 })
+        .toArray();
+
+    const daily = stats.map(doc => {
+        const msPlayed = doc?.totals?.msPlayed || 0;
+        return {
+            day: doc.day,
+            msPlayed,
+            minutes: Math.round((msPlayed / 60000) * 10) / 10,
+        };
+    });
+
+    const highlightKey = snapshotsDoc?.windows?.last30
+        ? 'last30'
+        : snapshotsDoc?.windows?.last7
+            ? 'last7'
+            : null;
+    const highlightWindow = highlightKey ? snapshotsDoc.windows[highlightKey] : null;
+    const highlights = highlightWindow
+        ? {
+            window: highlightKey,
+            track: highlightWindow.topTracks?.[0] || null,
+            artist: highlightWindow.topArtists?.[0] || null,
+            album: highlightWindow.topAlbums?.[0] || null,
+            genre: highlightWindow.topGenres?.[0] || null,
+        }
+        : null;
+
+    return {
+        snapshots: snapshotsDoc?.windows || {},
+        highlights,
+        daily,
+        generatedAt: snapshotsDoc?.generatedAt || null,
+    };
+}
+
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         db = await initDb();
