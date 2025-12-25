@@ -51,9 +51,9 @@ function makeDayKey(userId, day) {
 
 function addToMap(map, key, delta) {
   if (!key) return;
-  const current = map.get(key) || { plays: 0, qualifiedPlays: 0, msPlayed: 0 };
+  const current = map.get(key) || { plays: 0, unfinishedPlays: 0, msPlayed: 0 };
   current.plays += delta.plays || 0;
-  current.qualifiedPlays += delta.qualifiedPlays || 0;
+  current.unfinishedPlays += delta.unfinishedPlays || 0;
   current.msPlayed += delta.msPlayed || 0;
   map.set(key, current);
 }
@@ -74,8 +74,7 @@ async function loadTrackMetadata(trackIds, db) {
           albumName: 1,
           artistIds: 1,
           artistNames: 1,
-          images: 1,
-          spotifyRaw: 1 // TODO Remove
+          images: 1
         },
       }
     );
@@ -96,7 +95,7 @@ async function loadArtistMetadata(artistIds, db) {
     const slice = artistIds.slice(i, i + BATCH);
     const cursor = col.find(
       { _id: { $in: slice } },
-      { projection: { name: 1, genres: 1, images: 1 } }
+      { projection: { name: 1, genres: 1, images: 1, popularity : 1 } }
     );
     // eslint-disable-next-line no-await-in-loop
     for await (const doc of cursor) {
@@ -111,7 +110,7 @@ function sortByPlays(entries, limit) {
     .sort((a, b) => {
       if (b.plays !== a.plays) return b.plays - a.plays;
       if (b.msPlayed !== a.msPlayed) return b.msPlayed - a.msPlayed;
-      return b.qualifiedPlays - a.qualifiedPlays;
+      return (b.unfinishedPlays || 0) - (a.unfinishedPlays || 0);
     })
     .slice(0, limit);
 }
@@ -184,16 +183,14 @@ async function buildUserTrackDailyFromStreams(options = {}) {
             day: { $dayOfMonth: '$ts' },
           },
         },
-        qualified: {
-          $cond: [{ $gte: ['$ms', qualifiedMsThreshold] }, 1, 0],
-        },
+        qualified: { $cond: [{ $gte: ['$ms', qualifiedMsThreshold] }, 1, 0] },
       },
     },
     {
       $group: {
         _id: { userId: '$userId', day: '$day' },
-        plays: { $sum: 1 },
-        qualifiedPlays: { $sum: '$qualified' },
+        unfinishedPlays: { $sum: 1 },
+        plays: { $sum: '$qualified' },
         msPlayed: { $sum: '$ms' },
         lastStreamTs: { $max: '$ts' },
       },
@@ -210,8 +207,8 @@ async function buildUserTrackDailyFromStreams(options = {}) {
       userId,
       day,
       totals: {
+        unfinishedPlays: doc.unfinishedPlays || 0,
         plays: doc.plays || 0,
-        qualifiedPlays: doc.qualifiedPlays || 0,
         msPlayed: doc.msPlayed || 0,
       },
       lastStreamTs: doc.lastStreamTs || day,
@@ -247,8 +244,8 @@ async function buildUserTrackDailyFromStreams(options = {}) {
     {
       $group: {
         _id: { userId: '$userId', day: '$day', trackId: '$trackId' },
-        plays: { $sum: 1 },
-        qualifiedPlays: { $sum: '$qualified' },
+        unfinishedPlays: { $sum: 1 },
+        plays: { $sum: '$qualified' },
         msPlayed: { $sum: '$ms' },
         lastStreamTs: { $max: '$ts' },
       },
@@ -281,7 +278,9 @@ async function buildUserTrackDailyFromStreams(options = {}) {
       {
         userId,
         day,
-        totals: totalsEntry ? totalsEntry.totals : { plays: 0, qualifiedPlays: 0, msPlayed: 0 },
+        totals: totalsEntry
+          ? totalsEntry.totals
+          : { plays: 0, unfinishedPlays: 0, msPlayed: 0 },
         tracks: [],
         lastStreamTs: totalsEntry?.lastStreamTs || doc.lastStreamTs || day,
       };
@@ -289,7 +288,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
     statEntry.tracks.push({
       trackId,
       plays: doc.plays || 0,
-      qualifiedPlays: doc.qualifiedPlays || 0,
+      unfinishedPlays: doc.unfinishedPlays || 0,
       msPlayed: doc.msPlayed || 0,
     });
     statEntry.lastStreamTs =
@@ -308,10 +307,9 @@ async function buildUserTrackDailyFromStreams(options = {}) {
         update: {
           $set: {
             plays: doc.plays || 0,
-            qualifiedPlays: doc.qualifiedPlays || 0,
+            unfinishedPlays: doc.unfinishedPlays || 0,
             msPlayed: doc.msPlayed || 0,
             lastStreamTs: doc.lastStreamTs || day,
-            // qualifiedMsThreshold,
             updatedAt: now,
           },
           $setOnInsert: { createdAt: now },
@@ -352,7 +350,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
     if (meta.albumId && !albumMeta.has(meta.albumId)) {
       albumMeta.set(meta.albumId, {
         albumId: meta.albumId,
-        name: meta.albumName || meta.spotifyRaw.album.name || null,
+        name: meta.albumName || null,
         artistIds: meta.artistIds || [],
         images: meta.images || [],
       });
@@ -379,11 +377,11 @@ async function buildUserTrackDailyFromStreams(options = {}) {
       return {
         trackId: t.trackId,
         plays: t.plays,
-        qualifiedPlays: t.qualifiedPlays,
+        unfinishedPlays: t.unfinishedPlays || 0,
         msPlayed: t.msPlayed,
         trackName: meta.name || null,
         albumId: meta.albumId || null,
-        albumName: meta.albumName || meta.spotifyRaw.album.name || null, // TODO update 
+        albumName: meta.albumName || null,
         artistIds: meta.artistIds || [],
         artistNames: meta.artistNames || [],
       };
@@ -396,7 +394,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
         name: artistMeta.get(artistId)?.name || null,
         genres: artistMeta.get(artistId)?.genres || [],
         plays: counts.plays,
-        qualifiedPlays: counts.qualifiedPlays,
+        unfinishedPlays: counts.unfinishedPlays || 0,
         msPlayed: counts.msPlayed,
       })),
       DAILY_TOP_LIMIT
@@ -410,7 +408,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
           name: meta.name || null,
           artistIds: meta.artistIds || [],
           plays: counts.plays,
-          qualifiedPlays: counts.qualifiedPlays,
+          unfinishedPlays: counts.unfinishedPlays || 0,
           msPlayed: counts.msPlayed,
         };
       }),
@@ -485,11 +483,6 @@ async function buildUserSnapshots(options = {}) {
       .map(w => w.key)
       .join(',')} thresholdMs=${qualifiedMsThreshold}`
   );
-  // const minStart = bounds.reduce((acc, w) => {
-  //   if (!w.start) return acc;
-  //   if (!acc) return w.start;
-  //   return w.start < acc ? w.start : acc;
-  // }, null);
 
   const users =
     userIds && userIds.length ? userIds : await trackCol.distinct('userId');
@@ -498,15 +491,9 @@ async function buildUserSnapshots(options = {}) {
 
   for (const userId of users) {
     const statsMatch = { userId };
-    // if (minStart) {
-    //   statsMatch.day = { $gte: minStart };
-    // }
     const statDocs = await statsCol
       .find(statsMatch, { projection: { day: 1, totals: 1 } })
       .toArray();
-    const dayTotalsMap = new Map(
-      statDocs.map(doc => [startOfDay(doc.day).toISOString(), doc.totals || {}])
-    );
 
     const facet = {};
     for (const bound of bounds) {
@@ -523,7 +510,7 @@ async function buildUserSnapshots(options = {}) {
           $group: {
             _id: '$trackId',
             plays: { $sum: '$plays' },
-            qualifiedPlays: { $sum: '$qualifiedPlays' },
+            unfinishedPlays: { $sum: '$unfinishedPlays' },
             msPlayed: { $sum: '$msPlayed' },
           },
         },
@@ -531,9 +518,6 @@ async function buildUserSnapshots(options = {}) {
     }
 
     const baseMatch = { userId };
-    // if (minStart) {
-    //   baseMatch.day = { $gte: minStart };
-    // }
     const aggCursor = trackCol.aggregate([{ $match: baseMatch }, { $facet: facet }], {
       allowDiskUse: true,
     });
@@ -547,7 +531,7 @@ async function buildUserSnapshots(options = {}) {
       windowTrackAgg[bound.key] = docs.map(doc => ({
         trackId: doc._id,
         plays: doc.plays || 0,
-        qualifiedPlays: doc.qualifiedPlays || 0,
+        unfinishedPlays: doc.unfinishedPlays || 0,
         msPlayed: doc.msPlayed || 0,
       }));
       docs.forEach(doc => allTrackIds.add(doc._id));
@@ -579,7 +563,7 @@ async function buildUserSnapshots(options = {}) {
       aggregates[bound.key] = {
         start: bound.start,
         end: bound.end,
-        totals: { plays: 0, qualifiedPlays: 0, msPlayed: 0 },
+        totals: { plays: 0, unfinishedPlays: 0, msPlayed: 0 },
         trackMap: new Map(),
         artistMap: new Map(),
         albumMap: new Map(),
@@ -600,18 +584,18 @@ async function buildUserSnapshots(options = {}) {
         .reduce(
           (acc, stat) => ({
             plays: acc.plays + (stat.totals?.plays || 0),
-            qualifiedPlays: acc.qualifiedPlays + (stat.totals?.qualifiedPlays || 0),
+            unfinishedPlays: acc.unfinishedPlays + (stat.totals?.unfinishedPlays || 0),
             msPlayed: acc.msPlayed + (stat.totals?.msPlayed || 0),
           }),
-          { plays: 0, qualifiedPlays: 0, msPlayed: 0 }
+          { plays: 0, unfinishedPlays: 0, msPlayed: 0 }
         );
 
-      if (statTotals.plays || statTotals.qualifiedPlays || statTotals.msPlayed) {
+      if (statTotals.plays || statTotals.unfinishedPlays || statTotals.msPlayed) {
         bucket.totals = statTotals;
       } else {
         for (const track of tracks) {
           bucket.totals.plays += track.plays || 0;
-          bucket.totals.qualifiedPlays += track.qualifiedPlays || 0;
+          bucket.totals.unfinishedPlays += track.unfinishedPlays || 0;
           bucket.totals.msPlayed += track.msPlayed || 0;
         }
       }
@@ -648,9 +632,10 @@ async function buildUserSnapshots(options = {}) {
             artistIds: meta.artistIds || [],
             artistNames: meta.artistNames || [],
             albumId: meta.albumId || null,
-            albumName: meta.albumName || meta.spotifyRaw.album.name || null,
+            albumName: meta.albumName || null,
+            images : meta.images,
             plays: counts.plays,
-            qualifiedPlays: counts.qualifiedPlays,
+            unfinishedPlays: counts.unfinishedPlays || 0,
             msPlayed: counts.msPlayed,
           };
         }),
@@ -665,7 +650,8 @@ async function buildUserSnapshots(options = {}) {
             name: meta.name || null,
             genres: meta.genres || [],
             plays: counts.plays,
-            qualifiedPlays: counts.qualifiedPlays,
+            popularity: meta.popularity,
+            unfinishedPlays: counts.unfinishedPlays || 0,
             msPlayed: counts.msPlayed,
           };
         }),
@@ -679,8 +665,10 @@ async function buildUserSnapshots(options = {}) {
             albumId,
             name: meta.name || null,
             artistIds: meta.artistIds || [],
+            artistNames: meta.artistNames || [],
+            images: meta.images,
             plays: counts.plays,
-            qualifiedPlays: counts.qualifiedPlays,
+            unfinishedPlays: counts.unfinishedPlays || 0,
             msPlayed: counts.msPlayed,
           };
         }),
@@ -691,7 +679,7 @@ async function buildUserSnapshots(options = {}) {
         Array.from(bucket.genreMap.entries()).map(([genre, counts]) => ({
           genre,
           plays: counts.plays,
-          qualifiedPlays: counts.qualifiedPlays,
+          unfinishedPlays: counts.unfinishedPlays || 0,
           msPlayed: counts.msPlayed,
         })),
         SNAPSHOT_TOP_GENRES
@@ -719,11 +707,6 @@ async function buildUserSnapshots(options = {}) {
           userId,
           windows: windowsDoc,
           generatedAt: now,
-          // qualifiedMsThreshold,
-          // topTrackLimit: SNAPSHOT_TOP_TRACKS,
-          // topArtistLimit: SNAPSHOT_TOP_ARTISTS,
-          // topAlbumLimit: SNAPSHOT_TOP_ALBUMS,
-          // topGenreLimit: SNAPSHOT_TOP_GENRES,
           updatedAt: now,
         },
         $setOnInsert: { createdAt: now },
@@ -759,16 +742,15 @@ async function runFullBackfill(options = {}) {
   const start = startOfDay(range.min);
   const end = new Date(startOfDay(range.max).getTime() + DAY_MS);
 
-  // const daily = await buildUserTrackDailyFromStreams({
-  //   startDate: start,
-  //   endDate: end,
-  //   logger,
-  //   userIds: ['pnleguizamo']
-  // });
+  const daily = await buildUserTrackDailyFromStreams({
+    startDate: start,
+    endDate: end,
+    logger,
+    userIds: ['pnleguizamo']
+  });
   const snapshots = await buildUserSnapshots({ logger, 
     userIds: ['pnleguizamo'] });
-  // return { daily, snapshots };
-  return { snapshots };
+  return { daily, snapshots };
 }
 
 module.exports = {

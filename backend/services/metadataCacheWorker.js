@@ -254,7 +254,6 @@ class MetadataCacheWorker {
               artistIds: docArtistIds,
               artistNames: docArtistNames,
               images: track.album?.images || [],
-              // spotifyRaw: track,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + TRACK_REFRESH_MS),
@@ -317,6 +316,7 @@ class MetadataCacheWorker {
     const updates = [];
     const missingIds = [];
     const artistIds = new Set();
+    const artistNames = new Set();
 
     for (const id of ids) {
       const album = albumMap.get(id);
@@ -329,6 +329,11 @@ class MetadataCacheWorker {
         .filter(Boolean);
       docArtistIds.forEach(id => artistIds.add(id));
 
+      const docArtistNames = (album.artists || [])
+        .map(artist => artist?.name)
+        .filter(Boolean);
+      docArtistNames.forEach(name => artistNames.add(name));
+
       updates.push({
         updateOne: {
           filter: { _id: album.id },
@@ -340,10 +345,9 @@ class MetadataCacheWorker {
               releaseDatePrecision: album.release_date_precision,
               totalTracks: album.total_tracks,
               label: album.label,
-              // genres: album.genres || [],
               artistIds: docArtistIds,
+              artistNames: docArtistNames,
               images: album.images || [],
-              // spotifyRaw: album,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + ALBUM_REFRESH_MS),
@@ -419,7 +423,6 @@ class MetadataCacheWorker {
               genres: artist.genres || [],
               images: artist.images || [],
               followers: artist.followers,
-              // spotifyRaw: artist,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + ARTIST_REFRESH_MS),
