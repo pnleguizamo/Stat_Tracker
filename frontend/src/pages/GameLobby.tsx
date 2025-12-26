@@ -96,14 +96,13 @@ const GameLobby: React.FC = () => {
 
 
   const AVATAR_BASE = "/gamerpics";
-  const NUM_AVATARS = isGuest ? 21 : 20;
+  const userAvatarUrl = status.data?.spotifyUser?.images?.[0]?.url || null;
+  const NUM_AVATARS = !isGuest && userAvatarUrl ? 20 : 21;
 
   const avatarOptions = Array.from({ length: NUM_AVATARS }, (_, i) => (
     `${AVATAR_BASE}/avatar-${i + 1}.png`
   ));
 
-
-  const userAvatarUrl = status.data?.spotifyUser?.images?.[0]?.url || null;
   const computedAvatarOptions = userAvatarUrl && !isGuest
     ? [userAvatarUrl, ...avatarOptions]
     : avatarOptions;

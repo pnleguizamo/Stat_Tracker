@@ -14,8 +14,9 @@ export type MinigameId =
   // // | 'SONG_YEAR_GUESS' // Hitster
   // // | 'HEARDLE' // Guess the song, try to pull songs that everyone has heard
   // // | 'TRUTH_AND_LIES' // Two truths and a lie, pull any other stat
+  // // | 'MATCHING' // Pull stat for each user, have everyone match whose is whose
   // // | 'OUTLIER' // One of these is not like the others. One song or artist with a different genre
-  // // | 'GENRE_GUESS'
+  // // | 'CALENDAR' // Guess which day of the year the user stat bundle comes from
 
 export type StageConfig = {
   index: number;
