@@ -1,163 +1,73 @@
 const { getAlbumCover } = require('../services/spotifyServices.js');
-const { initDb } = require('../mongo.js');
-const { cannotHaveAUsernamePasswordPort } = require('whatwg-url');
+const { initDb, COLLECTIONS } = require('../mongo.js');
+const { ingestNormalizedStreamEvents } = require('./streamNormalizationService.js');
 
-const collectionName = process.env.COLLECTION_NAME;
+const collectionName = COLLECTIONS.rawStreams;
 let db;
 
 const mongoService = module.exports = {};
 
-const getStartDate = (tf) => {
-    if (tf === "month") {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 1);
-        return d;
-    } else if (tf === "6months") {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 6);
-        return d;
-    } else if (tf === "year") {
-        const d = new Date();
-        d.setFullYear(d.getFullYear() - 1);
-        return d;
-    }
-    return null;
-};
+const SNAPSHOT_TIMEFRAMES = new Set([
+    'last7',
+    'last30',
+    'last90',
+    'last180',
+    'ytd',
+    'allTime'
+])
 
-mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "lifetime") {
+mongoService.getSnapshots = async function(accessToken, userId){
+    db = await initDb();
+    const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
+    const snapshot = await snapshotsCol.findOne(
+        { userId },
+        { projection: { windows: 1 } }
+    );
+
+    return snapshot;
+}
+
+// TODO support metadata without cached DB metadata
+mongoService.getTopAlbums = async function (accessToken, userId, timeframe = "allTime") {
     try {
+
         db = await initDb();
-        const startDate = getStartDate(timeframe);
-
-        const pipeline = [];
-        if (startDate) {
-            pipeline.push({
-                $match: {
-                    ts: { $gte: startDate.toISOString() }
-                }
-            });
-        }
-
-        pipeline.push(
-            {
-                "$match": {
-                    "userId" : `${userId}`,
-                    "reason_end": "trackdone",
-                    "master_metadata_album_artist_name": { "$ne": null }
-                }
-            },
-            {
-                $group: {
-                    _id: "$master_metadata_album_album_name",
-                    "artist": { "$first": "$master_metadata_album_artist_name" },
-                    "play_count": { $sum: 1 },
-                    "spotify_uri": { "$first": "$spotify_track_uri" }
-                }
-            },
-            {
-                $sort: { "play_count": -1 }
-            },
-            {
-                $limit: 25
-            }
-        );
-
-        const topAlbums = await db.collection(collectionName).aggregate(pipeline).toArray();
-        const trackIds = topAlbums.map(album => album.spotify_uri.split(':')[2]);
-        const tracks = await getAlbumCover(accessToken, trackIds);
-        const trackMap = new Map(
-            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
-        );
-        return topAlbums.map(album => {
-            const trackId = album.spotify_uri.split(':')[2];
-            return {
-                ...album,
-                image_url: trackMap.get(trackId) || null
-            };
-        })
+        const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
+    
+        const window = SNAPSHOT_TIMEFRAMES.has(timeframe) ? timeframe : 'allTime';
+        const fieldPath = `windows.${window}.topAlbums`;
+        const pipeline = [
+            { $match: { userId } },
+            { $project: { userId: 1, [fieldPath]: 1 } },
+            { $unwind: `$${fieldPath}` },
+            { $replaceRoot: { newRoot: `$${fieldPath}` } },
+            { $limit: 100 }
+        ];
+        
+        const topAlbums = await snapshotsCol.aggregate(pipeline).toArray();
+        return topAlbums;
     } catch (err) {
         console.error("Error retrieving top albums:", err);
         throw err;
     }
 }
 
-mongoService.getTopPlayedArtists = async function (accessToken, userId, timeframe = "lifetime") {
+mongoService.getTopPlayedArtists = async function (accessToken, userId, timeframe = "allTime") {
     try {
         db = await initDb();
-        const collection = db.collection(collectionName);
-
-        const startDate = getStartDate(timeframe);
-        const matchStage = {
-            userId,
-            master_metadata_album_artist_name: { $ne: null },
-            reason_end: "trackdone"
-        };
-        if (startDate) {
-            matchStage.ts = { $gte: startDate.toISOString() };
-        }
-
+        const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
+    
+        const window = SNAPSHOT_TIMEFRAMES.has(timeframe) ? timeframe : 'allTime';
+        const fieldPath = `windows.${window}.topArtists`;
         const pipeline = [
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: "$master_metadata_album_artist_name",
-                    play_count: { $sum: 1 },
-                    spotify_uri: { $first: "$spotify_track_uri" }
-                }
-            },
-            { $sort: { play_count: -1 } },
-            { $limit: 25 }
+            { $match: { userId } },
+            { $project: { userId: 1, [fieldPath]: 1 } },
+            { $unwind: `$${fieldPath}` },
+            { $replaceRoot: { newRoot: `$${fieldPath}` } },
+            { $limit: 100 }
         ];
-
-
-        const topArtists = await collection.aggregate(pipeline).toArray();
-
-        const trackIds = topArtists.map(a => a.spotify_uri?.split(':')[2]).filter(Boolean);
-
-        if (trackIds.length) {
-            const resp = await fetch(
-                `https://api.spotify.com/v1/tracks?ids=${trackIds.join(',')}`,
-                {
-                method: 'GET',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                }
-            );
-            if (!resp.ok) {
-                console.error('Spotify /tracks error', await resp.text());
-            } else {
-                const trackData = await resp.json();
-                const artistByTrackId = {};
-
-                const artistIds = trackData.tracks.map(a => a.artists[0].id);
-                const resp2 = await fetch(`https://api.spotify.com/v1/artists?ids=${artistIds.join(',')}`, {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                });
-
-                for (const t of trackData.tracks || []) {
-                    if (t?.id && t.artists?.[0]?.id) {
-                        artistByTrackId[t.id] = t.artists?.[0]?.id;
-                    }
-                }
-                
-                const artistsData = await resp2.json();
-                
-                const imageByArtistId = {};
-                for (const t of artistsData.artists || []) {
-                    if (t?.id && t.images?.[0]?.url) {
-                        imageByArtistId[t.id] = t.images[0].url;
-                    }
-                }
-                for (const artist of topArtists) {
-                    const trackId = artist.spotify_uri?.split(':')[2];
-                    artist.image_url = trackId ? imageByArtistId[artistByTrackId[trackId]] ?? null : null;
-                }
-            }
-        }
+        
+        const topArtists = await snapshotsCol.aggregate(pipeline).toArray();
         return topArtists;
     } catch (error) {
         console.error("Error fetching top played artists:", error);
@@ -165,52 +75,23 @@ mongoService.getTopPlayedArtists = async function (accessToken, userId, timefram
     }
 }
 
-mongoService.getTopPlayedSongs = async function (access_token, userId ) {
+mongoService.getTopPlayedSongs = async function (access_token, userId, timeframe = "allTime") {
     try {
         db = await initDb();
-        const collection = db.collection(collectionName);
+        const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
 
+        const window = SNAPSHOT_TIMEFRAMES.has(timeframe) ? timeframe : 'allTime';
+        const fieldPath = `windows.${window}.topTracks`;
         const pipeline = [
-            {
-                "$match": {
-                    "userId" : `${userId}`,
-                    "master_metadata_track_name": { "$ne": null },
-                    "master_metadata_album_artist_name": { "$ne": null },
-                    "reason_end": "trackdone"
-                }
-            },
-            {
-                "$group": {
-                    "_id": {
-                        "track_name": "$master_metadata_track_name",
-                        "artist_name": "$master_metadata_album_artist_name"
-                    },
-                    "play_count": { "$sum": 1 },
-                    "spotify_track_uri": { "$first": "$spotify_track_uri" }
-                }
-            },
-            {
-                "$sort": { "play_count": -1 }
-            },
-            {
-                "$limit": 25
-            }
+            { $match: { userId } },
+            { $project: { userId: 1, [fieldPath]: 1 } },
+            { $unwind: `$${fieldPath}` },
+            { $replaceRoot: { newRoot: `$${fieldPath}` } },
+            { $limit: 100 }
         ];
 
-        const topSongs = await collection.aggregate(pipeline).toArray();
-
-        const trackIds = topSongs.map(song => song.spotify_track_uri.split(':')[2]);
-        const tracks = await getAlbumCover(access_token, trackIds);
-        const trackMap = new Map(
-            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
-        );
-        return topSongs.map(song => {
-            const trackId = song.spotify_track_uri.split(':')[2];
-            return {
-                ...song,
-                album_cover: trackMap.get(trackId) || null
-            };
-        });
+        const topSongs = await snapshotsCol.aggregate(pipeline).toArray();
+        return topSongs;
     } catch (error) {
         console.error("Error fetching top played songs:", error);
         throw error;
@@ -266,21 +147,82 @@ mongoService.getTotalMinutesStreamed = async function (userId, timeframe = "life
     }
 };
 
+mongoService.getRollupDashboard = async function (userId, options = {}) {
+    function startOfUtcDay(value = new Date()) {
+        const d = new Date(value);
+        d.setUTCHours(0, 0, 0, 0);
+        return d;
+    }
+
+    const { days = 30 } = options;
+    const db = await initDb();
+    const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
+    const statsCol = db.collection(COLLECTIONS.userStatsDaily);
+
+    const snapshotsDoc = await snapshotsCol.findOne({ userId });
+
+    const end = startOfUtcDay(new Date());
+    end.setUTCDate(end.getUTCDate() + 1);
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - days);
+
+    const stats = await statsCol
+        .find(
+            { userId, day: { $gte: start, $lt: end } },
+            { projection: { userId: 0 } }
+        )
+        .sort({ day: 1 })
+        .toArray();
+
+    const daily = stats.map(doc => {
+        const msPlayed = doc?.totals?.msPlayed || 0;
+        return {
+            day: doc.day,
+            msPlayed,
+            minutes: Math.round((msPlayed / 60000) * 10) / 10,
+        };
+    });
+
+    const highlightKey = snapshotsDoc?.windows?.last30
+        ? 'last30'
+        : snapshotsDoc?.windows?.last7
+            ? 'last7'
+            : null;
+    const highlightWindow = highlightKey ? snapshotsDoc.windows[highlightKey] : null;
+    const highlights = highlightWindow
+        ? {
+            window: highlightKey,
+            track: highlightWindow.topTracks?.[0] || null,
+            artist: highlightWindow.topArtists?.[0] || null,
+            album: highlightWindow.topAlbums?.[0] || null,
+            genre: highlightWindow.topGenres?.[0] || null,
+        }
+        : null;
+
+    return {
+        snapshots: snapshotsDoc?.windows || {},
+        highlights,
+        daily,
+        generatedAt: snapshotsDoc?.generatedAt || null,
+    };
+}
+
 mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         db = await initDb();
-        const collection = db.collection(collectionName);        
+        const collection = db.collection(collectionName);
         const ops = recentTracks.map(track => {
+            const tsIso = new Date(track.playedAt).toISOString();
             return {
                 updateOne: {
                     filter: {
                         userId,
-                        ts : new Date(track.playedAt).toISOString(),
+                        ts: tsIso,
                         spotify_track_uri: track.trackUri
                     },
                     update: {
                         $setOnInsert: {
-                            ts: new Date(track.playedAt).toISOString(),
+                            ts: tsIso,
                             userId,
                             master_metadata_track_name: track.trackName,
                             master_metadata_album_artist_name: track.artistName,
@@ -295,69 +237,30 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
             };
         });
 
-        if (!ops.length) return 0;
+        let insertedCount = 0;
+        if (ops.length) {
+            const res = await collection.bulkWrite(ops, { ordered: false });
+            insertedCount = res.upsertedCount || 0;
+        }
 
-        const res = await collection.bulkWrite(ops, { ordered: false });
-        // upsertedCount = number of brand-new docs
-        return res.upsertedCount || 0;
+        await ingestNormalizedStreamEvents(
+            recentTracks.map(track => ({
+                ts: track.playedAt,
+                ms_played: track.duration,
+                spotify_track_uri: track.trackUri,
+                reason_end: 'trackdone',
+            })),
+            userId,
+            { source: 'recent-playback' }
+        );
+
+        return insertedCount;
     } catch (error) {
         console.error('Error syncing recent streams:', error);
         throw error;
     }
 };
 
-// TODO
-mongoService.updateAlbumsWithImageUrls = async (accessToken) => {
-    try {
-        db = await initDb();
-        // const albums = await db.collection(collectionName).find({}).toArray();
-        const uniqueTrackUris = await db.collection(collectionName).distinct('spotify_track_uri');
-
-        const albums = await db.collection(collectionName).find({
-            spotify_track_uri: { $in: uniqueTrackUris }
-        }).toArray();
-
-        for (let uri of uniqueTrackUris) {
-            // if (!album.image_url && album.spotify_track_uri) {
-            const album = albums.find(a => a.spotify_track_uri === uri);
-
-            if (album && !album.image_url && uri) {
-                const trackId = uri.split(':')[2];
-
-                try {
-                    const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-                        method: 'GET',
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`
-                        }
-                    });
-
-                    const trackData = await resp.json();
-
-                    if (trackData.album && trackData.album.images && trackData.album.images.length > 0) {
-                        const url = trackData.album.images[0].url;
-
-                        await db.collection(collectionName).updateMany(
-                            { spotify_track_uri: uri },
-                            { $set: { image_url: url } }
-                        );
-                        console.log("success");
-                    } else {
-                        console.warn(`No images found for album with track ID ${trackId}`);
-                    }
-
-                } catch (error) {
-                    console.error('Error updating albums with image URLs:', error);
-                }
-            }
-            else {
-                console.log("ALREADY DONE / ERROR")
-            }
-        }
-    } catch (err) {
-        console.error("Error updating albums with image URLs:", err);
-    }
-};
 
 mongoService.getListenCountsForSong = async function(userIds, trackName, artistName) {
   try {

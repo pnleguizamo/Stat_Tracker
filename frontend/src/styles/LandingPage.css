@@ -18,23 +18,32 @@
     box-shadow: 0 8px 20px rgba(0,0,0,0.12);
 }
 
+.landing-page .card {
+  background-color: #1e1e1e;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  margin-top: 20px;
+}
+
 .landing-header{
     text-align:left;
     margin-bottom:0.75rem;
 }
 
-.title{
+.landing-page .title{
     margin:0;
     font-size:2rem;
     color: #fff;
 }
 
-.tagline{
+.landing-page .tagline{
     margin:0.25rem 0 0;
+    font-size: 1.1rem;
     color: rgba(255,255,255,0.9);
 }
 
-.actions{
+.landing-page .actions{
     display:flex;
     align-items:center;
     gap:1rem;
@@ -53,7 +62,7 @@
     box-shadow: 0 6px 12px rgba(0,0,0,0.08);
 }
 
-.login-btn:hover{ filter:brightness(0.98); }
+.login-btn:hover{ filter:brightness(0.75); }
 
 .guest-block{ display:flex; align-items:center; }
 

@@ -12,6 +12,7 @@ import GameLobby from './pages/GameLobby.tsx';
 import StagePlanner from './game/host/StagePlanner.tsx';
 import PlayerScreen from 'game/player/PlayerScreen.tsx';
 import HostGameScreen from 'game/host/HostGame.tsx';
+import Wrapped from 'pages/Wrapped.jsx';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="/top_artists" element={<ProtectedRoute><TopArtists/></ProtectedRoute>} />
           <Route path="/top_albums" element={<ProtectedRoute><TopAlbums/></ProtectedRoute>} />
           <Route path="/top_songs" element={<ProtectedRoute><TopSongs/></ProtectedRoute>} />
+          <Route path="/wrapped" element={<ProtectedRoute><Wrapped/></ProtectedRoute>} />
           <Route path="/upload_history" element={<ProtectedRoute><FileUpload/></ProtectedRoute>} />
           <Route path="/lobby" element={<ProtectedRoute><GameLobby/></ProtectedRoute>} />
           <Route path="/game/:roomCode" element={<PlayerScreen />} />

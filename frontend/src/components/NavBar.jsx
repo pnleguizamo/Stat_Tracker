@@ -50,13 +50,20 @@ const AppNavbar = () => {
             </Link>
             <Link
               key="6"
+              className={currentPage === '/wrapped' ? 'nav-link active' : 'nav-link'}
+              to="/wrapped"
+            >
+              Wrapped
+            </Link>
+            <Link
+              key="7"
               className={currentPage === '/upload_history' ? 'nav-link active' : 'nav-link'}
               to="/upload_history"
             >
               Upload History
             </Link>
             <Link
-              key="7"
+              key="8"
               className={currentPage === '/lobby' ? 'nav-link active' : 'nav-link'}
               to="/lobby"
             >
