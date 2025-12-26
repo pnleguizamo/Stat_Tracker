@@ -39,7 +39,12 @@ function CurrentlyPlaying() {
   const track = currentlyPlayingQuery.data || null;
 
   const rollup = rollupQuery.data || {};
-  const snapshots = rollup.snapshots || {};
+  const snapshots = useMemo(() => {
+    const raw = rollup.snapshots || {};
+    return Object.fromEntries(
+      Object.entries(raw).filter(([key]) => !key.toLowerCase().includes('year'))
+    );
+  }, [rollup]);
   const highlightWindowKey = rollup.highlights?.window;
   const highlightLabel = highlightWindowKey === 'last7' ? 'Past 7 Days' : highlightWindowKey === 'last30' ? 'Past 30 Days' : 'Recent';
   const highlightTracks = highlightWindowKey ? snapshots[highlightWindowKey]?.topTracks?.slice(0, 10) || [] : [];

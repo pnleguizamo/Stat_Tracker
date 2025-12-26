@@ -14,6 +14,8 @@ const SNAPSHOT_TOP_GENRES = Number(process.env.ROLLUP_TOP_GENRES || 50);
 const SNAPSHOT_WINDOWS = [
   { key: 'last7', days: 7 },
   { key: 'last30', days: 30 },
+  { key: 'last90', days: 90 },
+  { key: 'last180', days: 180 },
   { key: 'ytd', type: 'ytd' },
   { key: 'allTime', type: 'all' },
 ];
@@ -25,16 +27,37 @@ function startOfDay(value) {
 }
 
 function buildWindowBounds(now, def) {
-  const end = startOfDay(now);
+  let end = startOfDay(now);
   end.setUTCDate(end.getUTCDate() + 1);
   let start = null;
   if (def.type === 'ytd') {
     start = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+  } else if (def.type === 'year' && def.year) {
+    start = new Date(Date.UTC(def.year, 0, 1));
+    end = new Date(Date.UTC(def.year, 10, 13));
   } else if (def.days) {
     start = new Date(end);
     start.setUTCDate(start.getUTCDate() - def.days);
   }
   return { key: def.key, start, end };
+}
+
+async function addYearWindows(baseWindows, db) {
+  const windows = baseWindows.map(w => ({ ...w }));
+  const existingKeys = new Set(windows.map(w => w.key));
+  const range = await getStreamsDateRange(db);
+  if (!range?.min || !range?.max) return windows;
+
+  const minYear = startOfDay(range.min).getUTCFullYear();
+  const maxYear = startOfDay(range.max).getUTCFullYear();
+  for (let yr = minYear; yr <= maxYear; yr += 1) {
+    const key = `year${yr}`;
+    if (!existingKeys.has(key)) {
+      windows.push({ key, type: 'year', year: yr });
+      existingKeys.add(key);
+    }
+  }
+  return windows;
 }
 
 function isInWindow(day, bounds) {
@@ -218,7 +241,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
   const trackMatch = { ...match, trackId: { $ne: null } };
   const trackPipeline = [
     { $match: trackMatch },
-    { $project: { userId: 1, trackId: 1, ts: 1, ms: msExpr } },
+    { $project: { userId: 1, trackId: 1, ts: 1, ms: msExpr, reasonEnd: 1 } },
     {
       $match: {
         userId: { $ne: null },
@@ -237,7 +260,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
           },
         },
         qualified: {
-          $cond: [{ $gte: ['$ms', qualifiedMsThreshold] }, 1, 0],
+          $cond: [{ $eq: ['$reasonEnd', 'trackdone'] }, 1, 0],
         },
       },
     },
@@ -467,6 +490,7 @@ async function buildUserSnapshots(options = {}) {
   const {
     userIds,
     windows = SNAPSHOT_WINDOWS,
+    includeYearWindows = true,
     qualifiedMsThreshold = DEFAULT_QUALIFIED_MS,
     logger = console,
   } = options;
@@ -477,7 +501,9 @@ async function buildUserSnapshots(options = {}) {
   const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
   const now = new Date();
 
-  const bounds = windows.map(def => buildWindowBounds(now, def));
+  const baseWindows = windows || SNAPSHOT_WINDOWS;
+  const resolvedWindows = includeYearWindows ? await addYearWindows(baseWindows, db) : baseWindows;
+  const bounds = resolvedWindows.map(def => buildWindowBounds(now, def));
   logger.info?.(
     `[rollups] buildUserSnapshots start users=${userIds?.length || 'all'} windows=${bounds
       .map(w => w.key)
@@ -552,6 +578,7 @@ async function buildUserSnapshots(options = {}) {
           albumId: meta.albumId,
           name: meta.albumName || null,
           artistIds: meta.artistIds || [],
+          artistNames: meta.artistNames,
           images: meta.images || [],
         });
       }
@@ -607,7 +634,11 @@ async function buildUserSnapshots(options = {}) {
         if (meta.albumId) bucket.uniqueAlbums.add(meta.albumId);
 
         addToMap(bucket.trackMap, track.trackId, track);
+        const addAllArtists = bound.type !== 'year';
+        let addedArtists = 0;
         (meta.artistIds || []).forEach(artistId => {
+          if (!addAllArtists && addedArtists > 0) return;
+          addedArtists += 1;
           addToMap(bucket.artistMap, artistId, track);
           const artist = artistMeta.get(artistId);
           for (const genre of artist?.genres || []) {
@@ -648,6 +679,7 @@ async function buildUserSnapshots(options = {}) {
           return {
             artistId,
             name: meta.name || null,
+            images : meta.images,
             genres: meta.genres || [],
             plays: counts.plays,
             popularity: meta.popularity,
@@ -746,11 +778,13 @@ async function runFullBackfill(options = {}) {
     startDate: start,
     endDate: end,
     logger,
-    userIds: ['pnleguizamo']
+    // userIds: ['pnleguizamo']
   });
   const snapshots = await buildUserSnapshots({ logger, 
-    userIds: ['pnleguizamo'] });
+    // userIds: ['pnleguizamo'] 
+  });
   return { daily, snapshots };
+  // return { snapshots };
 }
 
 module.exports = {
