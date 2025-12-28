@@ -262,34 +262,25 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
 };
 
 
-mongoService.getListenCountsForSong = async function(userIds, trackName, artistName) {
+mongoService.getListenCountsForSong = async function(userIds, trackId, artistName) {
   try {
     const db = await initDb();
-    const collection = db.collection(collectionName);
+    const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
 
     const pipeline = [
       {
         $match: {
           userId: { $in: userIds },
-          master_metadata_track_name: trackName,
-          master_metadata_album_artist_name: artistName,
-          reason_end: "trackdone"
-        }
-      },
-      {
-        $group: {
-          _id: "$userId",
-          play_count: { $sum: 1 }
+          trackId
         }
       }
     ];
 
-    const results = await collection.aggregate(pipeline).toArray();
-    console.log(results)
+    const results = await trackCountsCol.aggregate(pipeline).toArray();
 
     const listenCounts = {};
     for (const result of results) {
-      listenCounts[result._id] = result.play_count;
+      listenCounts[result.userId] = result.plays;
     }
     
     for (const userId of userIds) {
@@ -297,8 +288,6 @@ mongoService.getListenCountsForSong = async function(userIds, trackName, artistN
         listenCounts[userId] = 0;
       }
     }
-
-    console.log(listenCounts);
     
     return listenCounts;
   } catch (error) {
@@ -314,61 +303,32 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
         }
         
         db = await initDb();
-        const collection = db.collection(collectionName);
+
         const streamsCol = db.collection(COLLECTIONS.streams);
         const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
 
+        const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
+        const hasRollups = await trackCountsCol.findOne({ userId: { $in: userIds } }, { projection: { _id: 1 } });
+
         const weightMultiplier = 4;
         const playCountStifler = 500;
-        const pipeline = [
-            {
-                $match: {
-                    userId: { $in: userIds },
-                    reasonEnd: "trackdone"
-                }
-            },
-            {
-                $group: {
-                    _id : "$trackId",
-                    play_count: { $sum: 1 },
-                    unique_users: { $addToSet: "$userId" }
-                }
-            },
-            { $addFields: { user_count: { $size: "$unique_users" } } },
-            { $match: { user_count: { $gte: minAccounts } } },
-            {
-                $addFields:
+
+        const basePipeline = [
+            { $addFields:
                 {
                     playCountWeight: {
-                        $divide:
-                            [
-                                { $multiply:
-                                        [{ $pow: ["$play_count", 0.9] }, { $ln: "$play_count" }] },
-                                playCountStifler
-                            ]
+                        $divide: [
+                            { $multiply: [{ $pow: ["$play_count", 0.9] }, { $ln: "$play_count" }] },
+                            playCountStifler
+                        ]
                     },
                     userCountWeight: { $max: [1, "$user_count"] }
                 },
             },
-            {
-                $addFields:
-                    { weight: { $pow: [{ $add: ["$playCountWeight", "$userCountWeight"] }, weightMultiplier] } }
-            },
-            {
-                $addFields:
-                    { randScore: { $divide: [{ $multiply: [-1, { $ln: { $rand: {} } }] }, "$weight"] } }
-            },
+            { $addFields: { weight: { $pow: [{ $add: ["$playCountWeight", "$userCountWeight"] }, weightMultiplier] } } },
+            { $addFields: { randScore: { $divide: [{ $multiply: [-1, { $ln: { $rand: {} } }] }, "$weight"] } } },
             { $sort: { randScore: 1 } },
             { $limit: sampleSize },
-            {
-                $lookup: {
-                    from: "tracks",
-                    localField: "_id",
-                    foreignField: "_id",
-                    as: "metadata"
-                }
-            },
-            { $addFields : { metadata : {$first : "$metadata"} } },
             { $project: { weight: 0, randScore: 0 } },
             {
                 $project: {
@@ -380,22 +340,70 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                             { $divide: ["$user_count", userIds.length] },
                             100
                         ]
-                    },
-                    metadata: 1
+                    }
                 }
             }
         ];
-        const sharedSongs = await streamsCol.aggregate(pipeline).toArray();
+
+        const sourcePipeline = hasRollups
+            ? [
+                { $match: { userId: { $in: userIds } } },
+                {
+                    $group: {
+                        _id: "$trackId",
+                        play_count: { $sum: "$plays" },
+                        unique_users: { $addToSet: "$userId" }
+                    }
+                },
+                { $addFields: { user_count: { $size: "$unique_users" } } },
+                { $match: { user_count: { $gte: minAccounts } } },
+            ]
+            : [
+                {
+                    $match: {
+                        userId: { $in: userIds },
+                        reasonEnd: "trackdone"
+                    }
+                },
+                {
+                    $group: {
+                        _id : "$trackId",
+                        play_count: { $sum: 1 },
+                        unique_users: { $addToSet: "$userId" }
+                    }
+                },
+                { $addFields: { user_count: { $size: "$unique_users" } } },
+                { $match: { user_count: { $gte: minAccounts } } },
+            ];
+
+        const pipeline = [...sourcePipeline, ...basePipeline];
+        const sourceCol = hasRollups ? trackCountsCol : streamsCol;
+        const sharedSongs = await sourceCol.aggregate(pipeline).toArray();
+
+        
+        const trackIds = sharedSongs.map(song => song?._id).filter(Boolean);
+        const tracksCol = db.collection(COLLECTIONS.tracks);
+        const metadata = trackIds.length
+            ? await tracksCol
+                .find(
+                    { _id: { $in: trackIds } },
+                    { projection: { name: 1, artistNames: 1, albumName: 1, images: 1 } }
+                )
+                .toArray()
+            : [];
+        const metaMap = new Map(metadata.map(doc => [doc._id, doc]));
 
         const resultSongs = sharedSongs.map(song => {
+            const meta = metaMap.get(song._id) || {};
             return {
-                id : song._id,
-                play_count : song.play_count,
+                id: song._id,
+                play_count: song.play_count,
                 user_count: song.user_count,
                 listener_percentage: song.listener_percentage,
-                track_name: song.metadata.name,
-                artists: song.metadata.artistNames,
-                imageUrl: song?.metadata?.images?.[0].url
+                track_name: meta.name || null,
+                artist_names: meta.artistNames || [],
+                album_name: meta.albumName || null,
+                imageUrl: meta.images?.[0]?.url || null
             };
         });
     

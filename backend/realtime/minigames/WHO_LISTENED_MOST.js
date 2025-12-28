@@ -62,11 +62,9 @@ function computeResults(roundState, room, listenCounts) {
 
   let correctSocketId = null;
   let maxListens = 0;
-  const socketIdToUserId = {};
   
   room.players.forEach((player, socketId) => {
     if (player.userId) {
-      socketIdToUserId[socketId] = player.userId;
       const count = listenCounts[player.userId] || 0;
       if (count > maxListens) {
         maxListens = count;
@@ -176,9 +174,7 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       room.players.forEach((player, socketId) => {
         if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
       });
-
-      const listenCounts = await getListenCountsForSong(userIds, round.prompt.track_name, round.prompt.artist);
-      console.log(listenCounts);
+      const listenCounts = await getListenCountsForSong(userIds, round.prompt.id, round.prompt.artist);
 
       const results = computeResults(round, room, listenCounts);
       if (round) {

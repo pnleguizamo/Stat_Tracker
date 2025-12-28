@@ -5,16 +5,16 @@ let db;
 let indexesEnsured = false;
 
 const COLLECTIONS = {
-  rawStreams: process.env.COLLECTION_NAME || "raw_streamed_tracks",
-  streams: process.env.STREAMS_COLLECTION || "streams",
-  tracks: process.env.TRACKS_COLLECTION || "tracks",
-  artists: process.env.ARTISTS_COLLECTION || "artists",
-  albums: process.env.ALBUMS_COLLECTION || "albums",
-  userTrackCounts: process.env.USER_TRACK_COUNTS_COLLECTION || "user_track_counts",
-  userArtistCounts: process.env.USER_ARTIST_COUNTS_COLLECTION || "user_artist_counts",
-  userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION || "user_track_daily",
-  userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION || "user_stats_daily",
-  userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION || "user_snapshots",
+  rawStreams: process.env.COLLECTION_NAME,
+  streams: process.env.STREAMS_COLLECTION,
+  tracks: process.env.TRACKS_COLLECTION,
+  artists: process.env.ARTISTS_COLLECTION,
+  albums: process.env.ALBUMS_COLLECTION,
+  userTrackCounts: process.env.USER_TRACK_COUNTS_COLLECTION,
+  userArtistCounts: process.env.USER_ARTIST_COUNTS_COLLECTION,
+  userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION,
+  userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION,
+  userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION,
 };
 
 async function ensureIndexes(dbInstance) {
