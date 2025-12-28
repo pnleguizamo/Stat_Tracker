@@ -52,10 +52,6 @@ function startRollupWorker(options = {}) {
     return cronJob;
   }
 
-  runRollups(reason).catch(err => {
-    console.error(`[rollups] ${reason} run failed`, err);
-  });
-
   cronJob = cron.schedule(SCHEDULE, () => {
     runRollups('scheduled').catch(err => {
       console.error('[rollups] scheduled run failed', err);
