@@ -3,9 +3,11 @@ require('dotenv').config();
 const cron = require('node-cron');
 const { client } = require('../mongo.js');
 const { buildUserTrackDailyFromStreams, buildUserSnapshots } = require('../services/rollupService.js');
+const { rollupUserCounts } = require('../services/mongoServices.js');
 
 const SCHEDULE = process.env.ROLLUP_CRON || '30 3 * * *'; // default: 03:30 UTC daily
 const RECENT_DAYS = Number(process.env.ROLLUP_RECENT_DAYS || 40);
+let cronJob = null;
 
 function computeRange(days) {
   const end = new Date();
@@ -21,29 +23,56 @@ async function runRollups(reason = 'manual') {
   console.log(
     `[rollups] ${reason} run; refreshing streams from ${start.toISOString()} to ${end.toISOString()}`
   );
+  
+  const startTime = Date.now();
   const daily = await buildUserTrackDailyFromStreams({ startDate: start, endDate: end });
   const snapshots = await buildUserSnapshots();
+  await rollupUserCounts();
+  
+  const endTime = Date.now();
+  const ms = endTime - startTime;
+  console.log(`Rollup worker finished in ${ms} ms (${(ms / 1000).toFixed(2)} seconds)`);
   console.log('[rollups] run finished', { daily, snapshots });
 }
 
 function shutdown() {
+  if (cronJob) {
+    cronJob.stop();
+  }
   client
     .close()
     .catch(err => console.error('Error closing Mongo client after rollup worker', err))
     .finally(() => process.exit(0));
 }
 
-if (require.main === module) {
-  runRollups('startup').catch(err => {
-    console.error('[rollups] startup run failed', err);
+function startRollupWorker(options = {}) {
+  const { reason = 'startup', registerSignals = true } = options;
+  if (cronJob) {
+    console.log('[rollups] worker already running');
+    return cronJob;
+  }
+
+  runRollups(reason).catch(err => {
+    console.error(`[rollups] ${reason} run failed`, err);
   });
 
-  cron.schedule(SCHEDULE, () => {
+  cronJob = cron.schedule(SCHEDULE, () => {
     runRollups('scheduled').catch(err => {
       console.error('[rollups] scheduled run failed', err);
     });
   });
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  if (registerSignals) {
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  }
+
+  console.log(`[rollups] worker scheduled with cron ${SCHEDULE}`);
+  return cronJob;
 }
+
+if (require.main === module) {
+  startRollupWorker();
+}
+
+module.exports = { startRollupWorker };

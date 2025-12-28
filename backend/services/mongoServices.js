@@ -412,6 +412,9 @@ mongoService.rollupUserCounts = async function (options = {}) {
     const streamsCol = db.collection(COLLECTIONS.streams);
     const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
     const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
+    const tracksCol = db.collection(COLLECTIONS.tracks);
+    
+    if (!startDate) artistCountsCol.deleteMany({});
 
     const match = { reasonEnd: "trackdone" };
     if (startDate || endDate) {
@@ -431,7 +434,67 @@ mongoService.rollupUserCounts = async function (options = {}) {
     };
 
     let trackOps = 0;
-    let ops = [];
+    let artistOps = 0;
+    let batch = [];
+
+    const flushBatch = async () => {
+        if (!batch.length) return;
+        const trackOpsPayload = batch.map(doc => {
+            const { userId, trackId } = doc._id || {};
+            return {
+                updateOne: {
+                    filter: { userId, trackId },
+                    update: {
+                        $set: {
+                            plays: doc.plays || 0,
+                            msPlayed: doc.msPlayed || 0,
+                            lastStreamTs: doc.lastStreamTs || null,
+                        },
+                    },
+                    upsert: true,
+                },
+            };
+        });
+        await writeBatch(trackCountsCol, trackOpsPayload);
+        trackOps += trackOpsPayload.length;
+
+        const trackIds = Array.from(new Set(batch.map(d => d._id?.trackId).filter(Boolean)));
+        const metas = trackIds.length
+            ? await tracksCol
+                .find({ _id: { $in: trackIds } }, { projection: { artistIds: 1 } })
+                .toArray()
+            : [];
+        const metaMap = new Map(metas.map(m => [m._id, m.artistIds || []]));
+
+        const artistOpsPayload = [];
+        for (const doc of batch) {
+            const { userId, trackId } = doc._id || {};
+            if (!userId || !trackId) continue;
+            const artistIds = metaMap.get(trackId) || [];
+            for (const artistId of artistIds) {
+                artistOpsPayload.push({
+                    updateOne: {
+                        filter: { userId, artistId },
+                        update: {
+                            $inc: {
+                                plays: doc.plays || 0,
+                                msPlayed: doc.msPlayed || 0,
+                            },
+                            $max: { lastStreamTs: doc.lastStreamTs || null },
+                        },
+                        upsert: true,
+                    },
+                });
+            }
+        }
+        if (artistOpsPayload.length) {
+            await writeBatch(artistCountsCol, artistOpsPayload);
+            artistOps += artistOpsPayload.length;
+        }
+
+        batch = [];
+    };
+
     const trackPipeline = [
         { $match: match },
         {
@@ -445,67 +508,12 @@ mongoService.rollupUserCounts = async function (options = {}) {
     ];
     const trackCursor = streamsCol.aggregate(trackPipeline, { allowDiskUse: true });
     for await (const doc of trackCursor) {
-        const { userId, trackId } = doc._id || {};
-        if (!userId || !trackId) continue;
-        ops.push({
-            updateOne: {
-                filter: { userId, trackId },
-                update: {
-                    $set: {
-                        plays: doc.plays || 0,
-                        msPlayed: doc.msPlayed || 0,
-                        lastStreamTs: doc.lastStreamTs || null,
-                    },
-                },
-                upsert: true,
-            },
-        });
-        trackOps += 1;
-        if (ops.length >= batchSize) {
-            await writeBatch(trackCountsCol, ops);
-            ops = [];
+        batch.push(doc);
+        if (batch.length >= batchSize) {
+            await flushBatch();
         }
     }
-    if (ops.length) await writeBatch(trackCountsCol, ops);
-
-    let artistOps = 0;
-    ops = [];
-    const artistPipeline = [
-        { $match: { ...match, artistIds: { $exists: true, $ne: null } } },
-        { $unwind: '$artistIds' },
-        {
-            $group: {
-                _id: { userId: '$userId', artistId: '$artistIds' },
-                plays: { $sum: 1 },
-                msPlayed: { $sum: msExpr },
-                lastStreamTs: { $max: '$ts' },
-            },
-        },
-    ];
-    const artistCursor = streamsCol.aggregate(artistPipeline, { allowDiskUse: true });
-    for await (const doc of artistCursor) {
-        const { userId, artistId } = doc._id || {};
-        if (!userId || !artistId) continue;
-        ops.push({
-            updateOne: {
-                filter: { userId, artistId },
-                update: {
-                    $set: {
-                        plays: doc.plays || 0,
-                        msPlayed: doc.msPlayed || 0,
-                        lastStreamTs: doc.lastStreamTs || null,
-                    },
-                },
-                upsert: true,
-            },
-        });
-        artistOps += 1;
-        if (ops.length >= batchSize) {
-            await writeBatch(artistCountsCol, ops);
-            ops = [];
-        }
-    }
-    if (ops.length) await writeBatch(artistCountsCol, ops);
+    await flushBatch();
 
     logger.info?.(`rollupUserCounts complete tracks=${trackOps} artists=${artistOps}`);
     return { tracks: trackOps, artists: artistOps };

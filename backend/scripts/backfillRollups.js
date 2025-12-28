@@ -2,9 +2,13 @@ require('dotenv').config();
 
 const { client } = require('../mongo.js');
 const { runFullBackfill } = require('../services/rollupService.js');
+const { rollupUserCounts } = require('../services/mongoServices.js');
 
 async function main() {
-  const result = await runFullBackfill();
+  const userIds = [];
+
+  const result = await runFullBackfill(userIds);
+  await rollupUserCounts();
   console.log('Rollup backfill complete', result);
 }
 

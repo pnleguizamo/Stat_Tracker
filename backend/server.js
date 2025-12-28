@@ -7,6 +7,7 @@ const http = require('http');
 const { initDb } = require('./mongo.js');
 const { initSocket } = require('./realtime/socketServer');
 const { startMetadataCacheWorker } = require('./services/metadataCacheWorker.js');
+const { startRollupWorker } = require('./scripts/rollupWorker.js');
 
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes);
   await initDb();
   require('./services/pollingService.js');
   startMetadataCacheWorker();
+  startRollupWorker({ reason: 'server-start', registerSignals: false });
 })();
 
 server.listen(port, () => {

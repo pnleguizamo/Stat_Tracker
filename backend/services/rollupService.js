@@ -729,7 +729,6 @@ async function buildUserSnapshots(options = {}) {
         topAlbums,
         topGenres,
       };
-      // console.log(windowsDoc[bound.key])
     }
 
     await snapshotsCol.updateOne(
@@ -758,7 +757,7 @@ async function buildUserSnapshots(options = {}) {
 }
 
 async function runFullBackfill(options = {}) {
-  const { logger = console } = options;
+  const { logger = console, userIds = [] } = options;
   const db = await initDb();
   logger.info?.('[rollups] runFullBackfill start');
   const range = await getStreamsDateRange(db);
@@ -767,10 +766,6 @@ async function runFullBackfill(options = {}) {
     return { daily: null, snapshots: null };
   }
 
-  
-  console.log("Debugger 0");
-  debugger;
-
   const start = startOfDay(range.min);
   const end = new Date(startOfDay(range.max).getTime() + DAY_MS);
 
@@ -778,13 +773,13 @@ async function runFullBackfill(options = {}) {
     startDate: start,
     endDate: end,
     logger,
-    // userIds: ['pnleguizamo']
+    userIds
   });
-  const snapshots = await buildUserSnapshots({ logger, 
-    // userIds: ['pnleguizamo'] 
+  const snapshots = await buildUserSnapshots({
+    logger,
+    userIds
   });
   return { daily, snapshots };
-  // return { snapshots };
 }
 
 module.exports = {
