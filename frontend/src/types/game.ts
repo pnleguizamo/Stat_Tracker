@@ -47,7 +47,7 @@ export type WhoListenedMostPrompt = {
   id: string;
   type: 'ARTIST' | 'TRACK' | 'INFO';
   track_name: string;
-  artist: string;
+  artists: string[];
   subtitle?: string;
   description?: string;
   imageUrl?: string;

@@ -11,7 +11,7 @@ async function pickPrompt(room, customPrompt) {
   if (customPrompt) return customPrompt;
   // const idx = Math.floor(Math.random() * SAMPLE_PROMPTS.length);
 
-  const userIds = []
+  const userIds = ['preethika.naveen', '31wxboit3bzjitqzphe2g65e2npa', 'fnk3g7l78s0kldllh9itee0ey']
   room.players.forEach((player, socketId) => {
     if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
   });
@@ -25,9 +25,7 @@ async function pickPrompt(room, customPrompt) {
   return {
     ...prompt, 
     type: "TRACK", 
-    description: `Who listened to ${prompt._id.track_name} most?`, 
-    track_name: prompt._id.track_name, 
-    artist: prompt._id.artist_name 
+    description: `Who listened to ${prompt.track_name} most?`
   };
 }
 

@@ -18,55 +18,33 @@ const COLLECTIONS = {
 async function ensureIndexes(dbInstance) {
   if (indexesEnsured) return;
 
-  const creations = [
-    dbInstance
-      .collection(COLLECTIONS.streams)
-      .createIndex({ userId: 1, ts: 1 }, { name: "streams_user_ts" }),
-    dbInstance
-      .collection(COLLECTIONS.tracks)
-      .createIndex({ status: 1, nextRefreshAt: 1 }, { name: "tracks_status_refresh" }),
-    dbInstance
-      .collection(COLLECTIONS.streams)
-      .createIndex({ userId: 1, ts: 1, trackId: 1 }, { name: 'uniq_stream_per_user', unique: true }),
-    dbInstance
-      .collection(COLLECTIONS.tracks)
-      .createIndex({ lockedAt: 1 }, { name: "tracks_locked_at" }),
-    dbInstance
-      .collection(COLLECTIONS.artists)
-      .createIndex({ status: 1, nextRefreshAt: 1 }, { name: "artists_status_refresh" }),
-    dbInstance
-      .collection(COLLECTIONS.artists)
-      .createIndex({ lockedAt: 1 }, { name: "artists_locked_at" }),
-    dbInstance
-      .collection(COLLECTIONS.albums)
-      .createIndex({ status: 1, nextRefreshAt: 1 }, { name: "albums_status_refresh" }),
-    dbInstance
-      .collection(COLLECTIONS.albums)
-      .createIndex({ lockedAt: 1 }, { name: "albums_locked_at" }),
-    dbInstance
-      .collection(COLLECTIONS.userTrackDaily)
-      .createIndex(
-        { userId: 1, day: 1, trackId: 1 },
-        { unique: true, name: "utd_user_day_track" }
-      ),
-    dbInstance
-      .collection(COLLECTIONS.userTrackDaily)
-      .createIndex({ day: 1 }, { name: "utd_day" }),
-    dbInstance
-      .collection(COLLECTIONS.userStatsDaily)
-      .createIndex(
-        { userId: 1, day: 1 },
-        { unique: true, name: "usd_user_day" }
-      ),
-    dbInstance
-      .collection(COLLECTIONS.userSnapshots)
-      .createIndex(
-        { userId: 1 },
-        { unique: true, name: "user_snapshots_user" }
-      ),
+  const indexDefs = [
+    { collection: COLLECTIONS.streams, keys: { userId: 1, ts: 1 }, options: { name: "streams_user_ts" } },
+    { collection: COLLECTIONS.streams, keys: { userId: 1, ts: 1, trackId: 1 }, options: { name: "uniq_stream_per_user", unique: true } },
+    {
+      collection: COLLECTIONS.streams,
+      keys: { userId: 1, trackId: 1 },
+      options: { name: "streams_user_track_trackdone", partialFilterExpression: { reasonEnd: "trackdone" } },
+    },
+
+    { collection: COLLECTIONS.tracks, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "tracks_status_refresh" } },
+    { collection: COLLECTIONS.tracks, keys: { lockedAt: 1 }, options: { name: "tracks_locked_at" } },
+    { collection: COLLECTIONS.artists, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "artists_status_refresh" } },
+    { collection: COLLECTIONS.artists, keys: { lockedAt: 1 }, options: { name: "artists_locked_at" } },
+    { collection: COLLECTIONS.albums, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "albums_status_refresh" } },
+    { collection: COLLECTIONS.albums, keys: { lockedAt: 1 }, options: { name: "albums_locked_at" } },
+  
+    { collection: COLLECTIONS.userTrackDaily, keys: { userId: 1, day: 1, trackId: 1 }, options: { unique: true, name: "utd_user_day_track" } },
+    { collection: COLLECTIONS.userTrackDaily, keys: { day: 1 }, options: { name: "utd_day" } },
+    { collection: COLLECTIONS.userStatsDaily, keys: { userId: 1, day: 1 }, options: { unique: true, name: "usd_user_day" } },
+    { collection: COLLECTIONS.userSnapshots, keys: { userId: 1 }, options: { unique: true, name: "user_snapshots_user" } },
   ];
 
-  await Promise.all(creations);
+  await Promise.all(
+    indexDefs.map(({ collection, keys, options }) =>
+      dbInstance.collection(collection).createIndex(keys, options)
+    )
+  );
   indexesEnsured = true;
 }
 

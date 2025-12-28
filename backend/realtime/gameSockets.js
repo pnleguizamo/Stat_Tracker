@@ -12,6 +12,7 @@ const {
   getGameState,
 } = roomsModule;
 const minigameRegistry = require('./minigames');
+const { registerStagePlanListeners } = require('./stagePlanSockets');
 
 function initGameSockets(io) {
   const broadcastGameState = (roomCode) => {
@@ -21,39 +22,11 @@ function initGameSockets(io) {
     return state;
   };
 
-  const ensureStageState = async (room) => {
-    if (!room || !room.stagePlan) return;
-    const stageIndex = typeof room.currentStageIndex === 'number' ? room.currentStageIndex : 0;
-    const stageConfig = room.stagePlan[stageIndex];
-    if (!stageConfig) return;
-    room.roundState = room.roundState || {};
-    if (room.roundState[stageIndex]) return;
-
-    const stageModule = minigameRegistry.modules?.[stageConfig.minigameId];
-    if (stageModule?.createRoundState) {
-      await stageModule.createRoundState(room, { stageIndex });
-      return;
-    }
-
-    room.roundState[stageIndex] = {
-      id: `pending-${stageConfig.minigameId}-${Date.now()}`,
-      prompt: {
-        type: 'INFO',
-        title: 'Coming soon',
-        subtitle: stageConfig.minigameId,
-        description: `${stageConfig.minigameId} is not available yet.`,
-      },
-      status: 'pending',
-      answers: {},
-    };
-  };
-
   io.on('connection', (socket) => {
     console.log('Client connected', socket.id, 'accountId:', socket.accountId);
     // register minigame-specific listeners for this socket
     try {
       minigameRegistry.registerAll(io, socket, {
-        rooms: roomsModule,
         getRoom,
         createRoom,
         addPlayer,
@@ -70,84 +43,18 @@ function initGameSockets(io) {
     } catch (err) {
       console.error('Failed to register minigame listeners for socket', socket.id, err);
     }
-    
-    socket.on('enterStageConfig', ({ roomCode }, cb) => {
-      const room = getRoom(roomCode);
-      if (!room) {
-        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
-        return;
-      }
-      // update phase
-      room.phase = 'stageConfig';
-      const payload = getRoomPayload(roomCode);
-      io.to(payload.hostSocketId).emit('stagePlanUpdated', {
-        stagePlan: room.stagePlan,
+
+    try {
+      registerStagePlanListeners(io, socket, {
+        getRoom,
+        updateStagePlan,
+        startGame,
+        getRoomPayload,
+        broadcastGameState,
       });
-      cb?.({ ok: true });
-    });
-
-    socket.on('updateStagePlan', async ({ roomCode, stagePlan }, cb) => {
-      const updated = updateStagePlan(roomCode, stagePlan);
-      if (!updated) {
-        cb?.({ ok: false, error: 'INVALID_STAGE_PLAN' });
-        return;
-      }
-      const payload = getRoomPayload(roomCode);
-      io.to(payload.hostSocketId).emit('stagePlanUpdated', {
-        stagePlan: updated.stagePlan,
-      });
-      if (!roomCode) {
-        cb?.({ ok: false, error: 'ROOM_REQUIRED' });
-        return;
-      }
-      const room = getRoom(roomCode);
-      if (!room) {
-        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
-        return;
-      }
-      if (room.hostSocketId !== socket.id) {
-        cb?.({ ok: false, error: 'NOT_HOST' });
-        return;
-      }
-
-      const started = startGame(roomCode);
-      if (!started) {
-        cb?.({ ok: false, error: 'CANT_START' });
-        return;
-      }
-
-      await ensureStageState(started);
-      broadcastGameState(roomCode);
-
-      cb?.({ ok: true });
-    });
-
-    socket.on('lockStagePlanAndStart', async ({ roomCode }, cb) => {
-      if (!roomCode) {
-        cb?.({ ok: false, error: 'ROOM_REQUIRED' });
-        return;
-      }
-      const room = getRoom(roomCode);
-      if (!room) {
-        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
-        return;
-      }
-      if (room.hostSocketId !== socket.id) {
-        cb?.({ ok: false, error: 'NOT_HOST' });
-        return;
-      }
-
-      const started = startGame(roomCode);
-      if (!started) {
-        cb?.({ ok: false, error: 'CANT_START' });
-        return;
-      }
-
-      await ensureStageState(started);
-      broadcastGameState(roomCode);
-
-      cb?.({ ok: true });
-    });
+    } catch (err) {
+      console.error('Failed to register stage plan listeners for socket', socket.id, err);
+    }
 
     socket.on('hostJoin', ({ roomCode } = {}, cb) => {
       if (!roomCode) {
@@ -185,47 +92,6 @@ function initGameSockets(io) {
       socket.join(roomCode);
       const state = broadcastGameState(roomCode);
       cb?.({ ok: true, state });
-    });
-
-    socket.on('advanceStageOrRound', async ({ roomCode } = {}, cb) => {
-      if (!roomCode) {
-        cb?.({ ok: false, error: 'ROOM_REQUIRED' });
-        return;
-      }
-      const room = getRoom(roomCode);
-      if (!room) {
-        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
-        return;
-      }
-      if (room.hostSocketId !== socket.id) {
-        cb?.({ ok: false, error: 'NOT_HOST' });
-        return;
-      }
-      if (typeof room.currentStageIndex !== 'number') {
-        cb?.({ ok: false, error: 'NO_STAGE_ACTIVE' });
-        return;
-      }
-
-      const nextIndex = room.currentStageIndex + 1;
-      if (!room.stagePlan || nextIndex >= room.stagePlan.length) {
-        room.phase = 'completed';
-        broadcastGameState(roomCode);
-        cb?.({ ok: true, completed: true });
-        return;
-      }
-
-      room.currentStageIndex = nextIndex;
-      room.roundState = room.roundState || {};
-      delete room.roundState[nextIndex];
-      await ensureStageState(room);
-      broadcastGameState(roomCode);
-      cb?.({ ok: true, currentStageIndex: room.currentStageIndex });
-      // stagePlan: room.stagePlan,
-      //   // plus any initial state for stage 0
-      // });
-
-      // cb?.({ ok: true });
-      // ok: true });
     });
 
     socket.on('createRoom', ({ displayName }, callback) => {
@@ -293,7 +159,7 @@ function initGameSockets(io) {
         const payload = getRoomPayload(roomCode);
         if (payload) io.to(roomCode).emit('roomUpdated', payload);
       }
-      console.log('Client disconnected', socket.id)
+      console.log('Client disconnected', socket.id);
     });
   });
 }

@@ -307,100 +307,99 @@ mongoService.getListenCountsForSong = async function(userIds, trackName, artistN
   }
 }
 
-mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 1) {
+mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 25) {
     try {
         if (!userIds || userIds.length === 0) {
             throw new Error('userIds array cannot be empty');
         }
-
+        
         db = await initDb();
         const collection = db.collection(collectionName);
-        const minAccounts = Math.ceil(userIds.length * minAccountsPercentage);
+        const streamsCol = db.collection(COLLECTIONS.streams);
+        const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
 
+        const weightMultiplier = 4;
+        const playCountStifler = 500;
         const pipeline = [
             {
                 $match: {
                     userId: { $in: userIds },
-                    master_metadata_track_name: { $ne: null },
-                    master_metadata_album_artist_name: { $ne: null },
-                    reason_end: "trackdone"
+                    reasonEnd: "trackdone"
                 }
             },
             {
                 $group: {
-                    _id: {
-                        track_name: "$master_metadata_track_name",
-                        artist_name: "$master_metadata_album_artist_name"
-                    },
+                    _id : "$trackId",
                     play_count: { $sum: 1 },
-                    unique_users: { $addToSet: "$userId" },
-                    spotify_track_uri: { $first: "$spotify_track_uri" }
+                    unique_users: { $addToSet: "$userId" }
                 }
             },
+            { $addFields: { user_count: { $size: "$unique_users" } } },
+            { $match: { user_count: { $gte: minAccounts } } },
             {
-                $addFields: {
-                    user_count: { $size: "$unique_users" }
+                $addFields:
+                {
+                    playCountWeight: {
+                        $divide:
+                            [
+                                { $multiply:
+                                        [{ $pow: ["$play_count", 0.9] }, { $ln: "$play_count" }] },
+                                playCountStifler
+                            ]
+                    },
+                    userCountWeight: { $max: [1, "$user_count"] }
+                },
+            },
+            {
+                $addFields:
+                    { weight: { $pow: [{ $add: ["$playCountWeight", "$userCountWeight"] }, weightMultiplier] } }
+            },
+            {
+                $addFields:
+                    { randScore: { $divide: [{ $multiply: [-1, { $ln: { $rand: {} } }] }, "$weight"] } }
+            },
+            { $sort: { randScore: 1 } },
+            { $limit: sampleSize },
+            {
+                $lookup: {
+                    from: "tracks",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "metadata"
                 }
             },
-            {
-                $match: {
-                    user_count: { $gte: minAccounts }
-                }
-            },
-            { 
-                $sample: { size: sampleSize } 
-            },
-            {
-                $sort: { play_count: -1 }
-            },
+            { $addFields : { metadata : {$first : "$metadata"} } },
+            { $project: { weight: 0, randScore: 0 } },
             {
                 $project: {
                     _id: 1,
                     play_count: 1,
                     user_count: 1,
-                    spotify_track_uri: 1,
                     listener_percentage: {
                         $multiply: [
                             { $divide: ["$user_count", userIds.length] },
                             100
                         ]
-                    }
+                    },
+                    metadata: 1
                 }
             }
         ];
+        const sharedSongs = await streamsCol.aggregate(pipeline).toArray();
 
-        const sharedSongs = await collection.aggregate(pipeline).toArray();
-
-        const trackIds = sharedSongs.map(song => song.spotify_track_uri?.split(':')[2]).filter(Boolean);
-        const tracks = await getAlbumCover(accessToken, trackIds);
-        const trackMap = new Map(
-            tracks.map(t => [t.id, t.album?.images?.[0]?.url || null])
-        );
-        sharedSongs.forEach(song => {
-            const trackId = song.spotify_track_uri?.split(':')[2];
-            song.imageUrl = trackMap.get(trackId) || null;
+        const resultSongs = sharedSongs.map(song => {
+            return {
+                id : song._id,
+                play_count : song.play_count,
+                user_count: song.user_count,
+                listener_percentage: song.listener_percentage,
+                track_name: song.metadata.name,
+                artists: song.metadata.artistNames,
+                imageUrl: song?.metadata?.images?.[0].url
+            };
         });
-        
-
-        // Enrich with album covers
-        // const enhancedSongs = await Promise.all(
-        //     sharedSongs.map(async (song) => {
-        //         let album_cover = null;
-        //         if (song.spotify_track_uri && accessToken) {
-        //             try {
-        //                 album_cover = await getAlbumCover(accessToken, song.spotify_track_uri);
-        //             } catch (err) {
-        //                 console.warn('Failed to fetch album cover for', song._id.track_name, err);
-        //             }
-        //         }
-        //         return {
-        //             ...song,
-        //             album_cover
-        //         };
-        //     })
-        // );
-
-        return sharedSongs;
+    
+        return resultSongs;
     } catch (error) {
         console.error("Error fetching shared top songs:", error);
         throw error;

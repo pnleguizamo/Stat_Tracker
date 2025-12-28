@@ -56,7 +56,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
 
   return (
     <>
-      <section
+      {/* <section
         style={{
           display: "flex",
           gap: 16,
@@ -74,7 +74,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
           {prompt.artist && <div style={{ color: "#b8c2dc" }}>{prompt.artist}</div>}
           {prompt.description && <p style={{ marginTop: 8, color: "#cbd5f5" }}>{prompt.description}</p>}
         </div>
-      </section>
+      </section> */}
 
       <section style={{ marginBottom: 24 }}>
         <div style={{ marginBottom: 8 }}>
@@ -98,14 +98,13 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
               <button
                 key={socketId}
                 onClick={() => handleVote(socketId)}
-                disabled={voteBusy || isResultsShown || isSelf}
+                disabled={voteBusy || isResultsShown}
                 style={{
                   padding: "0.85rem",
                   borderRadius: 10,
                   border: isSelected ? "2px solid #38bdf8" : "1px solid #1f2933",
                   background: isSelected ? "#0f172a" : "#0b0f17",
-                  color: isSelf ? "#94a3b8" : "#fff",
-                  cursor: isSelf ? "not-allowed" : "pointer",
+                  color: "#fff",
                 }}
               >
                 <div style={{ fontWeight: 600 }}>{player.displayName || player.name}</div>
