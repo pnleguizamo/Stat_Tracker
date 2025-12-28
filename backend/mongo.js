@@ -10,6 +10,8 @@ const COLLECTIONS = {
   tracks: process.env.TRACKS_COLLECTION || "tracks",
   artists: process.env.ARTISTS_COLLECTION || "artists",
   albums: process.env.ALBUMS_COLLECTION || "albums",
+  userTrackCounts: process.env.USER_TRACK_COUNTS_COLLECTION || "user_track_counts",
+  userArtistCounts: process.env.USER_ARTIST_COUNTS_COLLECTION || "user_artist_counts",
   userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION || "user_track_daily",
   userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION || "user_stats_daily",
   userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION || "user_snapshots",
@@ -26,6 +28,9 @@ async function ensureIndexes(dbInstance) {
       keys: { userId: 1, trackId: 1 },
       options: { name: "streams_user_track_trackdone", partialFilterExpression: { reasonEnd: "trackdone" } },
     },
+    
+    { collection: COLLECTIONS.userTrackCounts, keys: { userId: 1, trackId: 1 }, options: { unique: true, name: "utc_user_track" } },
+    { collection: COLLECTIONS.userArtistCounts, keys: { userId: 1, artistId: 1 }, options: { unique: true, name: "uac_user_artist" } },
 
     { collection: COLLECTIONS.tracks, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "tracks_status_refresh" } },
     { collection: COLLECTIONS.tracks, keys: { lockedAt: 1 }, options: { name: "tracks_locked_at" } },

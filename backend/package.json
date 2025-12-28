@@ -29,7 +29,8 @@
     "migrate:streams": "node scripts/migrateToNormalizedStreams.js",
     "ensure:track-stubs": "node scripts/ensureTrackStubs.js",
     "rollups:backfill": "node scripts/backfillRollups.js",
-    "rollups:worker": "node scripts/rollupWorker.js"
+    "rollups:worker": "node scripts/rollupWorker.js",
+    "rollups:stream-counts": "node scripts/rollupStreamCounts.js"
   },
   "keywords": [],
   "author": "",

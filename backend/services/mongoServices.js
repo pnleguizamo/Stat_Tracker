@@ -405,3 +405,108 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
         throw error;
     }
 };
+
+mongoService.rollupUserCounts = async function (options = {}) {
+    const { startDate, endDate, userIds, batchSize = 500, logger = console } = options;
+    db = await initDb();
+    const streamsCol = db.collection(COLLECTIONS.streams);
+    const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
+    const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
+
+    const match = { reasonEnd: "trackdone" };
+    if (startDate || endDate) {
+        match.ts = {};
+        if (startDate) match.ts.$gte = startDate;
+        if (endDate) match.ts.$lt = endDate;
+    }
+    if (userIds?.length) {
+        match.userId = { $in: userIds };
+    }
+
+    const msExpr = { $ifNull: ['$msPlayed', '$ms_played'] };
+
+    const writeBatch = async (col, ops) => {
+        if (!ops.length) return;
+        await col.bulkWrite(ops, { ordered: false });
+    };
+
+    let trackOps = 0;
+    let ops = [];
+    const trackPipeline = [
+        { $match: match },
+        {
+            $group: {
+                _id: { userId: '$userId', trackId: '$trackId' },
+                plays: { $sum: 1 },
+                msPlayed: { $sum: msExpr },
+                lastStreamTs: { $max: '$ts' },
+            },
+        },
+    ];
+    const trackCursor = streamsCol.aggregate(trackPipeline, { allowDiskUse: true });
+    for await (const doc of trackCursor) {
+        const { userId, trackId } = doc._id || {};
+        if (!userId || !trackId) continue;
+        ops.push({
+            updateOne: {
+                filter: { userId, trackId },
+                update: {
+                    $set: {
+                        plays: doc.plays || 0,
+                        msPlayed: doc.msPlayed || 0,
+                        lastStreamTs: doc.lastStreamTs || null,
+                    },
+                },
+                upsert: true,
+            },
+        });
+        trackOps += 1;
+        if (ops.length >= batchSize) {
+            await writeBatch(trackCountsCol, ops);
+            ops = [];
+        }
+    }
+    if (ops.length) await writeBatch(trackCountsCol, ops);
+
+    let artistOps = 0;
+    ops = [];
+    const artistPipeline = [
+        { $match: { ...match, artistIds: { $exists: true, $ne: null } } },
+        { $unwind: '$artistIds' },
+        {
+            $group: {
+                _id: { userId: '$userId', artistId: '$artistIds' },
+                plays: { $sum: 1 },
+                msPlayed: { $sum: msExpr },
+                lastStreamTs: { $max: '$ts' },
+            },
+        },
+    ];
+    const artistCursor = streamsCol.aggregate(artistPipeline, { allowDiskUse: true });
+    for await (const doc of artistCursor) {
+        const { userId, artistId } = doc._id || {};
+        if (!userId || !artistId) continue;
+        ops.push({
+            updateOne: {
+                filter: { userId, artistId },
+                update: {
+                    $set: {
+                        plays: doc.plays || 0,
+                        msPlayed: doc.msPlayed || 0,
+                        lastStreamTs: doc.lastStreamTs || null,
+                    },
+                },
+                upsert: true,
+            },
+        });
+        artistOps += 1;
+        if (ops.length >= batchSize) {
+            await writeBatch(artistCountsCol, ops);
+            ops = [];
+        }
+    }
+    if (ops.length) await writeBatch(artistCountsCol, ops);
+
+    logger.info?.(`rollupUserCounts complete tracks=${trackOps} artists=${artistOps}`);
+    return { tracks: trackOps, artists: artistOps };
+};
