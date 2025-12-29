@@ -10,6 +10,7 @@ const COLLECTIONS = {
   tracks: process.env.TRACKS_COLLECTION,
   artists: process.env.ARTISTS_COLLECTION,
   albums: process.env.ALBUMS_COLLECTION,
+  trackAliases: process.env.TRACK_ALIASES_COLLECTION || 'track_aliases',
   userTrackCounts: process.env.USER_TRACK_COUNTS_COLLECTION,
   userArtistCounts: process.env.USER_ARTIST_COUNTS_COLLECTION,
   userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION,
@@ -28,12 +29,15 @@ async function ensureIndexes(dbInstance) {
       keys: { userId: 1, trackId: 1 },
       options: { name: "streams_user_track_trackdone", partialFilterExpression: { reasonEnd: "trackdone" } },
     },
+    { collection: COLLECTIONS.streams, keys: { canonicalTrackId: 1 }, options: { name: "streams_canonical_track" } },
     
     { collection: COLLECTIONS.userTrackCounts, keys: { userId: 1, trackId: 1 }, options: { unique: true, name: "utc_user_track" } },
     { collection: COLLECTIONS.userArtistCounts, keys: { userId: 1, artistId: 1 }, options: { unique: true, name: "uac_user_artist" } },
 
     { collection: COLLECTIONS.tracks, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "tracks_status_refresh" } },
     { collection: COLLECTIONS.tracks, keys: { lockedAt: 1 }, options: { name: "tracks_locked_at" } },
+    { collection: COLLECTIONS.tracks, keys: { canonicalKey: 1 }, options: { name: "tracks_canonical_key" } },
+    { collection: COLLECTIONS.tracks, keys: { canonicalTrackId: 1 }, options: { name: "tracks_canonical_id" } },
     { collection: COLLECTIONS.artists, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "artists_status_refresh" } },
     { collection: COLLECTIONS.artists, keys: { lockedAt: 1 }, options: { name: "artists_locked_at" } },
     { collection: COLLECTIONS.albums, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "albums_status_refresh" } },
@@ -43,6 +47,7 @@ async function ensureIndexes(dbInstance) {
     { collection: COLLECTIONS.userTrackDaily, keys: { day: 1 }, options: { name: "utd_day" } },
     { collection: COLLECTIONS.userStatsDaily, keys: { userId: 1, day: 1 }, options: { unique: true, name: "usd_user_day" } },
     { collection: COLLECTIONS.userSnapshots, keys: { userId: 1 }, options: { unique: true, name: "user_snapshots_user" } },
+    { collection: COLLECTIONS.trackAliases, keys: { canonicalKey: 1 }, options: { name: "track_aliases_canonical_key" } },
   ];
 
   await Promise.all(
