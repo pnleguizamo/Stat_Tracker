@@ -19,7 +19,7 @@ function buildMissingCanonicalQuery({ windowStart, startAfterId }) {
     query.$and.push({ ts: { $gte: windowStart } });
   }
   if (startAfterId) {
-    query.$and.push({ _id: { $gt: startAfterId } }); // TODOo does this work?
+    query.$and.push({ _id: { $gt: startAfterId } });
   }
   return query;
 }
@@ -39,14 +39,12 @@ async function enrichBatch({
   const query = buildMissingCanonicalQuery({ windowStart, startAfterId });
   const docs = await streamsCol
     .find(query, { projection: { _id: 1, trackId: 1 } })
-    .sort({ _id: 1 }) // TODOo necessary sort?
+    .sort({ _id: 1 })
     .limit(batchSize)
     .toArray();
   if (!docs.length) {
     return { scanned: 0, resolved: 0, updated: 0, lastId: null, unresolvedTrackIds: [] };
   }
-
-  debugger;
 
   const trackIds = Array.from(new Set(docs.map(doc => doc.trackId).filter(Boolean)));
   const aliasDocs = trackIds.length
@@ -94,8 +92,6 @@ async function enrichBatch({
     `[canonical] batch windowStart=${windowStart ? windowStart.toISOString() : 'full'} scanned=${docs.length} resolved=${resolved} updated=${updated} unresolved=${unresolved.length}`
   );
 
-  debugger;
-
   return {
     scanned: docs.length,
     resolved,
@@ -121,7 +117,6 @@ async function enrichRecentStreamsWithCanonicalIds({
   const unresolvedTrackIds = new Set();
 
   while (batches < maxBatches) {
-    // eslint-disable-next-line no-await-in-loop
     const result = await enrichBatch({
       db,
       windowStart,
@@ -159,7 +154,7 @@ async function backfillCanonicalIds({
   db,
   batchSize = DEFAULT_BATCH_SIZE,
   logger = console,
-  maxBatches = Infinity, //point of maxBatches?
+  maxBatches = Infinity,
 }) {
   let batches = 0;
   let lastId = null;
@@ -169,7 +164,6 @@ async function backfillCanonicalIds({
   const unresolvedTrackIds = new Set();
 
   while (batches < maxBatches) {
-    debugger;
     const result = await enrichBatch({
       db,
       windowStart: null,

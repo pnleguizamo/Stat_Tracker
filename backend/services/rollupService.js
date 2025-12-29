@@ -184,6 +184,7 @@ async function buildUserTrackDailyFromStreams(options = {}) {
   if (userIds?.length) {
     match.userId = { $in: userIds };
   }
+  match.canonicalTrackId = { $ne: null };
 
   const msExpr = { $ifNull: ['$msPlayed', '$ms_played'] };
 
@@ -238,10 +239,18 @@ async function buildUserTrackDailyFromStreams(options = {}) {
     });
   }
 
-  const trackMatch = { ...match, trackId: { $ne: null } };
+  const trackMatch = { ...match, canonicalTrackId: { $ne: null } };
   const trackPipeline = [
     { $match: trackMatch },
-    { $project: { userId: 1, trackId: 1, ts: 1, ms: msExpr, reasonEnd: 1 } },
+    {
+      $project: {
+        userId: 1,
+        trackId: '$canonicalTrackId',
+        ts: 1,
+        ms: msExpr,
+        reasonEnd: 1,
+      },
+    },
     {
       $match: {
         userId: { $ne: null },
@@ -342,7 +351,6 @@ async function buildUserTrackDailyFromStreams(options = {}) {
     });
 
     if (bulkOps.length >= UPSERT_BATCH_SIZE) {
-      // eslint-disable-next-line no-await-in-loop
       await flushBulk();
     }
   }

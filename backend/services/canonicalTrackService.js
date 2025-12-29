@@ -66,21 +66,19 @@ async function ensureCanonicalForKey({
   canonicalKey,
   trackIds,
   playCountMap = new Map(),
+  existingAliases,
+  existingSiblingTracks,
   logger = console,
 }) {
   if (!canonicalKey || !trackIds?.length) return new Map();
   const aliasCol = db.collection(COLLECTIONS.trackAliases);
   const tracksCol = db.collection(COLLECTIONS.tracks);
 
-  const existingAliases = await aliasCol
-    .find({ canonicalKey }, { projection: { _id: 1, canonicalTrackId: 1 } })
-    .toArray();
-  const siblingTrackDocs = await tracksCol
-    .find({ canonicalKey }, { projection: { _id: 1 } })
-    .toArray();
+  const aliasesForKey = existingAliases || [];
+  const siblingTrackDocs = existingSiblingTracks || [];
 
   const candidateSet = new Set(trackIds);
-  existingAliases.forEach(doc => {
+  aliasesForKey.forEach(doc => {
     candidateSet.add(doc._id);
     if (doc.canonicalTrackId) {
       candidateSet.add(doc.canonicalTrackId);
@@ -90,16 +88,16 @@ async function ensureCanonicalForKey({
   const candidates = Array.from(candidateSet);
   if (!candidates.length) return new Map();
 
-  const presetCanonical = existingAliases.find(doc => doc.canonicalTrackId)?.canonicalTrackId;
+  const presetCanonical = aliasesForKey.find(doc => doc.canonicalTrackId)?.canonicalTrackId;
   const countMap =
     playCountMap.size || presetCanonical ? playCountMap : await fetchPlayCounts(db, candidates);
   const canonicalTrackId = presetCanonical || pickCanonicalTrackId(candidates, countMap);
   const now = new Date();
 
-  const aliasIds = new Set(existingAliases.map(doc => doc._id));
+  const aliasIds = new Set(aliasesForKey.map(doc => doc._id));
   const aliasesNeedUpdate =
     aliasIds.size !== candidates.length ||
-    existingAliases.some(
+    aliasesForKey.some(
       doc => !doc.canonicalTrackId || doc.canonicalTrackId !== canonicalTrackId || doc.canonicalKey !== canonicalKey
     );
 
@@ -195,19 +193,62 @@ async function ensureAliasesForTrackIds({
   }
 
   const playCountIds = new Set();
+  const keys = Array.from(byKey.keys());
+
+  const aliasesByKey = keys.length
+    ? await aliasCol
+        .find(
+          { canonicalKey: { $in: keys } },
+          { projection: { _id: 1, canonicalTrackId: 1, canonicalKey: 1 } }
+        )
+        .toArray()
+    : [];
+  const siblingTracksByKey = keys.length
+    ? await tracksCol
+        .find(
+          { canonicalKey: { $in: keys } },
+          { projection: { _id: 1, canonicalKey: 1, canonicalTrackId: 1 } }
+        )
+        .toArray()
+    : [];
+  let aliasesComplete = true;
   for (const ids of byKey.values()) {
     ids.forEach(id => playCountIds.add(id));
+    for (const id of ids) {
+      const alias = aliasLookup.get(id);
+      if (!alias || !alias.canonicalTrackId) {
+        aliasesComplete = false;
+        break;
+      }
+    }
+    if (!aliasesComplete) break;
   }
-  const playCountMap = await fetchPlayCounts(db, Array.from(playCountIds));
+  const playCountMap = aliasesComplete ? new Map() : await fetchPlayCounts(db, Array.from(playCountIds));
 
   const aliasMap = new Map();
   for (const [canonicalKey, ids] of byKey.entries()) {
-    // eslint-disable-next-line no-await-in-loop
+    const aliasesForKey = aliasesByKey.filter(doc => doc.canonicalKey === canonicalKey);
+    const siblingTracksForKey = siblingTracksByKey.filter(doc => doc.canonicalKey === canonicalKey);
+    const allAliasesPointSame =
+      aliasesForKey.length === ids.length &&
+      aliasesForKey.every(doc => doc.canonicalTrackId && doc.canonicalTrackId === aliasesForKey[0].canonicalTrackId);
+    const allTracksPointSame =
+      siblingTracksForKey.length === ids.length &&
+      siblingTracksForKey.every(
+        doc => doc.canonicalTrackId && doc.canonicalTrackId === siblingTracksForKey[0].canonicalTrackId
+      );
+    if (allAliasesPointSame && allTracksPointSame) {
+      const canonicalTrackId = aliasesForKey[0].canonicalTrackId;
+      ids.forEach(id => aliasMap.set(id, canonicalTrackId));
+      continue;
+    }
     const resolved = await ensureCanonicalForKey({
       db,
       canonicalKey,
       trackIds: ids,
       playCountMap,
+      existingAliases: aliasesForKey,
+      existingSiblingTracks: siblingTracksForKey,
       logger,
     });
     for (const [trackId, canonicalTrackId] of resolved.entries()) {

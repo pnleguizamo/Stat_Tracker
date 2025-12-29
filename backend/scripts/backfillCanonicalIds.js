@@ -8,7 +8,6 @@ const BATCH_SIZE = Number(process.env.CANONICAL_ENRICH_BATCH || 10000); // Neces
 async function main() {
   console.log(`[canonical-backfill] starting full backfill batchSize=${BATCH_SIZE}`);
   const start = Date.now();
-  debugger;
   const result = await backfillCanonicalIds({ batchSize: BATCH_SIZE, logger: console });
   const duration = Date.now() - start;
   console.log(

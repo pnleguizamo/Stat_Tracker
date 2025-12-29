@@ -2,6 +2,7 @@ const { initDb, COLLECTIONS } = require('../mongo.js');
 const { ensureDimensionStubs } = require('./streamNormalizationService.js');
 const { SpotifyMetadataClient, SpotifyRateLimitError } = require('./spotifyMetadataClient.js');
 const { getAccessToken } = require('./authService.js');
+const { buildCanonicalKey, ensureAliasesForTrackIds } = require('./canonicalTrackService.js');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRACK_BATCH_SIZE = Math.min(50, Number(process.env.METADATA_TRACK_BATCH || 25));
@@ -218,6 +219,7 @@ class MetadataCacheWorker {
     const albumIds = new Set();
     const artistIds = new Set();
     const artistNames = new Set();
+    const canonicalKeyByTrackId = new Map();
 
     for (const id of ids) {
       const track = trackMap.get(id);
@@ -238,6 +240,10 @@ class MetadataCacheWorker {
         .map(artist => artist?.name)
         .filter(Boolean);
       docArtistNames.forEach(name => artistNames.add(name));
+      const canonicalKey = buildCanonicalKey(track.name, docArtistNames);
+      if (canonicalKey) {
+        canonicalKeyByTrackId.set(track.id, canonicalKey);
+      }
 
       updates.push({
         updateOne: {
@@ -253,6 +259,7 @@ class MetadataCacheWorker {
               artistIds: docArtistIds,
               artistNames: docArtistNames,
               images: track.album?.images || [],
+              canonicalKey: canonicalKey || null,
               status: 'ready',
               lastFetchedAt: now,
               nextRefreshAt: new Date(now.getTime() + TRACK_REFRESH_MS),
@@ -286,6 +293,18 @@ class MetadataCacheWorker {
     if (artistIds.size) {
       await ensureDimensionStubs('artists', Array.from(artistIds), db);
       console.log(`[MetadataWorker] Ensured ${artistIds.size} artist stubs`);
+    }
+
+    if (canonicalKeyByTrackId.size) {
+      await ensureAliasesForTrackIds({
+        trackIds: Array.from(canonicalKeyByTrackId.keys()),
+        canonicalKeyByTrackId,
+        db,
+        logger: console,
+      });
+      console.log(
+        `[MetadataWorker] Ensured canonical aliases for ${canonicalKeyByTrackId.size} tracks`
+      );
     }
 
     return true;

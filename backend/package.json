@@ -28,10 +28,9 @@
     "start": "node server.js",
     "migrate:streams": "node scripts/migrateToNormalizedStreams.js",
     "ensure:track-stubs": "node scripts/ensureTrackStubs.js",
-    "rollups:backfill": "node scripts/backfillRollups.js",
-    "rollups:worker": "node scripts/rollupWorker.js",
+    "rollups:canonical-backfill": "node scripts/backfillCanonicalIds.js",
     "rollups:stream-counts": "node scripts/rollupStreamCounts.js",
-    "rollups:canonical-backfill": "node scripts/backfillCanonicalIds.js"
+    "rollups:backfill": "node scripts/backfillRollups.js"
   },
   "keywords": [],
   "author": "",

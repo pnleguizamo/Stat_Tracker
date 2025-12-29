@@ -362,12 +362,13 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                 {
                     $match: {
                         userId: { $in: userIds },
-                        reasonEnd: "trackdone"
+                        reasonEnd: "trackdone",
+                        canonicalTrackId: { $ne: null }
                     }
                 },
                 {
                     $group: {
-                        _id : "$trackId",
+                        _id : "$canonicalTrackId",
                         play_count: { $sum: 1 },
                         unique_users: { $addToSet: "$userId" }
                     }
@@ -424,7 +425,7 @@ mongoService.rollupUserCounts = async function (options = {}) {
     
     if (!startDate) artistCountsCol.deleteMany({});
 
-    const match = { reasonEnd: "trackdone" };
+    const match = { reasonEnd: "trackdone", canonicalTrackId: { $ne: null } };
     if (startDate || endDate) {
         match.ts = {};
         if (startDate) match.ts.$gte = startDate;
@@ -507,7 +508,7 @@ mongoService.rollupUserCounts = async function (options = {}) {
         { $match: match },
         {
             $group: {
-                _id: { userId: '$userId', trackId: '$trackId' },
+                _id: { userId: '$userId', trackId: '$canonicalTrackId' },
                 plays: { $sum: 1 },
                 msPlayed: { $sum: msExpr },
                 lastStreamTs: { $max: '$ts' },
