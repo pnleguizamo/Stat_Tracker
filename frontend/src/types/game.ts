@@ -43,11 +43,12 @@ export type WhoListenedMostAnswer = {
   targetSocketId: string;
 };
 
+// TODOo ensure types are right
 export type WhoListenedMostPrompt = {
   id: string;
   type: 'ARTIST' | 'TRACK' | 'INFO';
   track_name: string;
-  artists: string[];
+  artist_names: string[];
   subtitle?: string;
   description?: string;
   imageUrl?: string;
@@ -70,7 +71,7 @@ export type WhoListenedMostRoundState = {
   results?: {
     tally: Record<string, number>;
     totalVotes: number;
-    topListenerSocketId: string | null;
+    topListenerSocketIds: string[] | null;
     listenCounts?: Record<string, number>;
     winners?: string[];
   };

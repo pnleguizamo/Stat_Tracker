@@ -16,7 +16,7 @@ async function createIndex(){
     );
 }
 
-cron.schedule('*/3 * * * *', async () => {
+cron.schedule('*/10 * * * *', async () => {
     try {
         db = await initDb();
         
@@ -31,7 +31,7 @@ cron.schedule('*/3 * * * *', async () => {
             const token = await getAccessToken(accountId);
             const { tracks, maxPlayedAtMs } = await getRecentlyPlayedSongs(token, state.afterMs);
             const newStreamsCount = await syncRecentStreams(tracks, accountId);
-            console.log(`User ${display_name}: inserted ${newStreamsCount} new streams`);
+            if (newStreamsCount) console.log(`User ${display_name}: inserted ${newStreamsCount} new streams`);
             const end = Date.now();
             const ms = end - start;
             // console.log(`Cron finished in ${ms} ms (${(ms / 1000).toFixed(2)} seconds)`);

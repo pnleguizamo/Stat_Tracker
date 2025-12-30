@@ -296,7 +296,7 @@ mongoService.getListenCountsForSong = async function(userIds, trackId, artistNam
   }
 }
 
-mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 25) {
+mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 100) {
     try {
         if (!userIds || userIds.length === 0) {
             throw new Error('userIds array cannot be empty');
@@ -304,10 +304,14 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
         
         db = await initDb();
 
+        
+        const start = Date.now();
+
         const streamsCol = db.collection(COLLECTIONS.streams);
         const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
 
         const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
+        // hasRollups is never false
         const hasRollups = await trackCountsCol.findOne({ userId: { $in: userIds } }, { projection: { _id: 1 } });
 
         const weightMultiplier = 4;
@@ -335,6 +339,7 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                     _id: 1,
                     play_count: 1,
                     user_count: 1,
+                    users: 1,
                     listener_percentage: {
                         $multiply: [
                             { $divide: ["$user_count", userIds.length] },
@@ -352,7 +357,10 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                     $group: {
                         _id: "$trackId",
                         play_count: { $sum: "$plays" },
-                        unique_users: { $addToSet: "$userId" }
+                        unique_users: { $addToSet: "$userId" },
+                        users: {
+                            $push: { userId: '$userId', plays: '$plays' }
+                        },
                     }
                 },
                 { $addFields: { user_count: { $size: "$unique_users" } } },
@@ -401,13 +409,18 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                 play_count: song.play_count,
                 user_count: song.user_count,
                 listener_percentage: song.listener_percentage,
+                users: song.users,
+                topUserId: (song.users || []).reduce((best, u) => (u && u.plays > (best?.plays || 0) ? u : best),null)?.userId,
                 track_name: meta.name || null,
                 artist_names: meta.artistNames || [],
                 album_name: meta.albumName || null,
                 imageUrl: meta.images?.[0]?.url || null
             };
         });
-    
+        
+        const end = Date.now();
+        const ms = end - start;
+        console.log(`Query finished in ${ms} ms (${(ms / 1000).toFixed(2)} seconds)`);
         return resultSongs;
     } catch (error) {
         console.error("Error fetching shared top songs:", error);

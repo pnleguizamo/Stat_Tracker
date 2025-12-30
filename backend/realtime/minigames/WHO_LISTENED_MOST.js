@@ -1,4 +1,4 @@
-const { getSharedTopSongs, getListenCountsForSong } = require("../../services/mongoServices");
+const { getSharedTopSongs } = require("../../services/mongoServices");
 const { getAccessToken } = require('../../services/authService.js');
 
 function safeRoomLookup(getRoom, roomCode) {
@@ -7,26 +7,94 @@ function safeRoomLookup(getRoom, roomCode) {
   return room;
 }
 
-async function pickPrompt(room, customPrompt) {
-  if (customPrompt) return customPrompt;
-  // const idx = Math.floor(Math.random() * SAMPLE_PROMPTS.length);
+async function buildPromptPool(room) {
+  if (room.promptPool?.length) return room.promptPool;
 
-  const userIds = ['preethika.naveen', '31wxboit3bzjitqzphe2g65e2npa', 'fnk3g7l78s0kldllh9itee0ey']
+  const userIds = [];
   room.players.forEach((player, socketId) => {
     if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
   });
-  
+
   const accessToken = await getAccessToken(userIds[0]);
   const sharedTopSongs = await getSharedTopSongs(userIds, accessToken);
+  const prompts = (sharedTopSongs || []).map(song => {
+    const listenCounts = {};
+    (song.users || []).forEach(entry => {
+      if (!entry?.userId) return;
+      listenCounts[entry.userId] = entry.plays || 0;
+    });
+    return {
+      ...song,
+      type: 'TRACK',
+      description: `Who listened to ${song.track_name} most?`,
+      listenCounts,
+    };
+  });
 
-  const prompt = sharedTopSongs[0];
-  console.log(prompt);
+  room.promptPool = prompts;
+  return prompts;
+}
 
-  return {
-    ...prompt, 
-    type: "TRACK", 
-    description: `Who listened to ${prompt.track_name} most?`
-  };
+async function pickPrompt(room, customPrompt) {
+  if (customPrompt) return customPrompt;
+
+  const pool = await buildPromptPool(room);
+  if (!pool.length) {
+    throw new Error('NO_PROMPTS_AVAILABLE');
+  }
+
+  const winnersUsed = room.winnersUsed || new Set();
+  const tracksSeen = room.tracksSeen || new Set();
+  if (winnersUsed.size >= pool.length) {
+    winnersUsed.clear();
+  }
+
+  const total = pool.length;
+  room.promptPointer = typeof room.promptPointer === 'number' ? room.promptPointer : 0;
+  let attempts = 0;
+  let selected = null;
+
+  while (attempts < total && !selected) {
+    const promptIdx = room.promptPointer % total;
+    const prompt = pool[promptIdx];
+    room.promptPointer = promptIdx + 1;
+
+    if (tracksSeen.has(prompt.id)) {
+      attempts += 1;
+      continue;
+    }
+
+    if (prompt.topUserId && !winnersUsed.has(prompt.topUserId)) {
+      selected = prompt;
+      winnersUsed.add(prompt.topUserId);
+      tracksSeen.add(prompt.id);
+      break;
+    }
+
+    attempts += 1;
+  }
+
+  if (!selected) {
+    winnersUsed.clear();
+    let fallbackAttempts = 0;
+    while (fallbackAttempts < total && !selected) {
+      const promptIdx = room.promptPointer % total;
+      const prompt = pool[promptIdx];
+      room.promptPointer = promptIdx + 1;
+      if (tracksSeen.has(prompt.id)) {
+        fallbackAttempts += 1;
+        continue;
+      }
+      selected = prompt;
+      if (selected?.topUserId) winnersUsed.add(selected.topUserId);
+      if (selected?.id) tracksSeen.add(selected.id);
+    }
+  }
+
+  room.winnersUsed = winnersUsed;
+  room.tracksSeen = tracksSeen;
+  room.promptPointer = room.promptPointer ?? 0;
+  return selected;
 }
 
 async function createRoundState(room, params = {}) {
@@ -49,7 +117,7 @@ async function createRoundState(room, params = {}) {
   return roundState;
 }
 
-function computeResults(roundState, room, listenCounts) {
+function computeResults(roundState, room) {
   if (!roundState || !roundState.answers) {
     return { 
       tally: {}, 
@@ -60,17 +128,23 @@ function computeResults(roundState, room, listenCounts) {
     };
   }
 
-  let correctSocketId = null;
   let maxListens = 0;
+  const listenCounts = roundState?.prompt?.listenCounts || {};
   
   room.players.forEach((player, socketId) => {
     if (player.userId) {
       const count = listenCounts[player.userId] || 0;
       if (count > maxListens) {
         maxListens = count;
-        correctSocketId = socketId;
       }
     }
+  });
+
+  const correctSocketsSet = new Set();
+
+  room.players.forEach((player, socketId) => {
+      if(player.userId && (listenCounts[player.userId] || 0) == maxListens)
+        correctSocketsSet.add(socketId);
   });
 
   const tally = {};
@@ -82,7 +156,7 @@ function computeResults(roundState, room, listenCounts) {
 
   const winners = [];
   for (const [voterSocketId, submission] of Object.entries(roundState.answers)) {
-    if (submission?.answer?.targetSocketId === correctSocketId) {
+    if (correctSocketsSet.has(submission?.answer?.targetSocketId)) {
       winners.push(voterSocketId);
     }
   }
@@ -92,31 +166,11 @@ function computeResults(roundState, room, listenCounts) {
   return {
     tally, 
     totalVotes, 
-    topListenerSocketId : correctSocketId,
+    topListenerSocketIds: Array.from(correctSocketsSet),
     listenCounts,
     winners
   };
 }
-
-// function computeResults(roundState) {
-//   if (!roundState || !roundState.answers) return { tally: {}, totalVotes: 0, topListenerSocketId: null };
-//   const tally = {};
-//   for (const submission of Object.values(roundState.answers)) {
-//     const target = submission?.answer?.targetSocketId;
-//     if (!target) continue;
-//     tally[target] = (tally[target] || 0) + 1;
-//   }
-//   let topListenerSocketId = null;
-//   let maxVotes = 0;
-//   for (const [socketId, votes] of Object.entries(tally)) {
-//     if (votes > maxVotes) {
-//       maxVotes = votes;
-//       topListenerSocketId = socketId;
-//     }
-//   }
-//   const totalVotes = Object.values(tally).reduce((sum, count) => sum + count, 0);
-//   return { tally, totalVotes, topListenerSocketId };
-// }
 
 function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
   const { getRoom, broadcastGameState } = deps;
@@ -170,18 +224,13 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       const idx = room.currentStageIndex || 0;
       const round = room.roundState?.[idx];
 
-      const userIds = []
-      room.players.forEach((player, socketId) => {
-        if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
-      });
-      const listenCounts = await getListenCountsForSong(userIds, round.prompt.id, round.prompt.artist);
-
-      const results = computeResults(round, room, listenCounts);
+      const results = computeResults(round, room);
       if (round) {
         round.results = results;
         round.status = 'revealed';
         round.revealedAt = Date.now();
       }
+      console.log(results);
 
       // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:revealResults', { results });
       broadcastGameState?.(roomCode);

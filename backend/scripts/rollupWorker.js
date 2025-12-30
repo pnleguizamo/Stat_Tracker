@@ -6,7 +6,7 @@ const { buildUserTrackDailyFromStreams, buildUserSnapshots } = require('../servi
 const { rollupUserCounts } = require('../services/mongoServices.js');
 const { enrichRecentStreamsWithCanonicalIds } = require('../services/canonicalEnrichmentService.js');
 
-const SCHEDULE = process.env.ROLLUP_CRON || '30 3 * * *'; // default: 03:30 UTC daily
+const SCHEDULE = process.env.ROLLUP_CRON || '30 15 * * *';
 const RECENT_DAYS = Number(process.env.ROLLUP_RECENT_DAYS || 40);
 const CANONICAL_SCHEDULE = process.env.CANONICAL_ENRICH_CRON || '*/30 * * * *';
 const CANONICAL_WINDOW_DAYS = Number(process.env.CANONICAL_ENRICH_WINDOW_DAYS || 7);

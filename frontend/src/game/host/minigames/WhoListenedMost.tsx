@@ -22,6 +22,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
   const listenCounts = (round?.results?.listenCounts as Record<string, number> | undefined) || {};
   const winners = (round?.results?.winners as string[] | undefined) || [];
   
+  // TODO Changes order of board depending on votes. 
   const sortedVoteBoard = useMemo(() => {
     return [...players].sort((a, b) => {
       const aVotes = a.socketId ? voteTotals[a.socketId] || 0 : 0;
@@ -31,7 +32,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
   }, [players, voteTotals]);
 
   const roundStatus = round?.status || "pending";
-  const topListener = players.find((p: Player) => p.socketId && p.socketId === round?.results?.topListenerSocketId);
+  const topListeners = players.filter((p: Player) => p.socketId && round?.results?.topListenerSocketIds?.includes(p.socketId));
 
   const handleNewPrompt = () => {
     if (!roomCode) return;
@@ -88,7 +89,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
             {round.prompt.type === "TRACK" ? "Track" : round.prompt.type === "ARTIST" ? "Artist" : "Info"}
           </div>
           <h2 style={{ margin: "0.5rem 0", color: "#ffffffff", fontSize: 28 }}>{round.prompt.track_name}</h2>
-          {round.prompt.artists && <div style={{ fontSize: 16, color: "#ffffffff" }}>{round.prompt.artists.join(', ')}</div>}
+          {round.prompt.artist_names && <div style={{ fontSize: 16, color: "#ffffffff" }}>{round.prompt.artist_names.join(', ')}</div>}
           {round.prompt.description && (
             <p style={{ marginTop: "1rem", maxWidth: 420, color: "#cdd5ee" }}>{round.prompt.description}</p>
           )}
@@ -117,7 +118,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
         >
           {sortedVoteBoard.map((player) => {
             const votes = player.socketId ? voteTotals[player.socketId] || 0 : 0;
-            const isTop = player.socketId && player.socketId === round?.results?.topListenerSocketId;
+            const isTop = player.socketId && round?.results?.topListenerSocketIds?.includes(player.socketId);
             const actualListens = player.userId ? listenCounts[player.userId] || 0 : 0;
             
             return (
@@ -148,10 +149,26 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
 
       {roundStatus === "revealed" && (
         <>
-          {topListener && (
+          {topListeners.length > 0 && (
             <div style={{ padding: "1rem", borderRadius: 12, background: "#233044", color: "#ffffffff" }}>
-              <strong>{topListener.displayName || topListener.name}</strong> is the top listener with{" "}
-              {topListener.userId ? listenCounts[topListener.userId] || 0 : 0} plays!
+              {topListeners.length === 1 ? (
+                <>
+                  <strong>{topListeners[0].displayName || topListeners[0].name}</strong> is the top listener with{" "}
+                  {topListeners[0].userId ? listenCounts[topListeners[0].userId] || 0 : 0} plays!
+                </>
+              ) : (
+                <>
+                  <strong>Top listeners:</strong>{" "}
+                  {topListeners.map((p, idx) => {
+                    return (
+                      <span key={p.socketId || p.name}>
+                        {p.displayName || p.name}
+                        {idx < topListeners.length - 1 ? ", " : ""}
+                      </span>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
           

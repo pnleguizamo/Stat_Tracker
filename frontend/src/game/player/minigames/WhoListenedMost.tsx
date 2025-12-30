@@ -32,7 +32,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
 
   const results = round?.results;
   const isResultsShown = round?.status === "revealed";
-  const topPlayer = players.find((p: Player) => p.socketId && p.socketId === results?.topListenerSocketId);
+  // const topPlayer = players.find((p: Player) => p.socketId && p.socketId === results?.topListenerSocketId);
 
   function handleVote(targetSocketId: string) {
     if (!roomCode || !targetSocketId) return;
@@ -131,7 +131,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
               gap: 12,
             }}
           >
-            {sortedResults.map((player) => {
+            {/* {sortedResults.map((player) => {
               const socketId = player.socketId;
               if (!socketId) return null;
               const votes = voteTotals[socketId] || 0;
@@ -154,13 +154,13 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
                     )}
                   </div>
                 );
-              })}
+              })} */}
             </div>
-          {topPlayer && (
+          {/* {topPlayer && (
             <div style={{ marginTop: 12, fontWeight: 600 }}>
               {topPlayer.displayName || topPlayer.name} actually listened the most!
             </div>
-          )}
+          )} */}
         </section>
       )}
     </>
