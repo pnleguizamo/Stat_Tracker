@@ -88,7 +88,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
           <div style={{ fontSize: 12, textTransform: "uppercase", color: "#8f9bb3", letterSpacing: 1 }}>
             {round.prompt.type === "TRACK" ? "Track" : round.prompt.type === "ARTIST" ? "Artist" : "Info"}
           </div>
-          <h2 style={{ margin: "0.5rem 0", color: "#ffffffff", fontSize: 28 }}>{round.prompt.track_name}</h2>
+          <h2 style={{ margin: "0.5rem 0", color: "#ffffffff", fontSize: 28 }}>{round.prompt.type === "TRACK" ? round.prompt.track_name : round.prompt.artist_name}</h2>
           {round.prompt.artist_names && <div style={{ fontSize: 16, color: "#ffffffff" }}>{round.prompt.artist_names.join(', ')}</div>}
           {round.prompt.description && (
             <p style={{ marginTop: "1rem", maxWidth: 420, color: "#cdd5ee" }}>{round.prompt.description}</p>

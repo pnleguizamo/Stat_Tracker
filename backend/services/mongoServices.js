@@ -203,7 +203,7 @@ mongoService.getRollupDashboard = async function (userId, options = {}) {
         snapshots: snapshotsDoc?.windows || {},
         highlights,
         daily,
-        generatedAt: snapshotsDoc?.generatedAt || null,
+        updatedAt: snapshotsDoc?.updatedAt || null,
     };
 }
 
@@ -296,6 +296,137 @@ mongoService.getListenCountsForSong = async function(userIds, trackId, artistNam
   }
 }
 
+mongoService.getSharedTopArtists = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 100) {
+    try {
+        if (!userIds || userIds.length === 0) {
+            throw new Error('userIds array cannot be empty');
+        }
+
+        db = await initDb();
+
+        const start = Date.now();
+
+        const streamsCol = db.collection(COLLECTIONS.streams);
+        const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
+        const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
+
+        // hasRollups is never false
+        const hasRollups = await artistCountsCol.findOne({ userId: { $in: userIds } }, { projection: { _id: 1 } });
+
+        const weightMultiplier = 4;
+        const playCountStifler = 1000;
+
+        const basePipeline = [
+            { $addFields:
+                {
+                    playCountWeight: {
+                        $divide: [
+                            { $multiply: [{ $pow: ["$play_count", 0.7] }, { $ln: "$play_count" }] },
+                            playCountStifler
+                        ]
+                    },
+                    userCountWeight: { $max: [1, "$user_count"] }
+                },
+            },
+            { $addFields: { weight: { $pow: [{ $add: ["$playCountWeight", "$userCountWeight"] }, weightMultiplier] } } },
+            { $addFields: { randScore: { $divide: [{ $multiply: [-1, { $ln: { $rand: {} } }] }, "$weight"] } } },
+            { $sort: { randScore: 1 } },
+            { $limit: sampleSize },
+            { $project: { weight: 0, randScore: 0 } },
+            {
+                $project: {
+                    _id: 1,
+                    play_count: 1,
+                    user_count: 1,
+                    users: 1,
+                    listener_percentage: {
+                        $multiply: [
+                            { $divide: ["$user_count", userIds.length] },
+                            100
+                        ]
+                    }
+                }
+            }
+        ];
+
+        const sourcePipeline = hasRollups
+            ? [
+                { $match: { userId: { $in: userIds } } },
+                {
+                    $group: {
+                        _id: "$artistId",
+                        play_count: { $sum: "$plays" },
+                        unique_users: { $addToSet: "$userId" },
+                        users: {
+                            $push: { userId: '$userId', plays: '$plays' }
+                        },
+                    }
+                },
+                { $addFields: { user_count: { $size: "$unique_users" } } },
+                { $match: { user_count: { $gte: minAccounts } } },
+            ]
+            : [
+                {
+                    $match: {
+                        userId: { $in: userIds },
+                        reasonEnd: "trackdone",
+                        canonicalTrackId: { $ne: null },
+                        artistId: { $ne: null },
+                    }
+                },
+                {
+                    $group: {
+                        _id : "$artistId",
+                        play_count: { $sum: 1 },
+                        unique_users: { $addToSet: "$userId" }
+                    }
+                },
+                { $addFields: { user_count: { $size: "$unique_users" } } },
+                { $match: { user_count: { $gte: minAccounts } } },
+            ];
+
+        const pipeline = [...sourcePipeline, ...basePipeline];
+        const sourceCol = hasRollups ? artistCountsCol : streamsCol;
+        const sharedArtists = await sourceCol.aggregate(pipeline).toArray();
+
+
+        const artistIds = sharedArtists.map(artist => artist?._id).filter(Boolean);
+        const artistsCol = db.collection(COLLECTIONS.artists);
+        const metadata = artistIds.length
+            ? await artistsCol
+                .find(
+                    { _id: { $in: artistIds } },
+                    { projection: { name: 1, images: 1 } }
+                )
+                .toArray()
+            : [];
+        const metaMap = new Map(metadata.map(doc => [doc._id, doc]));
+
+        const resultArtists = sharedArtists.map(artist => {
+            const meta = metaMap.get(artist._id) || {};
+            return {
+                id: artist._id,
+                play_count: artist.play_count,
+                user_count: artist.user_count,
+                listener_percentage: artist.listener_percentage,
+                users: artist.users,
+                topUserId: (artist.users || []).reduce((best, u) => (u && u.plays > (best?.plays || 0) ? u : best), null)?.userId,
+                artist_name: meta.name || null,
+                weight: artist.weight,
+                imageUrl: meta.images?.[0]?.url || null
+            };
+        });
+
+        const end = Date.now();
+        const ms = end - start;
+        console.log(`Query (artists) finished in ${ms} ms (${(ms / 1000).toFixed(2)} seconds)`);
+        return resultArtists;
+    } catch (error) {
+        console.error("Error fetching shared top artists:", error);
+        throw error;
+    }
+};
+
 mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccountsPercentage = 0.5, sampleSize = 100) {
     try {
         if (!userIds || userIds.length === 0) {
@@ -304,7 +435,7 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
         
         db = await initDb();
 
-        
+
         const start = Date.now();
 
         const streamsCol = db.collection(COLLECTIONS.streams);

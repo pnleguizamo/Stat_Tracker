@@ -460,7 +460,6 @@ async function buildUserTrackDailyFromStreams(options = {}) {
             topAlbums,
             lastStreamTs: entry.lastStreamTs,
             qualifiedMsThreshold,
-            generatedAt: now,
             updatedAt: now,
           },
           $setOnInsert: { createdAt: now, userId: entry.userId, day: entry.day },
@@ -745,7 +744,6 @@ async function buildUserSnapshots(options = {}) {
         $set: {
           userId,
           windows: windowsDoc,
-          generatedAt: now,
           updatedAt: now,
         },
         $setOnInsert: { createdAt: now },

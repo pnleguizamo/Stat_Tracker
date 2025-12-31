@@ -86,7 +86,7 @@ function CurrentlyPlaying() {
           <div>
             <p className="eyebrow">Listening dashboard</p>
             <h1 className="page-title">{profileName || 'Your Stats'}</h1>
-            <p className="subdued">Last refreshed {rollup.generatedAt ? formatDate(rollup.generatedAt) : 'recently'}</p>
+            <p className="subdued">Last refreshed {rollup.updatedAt ? formatDate(rollup.updatedAt) : 'recently'}</p>
           </div>
         </div>
         <div className="hero-metrics">
