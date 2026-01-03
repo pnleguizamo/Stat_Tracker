@@ -33,7 +33,7 @@ export const Leaderboard: React.FC<Props> = ({ scoreboard, players, roundId, onC
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.6)",
+        background: "rgba(0,0,0,0.3)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

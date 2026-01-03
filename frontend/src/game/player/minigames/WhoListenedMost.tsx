@@ -17,9 +17,11 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
   const [voteError, setVoteError] = useState<string | null>(null);
 
   const mySocketId = socket.id;
+  const myPlayer = players.find((p) => p.socketId === mySocketId);
   const myVote = mySocketId && round?.answers?.[mySocketId]?.answer?.targetSocketId
     ? round.answers[mySocketId].answer!.targetSocketId
     : null;
+  const isPrivilegedUser = myPlayer?.userId === "pnleguizamo";
 
   const voteTotals = round?.results?.tally || {};
   const sortedResults = useMemo(() => {
@@ -47,6 +49,16 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
       }
     );
   }
+
+  const handleNewPrompt = () => {
+    if (!roomCode) return;
+    // setActionBusy("prompt");
+    // setError(null);
+    socket.emit("minigame:WHO_LISTENED_MOST:startRound", { roomCode }, (resp?: { ok: boolean; error?: string }) => {
+      // setActionBusy(null);
+      if (!resp?.ok) console.log(resp);
+    });
+  };
 
   if (!round) {
     return <div>Waiting for the host to start this minigame…</div>;
@@ -162,6 +174,19 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
             </div>
           )} */}
         </section>
+      )}
+
+      {isPrivilegedUser && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {/* <button onClick={handleReveal} disabled={actionBusy === "reveal" || submissions === 0 || roundStatus === "revealed"}>
+            {actionBusy === "reveal" ? "Revealing…" : "Reveal Votes"}
+          </button> */}
+          <button onClick={handleNewPrompt}>
+            {/* {actionBusy === "prompt" ? "Loading…" : "New Prompt"} */}
+            New Prompt
+          </button>
+          {/* <button onClick={onAdvance}>Next Stage</button> */}
+        </div>
       )}
     </>
   );

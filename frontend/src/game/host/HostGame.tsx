@@ -117,7 +117,7 @@ const HostGame = () => {
         )}
       </main>
 
-      {showLeaderboard && (
+      {showLeaderboard && gameState.currentRoundState?.status === "revealed" && (
         <Leaderboard
           scoreboard={gameState.scoreboard}
           players={gameState.players}
