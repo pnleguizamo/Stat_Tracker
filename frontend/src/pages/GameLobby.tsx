@@ -124,7 +124,6 @@ const GameLobby: React.FC = () => {
         setError(resp?.error || 'Failed to update profile');
       }
     });
-    console.log("Room update prof ", room)
   }
 
   const handleCreateRoom = () => {

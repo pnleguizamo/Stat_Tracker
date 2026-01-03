@@ -58,8 +58,9 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
     if (!roomCode) return;
     if (round) return;
     if (actionBusy === "prompt") return;
+    if (error) return;
     handleNewPrompt();
-  }, [round, roomCode, actionBusy]);
+  }, [round, roomCode, actionBusy, error]);
 
   if (!round) {
     return (

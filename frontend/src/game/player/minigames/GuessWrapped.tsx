@@ -56,15 +56,15 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
 
   return (
     <>
-      <section style={{ background: "#10141c", padding: 16, borderRadius: 12, marginBottom: 24 }}>
+      {/* <section style={{ background: "#10141c", padding: 16, borderRadius: 12, marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: "#ffffffff", textTransform: "uppercase", letterSpacing: 1 }}>
           {prompt.year} Spotify Wrapped
         </div>
         <h3 style={{ margin: "6px 0", color: "#ffffffff" }}>{prompt.minutesListened.toLocaleString()} minutes listened</h3>
         {prompt.topGenre && <div style={{ color: "#ffffffff" }}>Top genre: {prompt.topGenre}</div>}
-      </section>
+      </section> */}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24, color : "#ffffffff" }}>
+      {/* <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24, color : "#ffffffff" }}>
         <div style={{ background: "#0f172a", padding: 16, borderRadius: 12 }}>
           <h4>Top Artists</h4>
           <ol style={{ margin: 0, paddingLeft: 20 }}>
@@ -87,7 +87,7 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
             ))}
           </ol>
         </div>
-      </section>
+      </section> */}
 
       <section style={{ marginBottom: 24, color : "#ffffffff" }}>
         <div style={{ marginBottom: 8 }}>

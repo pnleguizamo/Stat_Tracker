@@ -61,7 +61,7 @@ function computeResults(round, room) {
 module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps = {}) {
   const { getRoom, broadcastGameState, applyAwards, computeTimeScore, scheduleRoundTimer, clearRoundTimer } = deps;
   const logger = deps.logger || console;
-  const ROUND_DURATION_MS = 20000;
+  const ROUND_DURATION_MS = 40000;
 
   const reveal = (room, roomCode, idx, cb) => {
     const round = room.roundState?.[idx];

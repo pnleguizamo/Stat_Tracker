@@ -63,7 +63,7 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance }) 
   const { prompt } = round;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", color: "#ffffffff" }}>
       <section style={{ background: "#14181f", padding: "1.5rem", borderRadius: 12 }}>
         <div style={{ fontSize: 12, color: "#8091b0", textTransform: "uppercase", letterSpacing: 1 }}>
           {prompt.year} Spotify Wrapped
