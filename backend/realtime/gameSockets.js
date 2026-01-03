@@ -11,6 +11,8 @@ const {
   updatePlayerProfile,
   getGameState,
 } = roomsModule;
+const { applyAwards, computeTimeScore } = require('./scoring');
+const { scheduleRoundTimer, clearRoundTimer } = require('./timers');
 const minigameRegistry = require('./minigames');
 const { registerStagePlanListeners } = require('./stagePlanSockets');
 
@@ -38,6 +40,10 @@ function initGameSockets(io) {
         getGameState,
         updatePlayerProfile,
         broadcastGameState,
+        applyAwards,
+        computeTimeScore,
+        scheduleRoundTimer,
+        clearRoundTimer,
         logger: console,
       });
     } catch (err) {

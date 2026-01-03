@@ -59,8 +59,36 @@ function computeResults(round, room) {
 }
 
 module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps = {}) {
-  const { getRoom, broadcastGameState } = deps;
+  const { getRoom, broadcastGameState, applyAwards, computeTimeScore, scheduleRoundTimer, clearRoundTimer } = deps;
   const logger = deps.logger || console;
+  const ROUND_DURATION_MS = 20000;
+
+  const reveal = (room, roomCode, idx, cb) => {
+    const round = room.roundState?.[idx];
+    if (!round || round.minigameId !== 'GUESS_SPOTIFY_WRAPPED') return cb?.({ ok: false, error: 'ROUND_NOT_READY' });
+    if (round.status === 'revealed') return cb?.({ ok: true, results: round.results });
+
+    round.results = computeResults(round, room);
+    round.status = 'revealed';
+    round.revealedAt = Date.now();
+    clearRoundTimer?.(room, idx);
+    if (applyAwards && round.results?.winners?.length) {
+      const awards = round.results.winners.map((socketId) => ({
+        socketId,
+        points: computeTimeScore(round, socketId),
+        reason: 'correct',
+        meta: {
+          minigameId: 'GUESS_SPOTIFY_WRAPPED',
+          roundId: round.id,
+          stageIndex: idx,
+        },
+      }));
+      applyAwards(room, awards);
+    }
+    broadcastGameState?.(roomCode);
+    cb?.({ ok: true, results: round.results });
+    return { ok: true, results: round.results };
+  };
 
   socket.on('minigame:GUESS_SPOTIFY_WRAPPED:startRound', async ({ roomCode } = {}, cb) => {
     try {
@@ -89,6 +117,13 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
         answers: {},
         startedAt: Date.now(),
       };
+      room.roundState[idx].expiresAt = scheduleRoundTimer(room, idx, ROUND_DURATION_MS, () => {
+        try {
+          reveal(room, roomCode, idx);
+        } catch (err) {
+          logger.error('GUESS_SPOTIFY_WRAPPED auto reveal failed', err);
+        }
+      });
 
       broadcastGameState?.(roomCode);
       cb?.({ ok: true });
@@ -113,8 +148,15 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
       }
 
       round.answers = round.answers || {};
+      if (round.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
       round.answers[socket.id] = { answer, at: Date.now() };
       broadcastGameState?.(roomCode);
+
+      const totalPlayers = room.players.size;
+      const answersCount = Object.keys(round.answers || {}).length;
+      if (totalPlayers > 0 && answersCount >= totalPlayers) {
+        reveal(room, roomCode, idx);
+      }
       cb?.({ ok: true });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
@@ -131,16 +173,10 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
         typeof room.currentStageIndex === 'number' && room.currentStageIndex >= 0
           ? room.currentStageIndex
           : 0;
-      const round = room.roundState?.[idx];
-      if (!round || round.minigameId !== 'GUESS_SPOTIFY_WRAPPED') {
-        return cb?.({ ok: false, error: 'ROUND_NOT_READY' });
+      const result = reveal(room, roomCode, idx, cb);
+      if (!cb && result?.ok) {
+        broadcastGameState?.(roomCode);
       }
-
-      round.results = computeResults(round, room);
-      round.status = 'revealed';
-      round.revealedAt = Date.now();
-      broadcastGameState?.(roomCode);
-      cb?.({ ok: true, results: round.results });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
       logger.error('GUESS_SPOTIFY_WRAPPED reveal error', err);

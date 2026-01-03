@@ -43,6 +43,7 @@ function createRoom(hostSocketId, profile = {}, displayName, userId) {
     createdAt: new Date(),
     hostSocketId,
     phase: 'lobby',
+    scoreboard: {},
     roundState: {},
     stagePlan: [
       { index: 0, minigameId: 'WHO_LISTENED_MOST' },
@@ -51,12 +52,13 @@ function createRoom(hostSocketId, profile = {}, displayName, userId) {
     ],
   };
 
-  room.players.set(hostSocketId, {
-    name: chosenName,
-    userId,
-    displayName: profile.displayName || chosenName,
-    avatar: profile.avatar || null,
-  });
+  // remove host screen from game
+  // room.players.set(hostSocketId, {
+  //   name: chosenName,
+  //   userId,
+  //   displayName: profile.displayName || chosenName,
+  //   avatar: profile.avatar || null,
+  // });
 
   rooms.set(roomCode, room);
   return { roomCode, room };
@@ -95,7 +97,9 @@ function startGame(roomCode) {
 
   room.phase = 'inGame';
   room.currentStageIndex = 0;
-  room.roundState = {};
+  room.scoreboard = {};
+  // room.roundState = {}; // Todo ensureStageState doesn't modify roundState anymore
+  room.roundTimers = {};
 
   return room;
 }
@@ -212,6 +216,29 @@ function getGameState(roomCode) {
           return clone;
         })()
       : null,
+    scoreboard: (() => {
+      const board = room.scoreboard || {};
+      const clone = {};
+      
+      for (const socketId of room.players.keys()) {
+        const entry = board[socketId] || null;
+        clone[socketId] = {
+          points: entry?.points || 0,
+          stats: { ...(entry?.stats || {}) },
+          awards: Array.isArray(entry?.awards) ? [...entry.awards] : [],
+        };
+      }
+      
+      for (const [socketId, entry] of Object.entries(board)) {
+        if (clone[socketId]) continue;
+        clone[socketId] = {
+          points: entry?.points || 0,
+          stats: { ...(entry?.stats || {}) },
+          awards: Array.isArray(entry?.awards) ? [...entry.awards] : [],
+        };
+      }
+      return clone;
+    })(),
   };
 }
 

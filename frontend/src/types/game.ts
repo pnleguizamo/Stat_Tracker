@@ -68,6 +68,7 @@ export type WhoListenedMostRoundState = {
     }
   >;
   startedAt?: number;
+  expiresAt?: number;
   revealedAt?: number;
   results?: {
     tally: Record<string, number>;
@@ -115,6 +116,7 @@ export type GuessWrappedRoundState = {
     avatar?: string | null;
   } | null;
   startedAt?: number;
+  expiresAt?: number;
   revealedAt?: number;
   results?: {
     votes: Record<string, number>;
@@ -130,10 +132,24 @@ export type GuessWrappedRoundState = {
 
 export type MinigameRoundState = WhoListenedMostRoundState | GuessWrappedRoundState;
 
+export type ScoreAward = {
+  points: number;
+  reason?: string;
+  meta?: Record<string, unknown> | null;
+  at?: number;
+};
+
+export type ScoreboardEntry = {
+  points: number;
+  stats?: Record<string, unknown>;
+  awards?: ScoreAward[];
+};
+
 export type GameState = RoomState & {
   phase: string;
   stagePlan: StageConfig[];
   currentStageIndex: number | null;
   currentStageConfig: StageConfig | null;
   currentRoundState: MinigameRoundState | null;
+  scoreboard?: Record<string, ScoreboardEntry>;
 };

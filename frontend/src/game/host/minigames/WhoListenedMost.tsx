@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 import { socket } from "socket";
 import { GameState, Player, WhoListenedMostRoundState } from "types/game";
 
@@ -54,13 +54,20 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
     });
   };
 
+  useEffect(() => {
+    if (!roomCode) return;
+    if (round) return;
+    if (actionBusy === "prompt") return;
+    handleNewPrompt();
+  }, [round, roomCode, actionBusy]);
+
   if (!round) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
-        <p>No prompt yet. Generate the first artist or track to get started!</p>
-        <button onClick={handleNewPrompt} disabled={actionBusy === "prompt"}>
+        <p>Loading the first prompt</p>
+        {/* <button onClick={handleNewPrompt} disabled={actionBusy === "prompt"}>
           {actionBusy === "prompt" ? "Generating..." : "Create Prompt"}
-        </button>
+        </button> */}
         {error && <p style={{ color: "red" }}>{error}</p>}
       </div>
     );
@@ -133,9 +140,24 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance }) =
               >
                 <div style={{ fontWeight: 600, color: "#ffffffff" }}>
                   {player.displayName || player.name}
+                  {!!(player.socketId && round.answers?.[player.socketId] && roundStatus === "collecting") && <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "2px 6px",
+                      borderRadius: 999,
+                      background: "#2f855a",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    ✓
+                  </span>}
                   {isTop && <span style={{ marginLeft: 6, color: "#48bb78" }}>🏆</span>}
                 </div>
-                <div style={{ fontSize: 13, color: "#9db2d0" }}>{votes} vote(s)</div>
+                {roundStatus === "revealed" && <div style={{ fontSize: 13, color: "#9db2d0" }}>{votes} vote(s)</div>}
                 {roundStatus === "revealed" && (
                   <div style={{ fontSize: 12, color: "#68d391", marginTop: 4 }}>
                     {actualListens} actual listens

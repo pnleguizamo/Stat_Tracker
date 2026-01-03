@@ -5,8 +5,7 @@ import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
 import { GameState, MinigameId } from "types/game";
-// import { GenreGuessHostView } from "./minigames/GenreGuessHostView";
-// etc.
+import { Leaderboard } from "./Leaderboard";
 
 type HostMinigameProps = {
   roomCode: string;
@@ -27,6 +26,9 @@ const HostGame = () => {
   const params = useParams();
   const roomCode = params.roomCode || "";
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [lastRevealedRoundId, setLastRevealedRoundId] = useState<string | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -42,6 +44,31 @@ const HostGame = () => {
       socket.off("gameStateUpdated", handler);
     };
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!gameState?.currentRoundState) return;
+    const round = gameState.currentRoundState;
+    if (round.status === "revealed" && round.id !== lastRevealedRoundId) {
+      setShowLeaderboard(true);
+      setLastRevealedRoundId(round.id);
+      const timer = setTimeout(() => setShowLeaderboard(false), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState, lastRevealedRoundId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const round = gameState?.currentRoundState;
+      const expiresAt = round?.expiresAt;
+      if (!expiresAt || round?.status === 'revealed') {
+        setRemainingMs(null);
+        return;
+      }
+      const delta = expiresAt - Date.now();
+      setRemainingMs(delta > 0 ? delta : 0);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [gameState?.currentRoundState?.expiresAt, gameState?.currentRoundState?.status]);
 
   const currentStage = gameState?.currentStageConfig;
   const HostMinigame = useMemo(() => {
@@ -66,6 +93,11 @@ const HostGame = () => {
             ? `Stage ${gameState.currentStageIndex + 1} / ${gameState.stagePlan.length}`
             : "Waiting for first stage"}
         </div>
+        <div>
+          {remainingMs !== null
+            ? `Time left: ${Math.max(0, Math.ceil(remainingMs / 1000))}s`
+            : "No timer running"}
+        </div>
       </header>
 
       {/* Minigame-specific view */}
@@ -84,6 +116,15 @@ const HostGame = () => {
           </div>
         )}
       </main>
+
+      {showLeaderboard && (
+        <Leaderboard
+          scoreboard={gameState.scoreboard}
+          players={gameState.players}
+          roundId={gameState.currentRoundState?.id}
+          onClose={() => setShowLeaderboard(false)}
+        />
+      )}
     </div>
   );
 };

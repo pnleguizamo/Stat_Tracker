@@ -202,8 +202,36 @@ function computeResults(roundState, room) {
 }
 
 function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
-  const { getRoom, broadcastGameState } = deps;
+  const { getRoom, broadcastGameState, applyAwards, computeTimeScore, scheduleRoundTimer, clearRoundTimer } = deps;
   const logger = deps.logger || console;
+  const ROUND_DURATION_MS = 20000;
+
+  const reveal = (room, idx, roomCode, cb) => {
+    const round = room.roundState?.[idx];
+    if (!round || round.minigameId !== 'WHO_LISTENED_MOST') return cb?.({ ok: false, error: 'ROUND_NOT_READY' });
+    if (round.status === 'revealed') return cb?.({ ok: true, results: round.results });
+
+    round.results = computeResults(round, room);
+    round.status = 'revealed';
+    round.revealedAt = Date.now();
+    clearRoundTimer?.(room, idx);
+    if (applyAwards && round.results?.winners?.length) {
+      const awards = round.results.winners.map((socketId) => ({
+        socketId,
+        points: computeTimeScore(round, socketId),
+        reason: 'correct',
+        meta: {
+          minigameId: 'WHO_LISTENED_MOST',
+          roundId: round.id,
+          stageIndex: idx,
+        },
+      }));
+      applyAwards(room, awards);
+    }
+    broadcastGameState?.(roomCode);
+    cb?.({ ok: true, results: round.results });
+    return { ok: true, results: round.results };
+  };
 
   socket.on('minigame:WHO_LISTENED_MOST:startRound', async ({ roomCode, params } = {}, cb) => {
     try {
@@ -213,6 +241,17 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       }
 
       const roundState = await createRoundState(room, params);
+      const idx =
+        typeof room.currentStageIndex === 'number' && room.currentStageIndex >= 0
+          ? room.currentStageIndex
+          : 0;
+      roundState.expiresAt = scheduleRoundTimer(room, idx, ROUND_DURATION_MS, () => {
+        try {
+          reveal(room, idx, roomCode);
+        } catch (err) {
+          logger.error('WHO_LISTENED_MOST auto reveal failed', err);
+        }
+      });
 
       // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:roundStarted', { roundState });
       broadcastGameState?.(roomCode);
@@ -230,11 +269,19 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       const idx = room.currentStageIndex || 0;
       room.roundState = room.roundState || {};
       room.roundState[idx] = room.roundState[idx] || { answers: {} };
-      room.roundState[idx].answers[socket.id] = {
+      const activeRound = room.roundState[idx];
+      if (activeRound.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
+      activeRound.answers[socket.id] = {
         answer,
         at: Date.now(),
       };
       broadcastGameState?.(roomCode);
+
+      const totalPlayers = room.players.size;
+      const answersCount = Object.keys(activeRound.answers || {}).length;
+      if (totalPlayers > 0 && answersCount >= totalPlayers) {
+        reveal(room, idx, roomCode);
+      }
 
       // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:answerReceived', { socketId: socket.id });
       cb?.({ ok: true });
@@ -251,18 +298,10 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       if (room.hostSocketId !== socket.id) return cb?.({ ok: false, error: 'NOT_HOST' });
 
       const idx = room.currentStageIndex || 0;
-      const round = room.roundState?.[idx];
-
-      const results = computeResults(round, room);
-      if (round) {
-        round.results = results;
-        round.status = 'revealed';
-        round.revealedAt = Date.now();
+      const result = reveal(room, idx, roomCode, cb);
+      if (!cb && result?.ok) {
+        broadcastGameState?.(roomCode);
       }
-
-      // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:revealResults', { results });
-      broadcastGameState?.(roomCode);
-      cb?.({ ok: true, results });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
       logger.error('WHO_LISTENED_MOST reveal error', err);

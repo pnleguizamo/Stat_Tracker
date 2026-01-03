@@ -1,5 +1,6 @@
 const minigameRegistry = require('./minigames');
 
+// TODOo determine if even necessary
 const ensureStageState = async (room) => {
   try {
     if (!room || !room.stagePlan) return;
@@ -11,7 +12,7 @@ const ensureStageState = async (room) => {
 
     const stageModule = minigameRegistry.modules?.[stageConfig.minigameId];
     if (stageModule?.createRoundState) {
-      await stageModule.createRoundState(room, { stageIndex });
+      // await stageModule.createRoundState(room, { stageIndex });
       return;
     }
 
@@ -72,14 +73,14 @@ function registerStagePlanListeners(io, socket, deps) {
       return;
     }
 
-    const started = startGame(roomCode);
-    if (!started) {
-      cb?.({ ok: false, error: 'CANT_START' });
-      return;
-    }
+    // const started = startGame(roomCode);
+    // if (!started) {
+    //   cb?.({ ok: false, error: 'CANT_START' });
+    //   return;
+    // }
 
-    await ensureStageState(started);
-    broadcastGameState(roomCode);
+    await ensureStageState(room);
+    broadcastGameState(roomCode); // TODOo Broadcast causes players to navigate prematurely (because of commented startGame)
 
     cb?.({ ok: true });
   });

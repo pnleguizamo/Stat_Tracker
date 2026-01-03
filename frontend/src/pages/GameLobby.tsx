@@ -67,21 +67,15 @@ const GameLobby: React.FC = () => {
     socket.on('roomUpdated', handleRoomUpdated);
 
     function handleGameStateUpdated(payload: any) {
-      console.log("GAME STATE UPDATED")
-      console.log(payload);
-      console.log("PRE CHECK ", room);
       const currentRoom = roomRef.current;
       // if the game has started, navigate non-host players to the player screen
       if (!payload || payload.phase !== 'inGame') return;
       if (!currentRoom) {
-        console.log("NOT ROOM")
-        console.log(room);
         return; 
       }
       if (payload.roomCode && payload.roomCode !== currentRoom.roomCode) return;
       if (currentRoom.hostSocketId === socket.id) return; // host stays with host flow
       // navigate non-hosts to the player screen for this room
-      console.log("NAVIGATE");
       navigate(`/game/${currentRoom.roomCode}`);
     }
 

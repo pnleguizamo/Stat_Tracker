@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 import { socket } from "socket";
 import { GameState, Player, WhoListenedMostRoundState } from "types/game";
 
@@ -114,23 +114,23 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
           })}
         </div>
         {voteError && <div style={{ marginTop: 8, color: "salmon" }}>{voteError}</div>}
-        {!isResultsShown && (
+        {!isResultsShown && !!myVote && (
           <div style={{ marginTop: 8, fontSize: 13, color: "#94a3b8" }}>
-            Waiting for the host to reveal the results{voteBusy ? "…" : "."}
+            Waiting for the results reveal{voteBusy ? "…" : "."}
           </div>
         )}
       </section>
 
       {isResultsShown && (
         <section style={{ marginBottom: 24 }}>
-          <h4>Votes</h4>
-          <div
+          <h4>Results Revealed!</h4>
+          {/* <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
             }}
-          >
+          > */}
             {/* {sortedResults.map((player) => {
               const socketId = player.socketId;
               if (!socketId) return null;
@@ -155,7 +155,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
                   </div>
                 );
               })} */}
-            </div>
+            {/* </div> */}
           {/* {topPlayer && (
             <div style={{ marginTop: 12, fontWeight: 600 }}>
               {topPlayer.displayName || topPlayer.name} actually listened the most!
