@@ -74,6 +74,9 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const loopInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pauseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrackRef = useRef<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastPreviewKeyRef = useRef<string | null>(null);
+  const playbackSessionRef = useRef(0);
 
   const currentSnippetMs = round?.snippetPlan?.[round.currentSnippetIndex || 0] || 0;
   const songsPerGame =
@@ -112,7 +115,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     const player = new window.Spotify.Player({
       name: 'Stat Tracker — Heardle Host',
       getOAuthToken: (cb: (token: string) => void) => cb(token),
-      volume: 0.8,
+      volume: 1,
     });
 
     player.addListener('ready', ({ device_id }: { device_id: string }) => {
@@ -163,10 +166,43 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     };
   }, [round?.song?.id, round?.currentSnippetIndex, deviceId, token, round?.status, currentSnippetMs]);
 
+  useEffect(() => {
+    if (!round || round.status !== 'revealed') return;
+    const trackName = round.song?.track_name || '';
+    if (!trackName) return;
+    const artistName = round.song.artist_names?.[0] || "";
+    const previewKey = round.song?.id || trackName;
+    if (lastPreviewKeyRef.current === previewKey) return;
+    lastPreviewKeyRef.current = previewKey;
+
+    stopSnippetLoop();
+    const params = new URLSearchParams({trackName, artistName});
+
+    api.get(`/api/spotify/track_preview?${params.toString()}`).then((res: any) => {
+      const previewUrl = res?.previewUrl || res?.[0]?.previewUrls || null;
+      if (!previewUrl) return;
+      const audio = new Audio(previewUrl);
+      audio.volume = 0.5;
+      previewAudioRef.current = audio;
+      audio.play().catch((err) => {
+        console.warn('Preview playback failed', err);
+      });
+    }).catch((err: any) => {
+      console.warn('Preview fetch failed', err);
+    });
+  }, [round?.status, round?.song?.id, round?.song?.track_name]);
+
+  useEffect(() => {
+    return () => {
+      stopSnippetLoop();
+    };
+  }, []);
+
   const startSnippetLoop = async (durationMs: number, uri: string) => {
     if (!playerRef.current || !deviceId || !token || !uri) return;
     try {
       stopSnippetLoop();
+      const sessionId = playbackSessionRef.current;
       if (currentTrackRef.current !== uri) {
         await transferAndPlay(token, deviceId, uri);
         currentTrackRef.current = uri;
@@ -174,6 +210,8 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         await playerRef.current.seek(0);
         await playerRef.current.resume();
       }
+      await waitForPlaybackStart(sessionId);
+      if (sessionId !== playbackSessionRef.current) return;
       pauseTimeout.current = setTimeout(() => {
         playerRef.current?.pause?.().catch(() => {});
       }, durationMs);
@@ -182,6 +220,8 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         try {
           await playerRef.current?.seek?.(0);
           await playerRef.current?.resume?.();
+          await waitForPlaybackStart(sessionId);
+          if (sessionId !== playbackSessionRef.current) return;
           if (pauseTimeout.current) clearTimeout(pauseTimeout.current);
           pauseTimeout.current = setTimeout(() => {
             playerRef.current?.pause?.().catch(() => {});
@@ -197,11 +237,39 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   };
 
   const stopSnippetLoop = () => {
+    playbackSessionRef.current += 1;
     if (pauseTimeout.current) clearTimeout(pauseTimeout.current);
     if (loopInterval.current) clearInterval(loopInterval.current);
     pauseTimeout.current = null;
     loopInterval.current = null;
+    playerRef.current?.pause?.().catch(() => { });
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
   };
+
+  const waitForPlaybackStart = (sessionId: number, timeoutMs = 3000) =>
+    new Promise<void>((resolve) => {
+      const start = Date.now();
+      const check = async () => {
+        if (sessionId !== playbackSessionRef.current) return resolve();
+        const player = playerRef.current;
+        if (!player) return resolve();
+        try {
+          const state = await player.getCurrentState();
+          const started = !!state && !state.paused && state.position > 0 && !state.loading;
+          if (started) {
+            return resolve();
+          }
+        } catch (err) {
+          console.warn('Playback start check failed', err);
+        }
+        if (Date.now() - start >= timeoutMs) return resolve();
+        setTimeout(check, 100);
+      };
+      check();
+    });
 
   const handleStart = () => {
     if (!roomCode) return;

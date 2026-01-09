@@ -92,6 +92,61 @@ async function getRecentlyPlayedSongs(accessToken, afterMs = null, limit = 50) {
   }
 }
 
+async function getPreviewLink(songName, artistName, limit = 5) {
+  try {
+    if (!songName) {
+      throw new Error('Song name is required');
+    }
+
+    const searchQuery = artistName
+      ? `track:"${songName}" artist:"${artistName}"`
+      : songName;
+
+    const url = new URL('https://api.deezer.com/search');
+    url.search = new URLSearchParams({
+      q: searchQuery,
+      limit: String(limit),
+    }).toString();
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      const err = new Error(`Deezer API error ${response.status}: ${text}`);
+      err.status = response.status;
+      throw err;
+    }
+
+    const data = await response.json();
+    const tracks = data.data || [];
+
+    if (!tracks.length) {
+      return { tracks: [], searchQuery };
+    }
+
+    const results = tracks.map((track) => ({
+      name: `${track.title} - ${track.artist && track.artist.name}`,
+      deezerUrl: track.link,
+      previewUrls: track.preview || null,
+      trackId: track.id,
+      albumName: track.album && track.album.title,
+      releaseDate: track.release_date || (track.album && track.album.release_date),
+      popularity: track.rank,
+      durationMs: track.duration ? track.duration * 1000 : undefined,
+    }));
+
+    return { tracks: results, searchQuery };
+  } catch (error) {
+    console.error('deezer preview search failed', {
+      songName,
+      artist: artistName || null,
+      error: error.message,
+      status: error.status,
+    });
+    return { tracks: [], searchQuery: null };
+  }
+}
+
+
 async function getAlbumCover(accessToken, trackIds) {
     try {
         const url = `https://api.spotify.com/v1/tracks?ids=${trackIds.join(',')}`;
@@ -112,4 +167,4 @@ async function getAlbumCover(accessToken, trackIds) {
 
 
 
-module.exports = {getRecentlyPlayedSongs, getAlbumCover, getCurrentlyPlayingTrack}
+module.exports = {getRecentlyPlayedSongs, getAlbumCover, getCurrentlyPlayingTrack, getPreviewLink}

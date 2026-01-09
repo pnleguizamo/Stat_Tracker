@@ -43,6 +43,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
     () => myGuesses.some((g) => g.outcome === 'correct'),
     [myGuesses]
   );
+  const guessedTrackIds = useMemo(() => new Set(myGuesses.map((g) => g.trackId).filter(Boolean)), [myGuesses]);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TrackOption[]>([]);
@@ -188,6 +189,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
           <div style={{ display: 'grid', gap: 8 }}>
             {results.map((track) => {
               const isSelected = selected?.id === track.id;
+              const isGuessed = guessedTrackIds.has(track.id);
               return (
                 <button
                   key={track.id}
@@ -202,8 +204,9 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
                     background: isSelected ? '#0b1220' : '#0f172a',
                     color: '#e2e8f0',
                     textAlign: 'left',
+                    opacity: isGuessed ? 0.5 : 1,
                   }}
-                  disabled={submitBusy || hasGuessedCurrent}
+                  disabled={submitBusy || hasGuessedCurrent || isGuessed}
                 >
                   <div>
                     <div style={{ fontWeight: 700 }}>{track.name}</div>
@@ -214,7 +217,11 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
                       <div style={{ fontSize: 12, color: '#64748b' }}>{track.albumName}</div>
                     ) : null}
                   </div>
-                  {isSelected && <span style={{ color: '#38bdf8', fontSize: 18 }}>✓</span>}
+                  {isGuessed ? (
+                    <span style={{ color: '#94a3b8', fontSize: 12 }}>Guessed</span>
+                  ) : isSelected ? (
+                    <span style={{ color: '#38bdf8', fontSize: 18 }}>✓</span>
+                  ) : null}
                 </button>
               );
             })}
