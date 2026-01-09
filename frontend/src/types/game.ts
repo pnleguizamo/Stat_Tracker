@@ -1,6 +1,7 @@
 export type MinigameId =
   | 'WHO_LISTENED_MOST'
   | 'GUESS_SPOTIFY_WRAPPED' 
+  | 'HEARDLE'
   | 'FIRST_PLAY'
   | 'GENRE_GUESS'
   | 'GRAPH_GUESS'
@@ -21,7 +22,6 @@ export type MinigameId =
 export type StageConfig = {
   index: number;
   minigameId: MinigameId;
-  customOptions?: Record<string, unknown>;
 };
 
 export type Player = {
@@ -130,7 +130,69 @@ export type GuessWrappedRoundState = {
   };
 };
 
-export type MinigameRoundState = WhoListenedMostRoundState | GuessWrappedRoundState;
+export type HeardleGuessOutcome = 'wrong' | 'artist_match' | 'album_match' | 'correct';
+
+export type HeardleGuess = {
+  snippetIndex: number;
+  trackId?: string | null;
+  trackName?: string | null;
+  artistNames?: string[];
+  albumName?: string | null;
+  outcome: HeardleGuessOutcome;
+  at: number;
+};
+
+export type HeardleSong = {
+  id: string;
+  track_name?: string | null;
+  artist_names?: string[];
+  album_name?: string | null;
+  imageUrl?: string | null;
+  uri?: string | null;
+};
+
+export type HeardleRoundState = {
+  id: string;
+  minigameId: 'HEARDLE';
+  status: 'guessing' | 'pending' | 'revealed';
+  song: HeardleSong;
+  answers: Record<
+    string,
+    {
+      guesses: HeardleGuess[];
+    }
+  >;
+  startedAt?: number;
+  snippetStartedAt?: number;
+  snippetPlan: number[];
+  snippetHistory?: Array<{
+    index?: number;
+    startedAt?: number | null;
+    endedAt?: number | null;
+    durationMs?: number | null;
+  }>;
+  currentSnippetIndex: number;
+  guessWindowMs?: number;
+  maxPointsPerSnippet?: number[];
+  expiresAt?: number;
+  stageProgress?: { songNumber?: number; songsPerGame?: number };
+  results?: {
+    winners: string[];
+    guessSummary: Record<
+      string,
+      {
+        outcome: HeardleGuessOutcome;
+        snippetIndex?: number | null;
+        at?: number;
+      }
+    >;
+    song: HeardleSong;
+    snippetPlan: number[];
+    stageProgress?: { songNumber?: number; songsPerGame?: number };
+  };
+};
+
+export type MinigameRoundState = WhoListenedMostRoundState | GuessWrappedRoundState | HeardleRoundState;
 
 export type ScoreAward = {
   points: number;

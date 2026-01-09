@@ -13,6 +13,7 @@ const spotifyRoutes = require('./routes/spotifyRoutes.js');
 const mongoRoutes = require('./routes/mongoRoutes.js');
 const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js');
 const authRoutes = require('./routes/auth.js');
+const heardleRoutes = require('./routes/heardleRoutes.js');
 
 
 const app = express();
@@ -45,6 +46,7 @@ app.use('/api/spotify', spotifyRoutes);
 app.use('/api/mongo', mongoRoutes);
 app.use(streamHistoryRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/heardle', heardleRoutes);
 
 (async () => {
   await initDb();

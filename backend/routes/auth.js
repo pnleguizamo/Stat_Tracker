@@ -63,7 +63,7 @@ router.post('/start', async (req, res) => {
     params.append('client_id', process.env.CLIENT_ID);
     params.append('response_type', 'code');
     params.append('redirect_uri', `${process.env.API_BASE_URL}/api/auth/callback`);
-    params.append('scope', 'user-read-private user-read-email user-read-playback-state user-read-recently-played user-top-read');
+    params.append('scope', 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-recently-played user-top-read');
     params.append('state', state);
     params.append('code_challenge_method', 'S256');
     params.append('code_challenge', challenge);

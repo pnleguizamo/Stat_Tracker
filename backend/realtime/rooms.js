@@ -46,9 +46,9 @@ function createRoom(hostSocketId, profile = {}, displayName, userId) {
     scoreboard: {},
     roundState: {},
     stagePlan: [
-      { index: 0, minigameId: 'WHO_LISTENED_MOST' },
-      { index: 1, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
-      { index: 2, minigameId: 'OUTLIER_MODE' },
+      { index: 0, minigameId: 'HEARDLE' },
+      { index: 1, minigameId: 'WHO_LISTENED_MOST' },
+      { index: 2, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
     ],
   };
 

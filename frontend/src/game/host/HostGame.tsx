@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { WhoListenedMost } from "./minigames/WhoListenedMost";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
+import { HeardleHost } from "./minigames/Heardle";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
 import { GameState, MinigameId } from "types/game";
@@ -16,6 +17,7 @@ type HostMinigameProps = {
 const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<HostMinigameProps>>> = {
   WHO_LISTENED_MOST: WhoListenedMost,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedHost,
+  HEARDLE: HeardleHost,
 //   GENRE_GUESS: GenreGuessHostView,
 //   FIRST_PLAY: FirstPlayHostView,
 //   GRAPH_GUESS: GraphGuessHostView,

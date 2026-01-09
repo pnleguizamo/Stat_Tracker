@@ -4,6 +4,7 @@ import { socket } from '../../socket';
 import { GameState, MinigameId } from 'types/game';
 import { WhoListenedMostPlayerView } from './minigames/WhoListenedMost';
 import { GuessWrappedPlayerView } from './minigames/GuessWrapped';
+import { HeardlePlayerView } from './minigames/Heardle';
 
 type PlayerMinigameProps = {
   roomCode: string;
@@ -13,6 +14,7 @@ type PlayerMinigameProps = {
 const PLAYER_MINIGAME_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<PlayerMinigameProps>>> = {
   WHO_LISTENED_MOST: WhoListenedMostPlayerView,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedPlayerView,
+  HEARDLE: HeardlePlayerView,
 };
 
 const PlayerScreen = () => {

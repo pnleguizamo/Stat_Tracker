@@ -527,7 +527,7 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
             ? await tracksCol
                 .find(
                     { _id: { $in: trackIds } },
-                    { projection: { name: 1, artistNames: 1, albumName: 1, images: 1 } }
+                    { projection: { name: 1, artistNames: 1, albumName: 1, images: 1, durationMs: 1 } }
                 )
                 .toArray()
             : [];
@@ -545,7 +545,8 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                 track_name: meta.name || null,
                 artist_names: meta.artistNames || [],
                 album_name: meta.albumName || null,
-                imageUrl: meta.images?.[0]?.url || null
+                imageUrl: meta.images?.[0]?.url || null,
+                durationMs: meta.durationMs || null,
             };
         });
         
@@ -559,6 +560,70 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
     }
 };
 
+mongoService.searchTracks = async function (query, options = {}) {
+    const { limit = 10, offset = 0 } = options;
+    if (!query || typeof query !== 'string' || query.trim().length < 2) {
+        return [];
+    }
+
+    db = await initDb();
+    const tracksCol = db.collection(COLLECTIONS.tracks);
+
+    const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+    const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
+    const terms = query
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(Boolean);
+    const regexes = terms
+        .map(t => t.replace(/[’']/g, '')) 
+        .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .filter(t => t.length)
+        .map(t => {
+            const flexible = t.split('').join("[’']?");
+            return new RegExp(flexible, 'i');
+        });
+
+    const cursor = tracksCol
+        .find(
+            {
+                $and: [
+                    { $expr: { $eq: ['$_id', '$canonicalTrackId'] } },
+                    ...regexes.map((rx) => ({
+                        $or: [
+                            { name: rx },
+                            { artistNames: rx },
+                            { albumName: rx },
+                        ],
+                    })),
+                ],
+            },
+            {
+                projection: {
+                    name: 1,
+                    artistNames: 1,
+                    albumName: 1,
+                    images: 1,
+                    durationMs: 1,
+                },
+            }
+        )
+        .skip(safeOffset)
+        .limit(safeLimit);
+
+    const docs = await cursor.toArray();
+    return docs.map(track => ({
+        id: track._id,
+        name: track.name,
+        artistNames: track.artistNames || [],
+        albumName: track.albumName || null,
+        imageUrl: track.images?.[0]?.url || null,
+        durationMs: track.durationMs || null,
+    }));
+};
+
+// TODOo make a raw trackCounts collection that uses original trackId for pickCanonicalTrackId to use 
 mongoService.rollupUserCounts = async function (options = {}) {
     const { startDate, endDate, userIds, batchSize = 500, logger = console } = options;
     db = await initDb();
