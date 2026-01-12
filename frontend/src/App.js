@@ -10,9 +10,9 @@ import TopAlbums from './pages/TopAlbums.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import GameLobby from './pages/GameLobby.tsx';
 import StagePlanner from './game/host/StagePlanner.tsx';
-import PlayerScreen from 'game/player/PlayerScreen.tsx';
-import HostGameScreen from 'game/host/HostGame.tsx';
-import Wrapped from 'pages/Wrapped.jsx';
+import PlayerScreen from './game/player/PlayerScreen.tsx';
+import HostGameScreen from './game/host/HostGame.tsx';
+import Wrapped from './pages/Wrapped.jsx';
 
 const NAVBAR_HIDDEN_PATHS = [/^\/game(\/|$)/];
 
