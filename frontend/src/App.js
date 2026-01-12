@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Outlet } from 'react-router-dom';
 import LandingPage from './pages/LandingPage.jsx';
 import CurrentlyPlaying from './pages/CurrentlyPlaying.jsx';
 import RecentlyPlayed from './pages/RecentlyPlayed.jsx';
@@ -14,15 +14,13 @@ import PlayerScreen from './game/player/PlayerScreen.tsx';
 import HostGameScreen from './game/host/HostGame.tsx';
 import Wrapped from './pages/Wrapped.jsx';
 
-const NAVBAR_HIDDEN_PATHS = [/^\/game(\/|$)/];
-
-function NavbarGate() {
-  const { pathname } = useLocation();
-  const hideNavbar = NAVBAR_HIDDEN_PATHS.some((pattern) => pattern.test(pathname));
-  if (hideNavbar) return null;
+function ProtectedLayout() {
   return (
     <ProtectedRoute>
-      <AppNavbar />
+      <div>
+        <AppNavbar />
+        <Outlet />
+      </div>
     </ProtectedRoute>
   );
 }
@@ -31,21 +29,22 @@ function App() {
   return (
     <div>
     <Router>
-        <NavbarGate />
-        <Routes>
-          <Route path="/" element={<LandingPage/>} />
-          <Route path="/dashboard" element={<ProtectedRoute><CurrentlyPlaying/></ProtectedRoute>} />
-          <Route path="/recently_played" element={<ProtectedRoute><RecentlyPlayed/></ProtectedRoute>} />
-          <Route path="/top_artists" element={<ProtectedRoute><TopArtists/></ProtectedRoute>} />
-          <Route path="/top_albums" element={<ProtectedRoute><TopAlbums/></ProtectedRoute>} />
-          <Route path="/top_songs" element={<ProtectedRoute><TopSongs/></ProtectedRoute>} />
-          <Route path="/wrapped" element={<ProtectedRoute><Wrapped/></ProtectedRoute>} />
-          <Route path="/upload_history" element={<ProtectedRoute><FileUpload/></ProtectedRoute>} />
-          <Route path="/lobby" element={<ProtectedRoute><GameLobby/></ProtectedRoute>} />
-          <Route path="/game/:roomCode" element={<PlayerScreen />} />
-          <Route path="/game/host/:roomCode/setup" element={<StagePlanner />} />
-          <Route path="/game/host/:roomCode/play" element={<HostGameScreen />} />
-        </Routes>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/game/:roomCode" element={<PlayerScreen />} />
+        <Route path="/game/host/:roomCode/setup" element={<StagePlanner />} />
+        <Route path="/game/host/:roomCode/play" element={<HostGameScreen />} />
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<CurrentlyPlaying />} />
+          <Route path="/recently_played" element={<RecentlyPlayed />} />
+          <Route path="/top_artists" element={<TopArtists />} />
+          <Route path="/top_albums" element={<TopAlbums />} />
+          <Route path="/top_songs" element={<TopSongs />} />
+          <Route path="/wrapped" element={<Wrapped />} />
+          <Route path="/upload_history" element={<FileUpload />} />
+          <Route path="/lobby" element={<GameLobby />} />
+        </Route>
+      </Routes>
     </Router>
     </div>
   );
