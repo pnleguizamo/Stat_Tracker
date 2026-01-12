@@ -20,10 +20,24 @@ const { monitorEventLoopDelay } = require('perf_hooks');
 function initGameSockets(io) {
   const eventLoopDelayMonitor = monitorEventLoopDelay({ resolution: 20 });
   eventLoopDelayMonitor.enable();
+  let lastBroadcastLogAt = 0;
+  const BROADCAST_LOG_INTERVAL_MS = 2000;
+
+  setInterval(() => {
+    const meanMs = Math.round(eventLoopDelayMonitor.mean / 1e6);
+    const maxMs = Math.round(eventLoopDelayMonitor.max / 1e6);
+    console.log(`[loop] mean=${meanMs}ms max=${maxMs}ms`);
+  }, 10000);
 
   const broadcastGameState = (roomCode) => {
     const state = getGameState(roomCode);
     if (!state) return null;
+    const now = Date.now();
+    if (now - lastBroadcastLogAt > BROADCAST_LOG_INTERVAL_MS) {
+      const payloadSize = Buffer.byteLength(JSON.stringify(state), 'utf8');
+      console.log(`[broadcast] room=${roomCode} size=${payloadSize}B players=${state.players?.length ?? 0}`);
+      lastBroadcastLogAt = now;
+    }
     io.to(roomCode).emit('gameStateUpdated', state);
     return state;
   };
