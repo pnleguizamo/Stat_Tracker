@@ -263,14 +263,30 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
     }
   });
 
-  socket.on('minigame:WHO_LISTENED_MOST:submitAnswer', ({ roomCode, answer } = {}, cb) => {
+  socket.on('minigame:WHO_LISTENED_MOST:submitAnswer', ({ roomCode, answer, meta } = {}, cb) => {
     try {
+      const serverReceivedAt = Date.now();
       const room = safeRoomLookup(getRoom, roomCode);
       const idx = room.currentStageIndex || 0;
       room.roundState = room.roundState || {};
       room.roundState[idx] = room.roundState[idx] || { answers: {} };
       const activeRound = room.roundState[idx];
-      if (activeRound.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
+      if (activeRound.status === 'revealed') {
+        const serverEmitAt = Date.now();
+        const loopDelayMs = deps.eventLoopDelayMonitor
+          ? Math.round(deps.eventLoopDelayMonitor.mean / 1e6)
+          : null;
+        return cb?.({
+          ok: false,
+          error: 'ROUND_REVEALED',
+          timing: {
+            clientSentAt: meta?.clientSentAt,
+            serverReceivedAt,
+            serverEmitAt,
+            eventLoopDelayMs: loopDelayMs,
+          },
+        });
+      }
       activeRound.answers[socket.id] = {
         answer,
         at: Date.now(),
@@ -284,7 +300,19 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       }
 
       // io.to(roomCode).emit('minigame:WHO_LISTENED_MOST:answerReceived', { socketId: socket.id });
-      cb?.({ ok: true });
+      const serverEmitAt = Date.now();
+      const loopDelayMs = deps.eventLoopDelayMonitor
+        ? Math.round(deps.eventLoopDelayMonitor.mean / 1e6)
+        : null;
+      cb?.({
+        ok: true,
+        timing: {
+          clientSentAt: meta?.clientSentAt,
+          serverReceivedAt,
+          serverEmitAt,
+          eventLoopDelayMs: loopDelayMs,
+        },
+      });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
       logger.error('WHO_LISTENED_MOST submitAnswer error', err);

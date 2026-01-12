@@ -1,4 +1,4 @@
-import { FC, useEffect, useMemo, useState } from "react";
+import { FC, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, Player, WhoListenedMostRoundState } from "types/game";
 
@@ -15,6 +15,14 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
   const players = gameState.players || [];
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [lastVoteLatencyMs, setLastVoteLatencyMs] = useState<number | null>(null);
+  const [lastVoteBreakdown, setLastVoteBreakdown] = useState<{
+    clientToServerMs?: number;
+    serverProcessingMs?: number;
+    serverToClientMs?: number;
+    eventLoopDelayMs?: number | null;
+  } | null>(null);
+  const pendingVoteRef = useRef<{ targetSocketId: string; sentAt: number } | null>(null);
 
   const mySocketId = socket.id;
   const myPlayer = players.find((p) => p.socketId === mySocketId);
@@ -69,15 +77,53 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
     if (!roomCode || !targetSocketId) return;
     setVoteBusy(true);
     setVoteError(null);
+    setLastVoteLatencyMs(null);
+    setLastVoteBreakdown(null);
+    pendingVoteRef.current = { targetSocketId, sentAt: Date.now() };
+    const clientSentAt = pendingVoteRef.current.sentAt;
     socket.emit(
       "minigame:WHO_LISTENED_MOST:submitAnswer",
-      { roomCode, answer: { targetSocketId } },
-      (resp?: { ok: boolean; error?: string }) => {
+      { roomCode, answer: { targetSocketId }, meta: { clientSentAt } },
+      (resp?: {
+        ok: boolean;
+        error?: string;
+        timing?: {
+          clientSentAt?: number;
+          serverReceivedAt?: number;
+          serverEmitAt?: number;
+          eventLoopDelayMs?: number | null;
+        };
+      }) => {
+        const clientReceiveAt = Date.now();
         setVoteBusy(false);
         if (!resp?.ok) setVoteError(resp?.error || "Failed to submit vote");
+        if (resp?.timing?.serverReceivedAt && resp?.timing?.serverEmitAt) {
+          const sentAt = resp.timing.clientSentAt ?? clientSentAt;
+          const clientToServerMs =
+            sentAt ? Math.max(0, resp.timing.serverReceivedAt - sentAt) : undefined;
+          const serverProcessingMs = Math.max(0, resp.timing.serverEmitAt - resp.timing.serverReceivedAt);
+          const serverToClientMs = Math.max(0, clientReceiveAt - resp.timing.serverEmitAt);
+          setLastVoteBreakdown({
+            clientToServerMs,
+            serverProcessingMs,
+            serverToClientMs,
+            eventLoopDelayMs: resp.timing.eventLoopDelayMs ?? null,
+          });
+        }
       }
     );
   }
+
+  useEffect(() => {
+    if (!mySocketId) return;
+    if (!pendingVoteRef.current) return;
+    if (!myVote) return;
+    if (myVote !== pendingVoteRef.current.targetSocketId) return;
+    const latency = Date.now() - pendingVoteRef.current.sentAt;
+    setLastVoteLatencyMs(latency);
+    console.log(latency);
+    pendingVoteRef.current = null;
+  }, [myVote, mySocketId]);
 
   const handleNewPrompt = () => {
     if (!roomCode) return;
@@ -142,6 +188,19 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
         {!isResultsShown && !!myVote && (
           <div style={{ marginTop: 8, fontSize: 13, color: "#94a3b8" }}>
             Waiting for the results reveal{voteBusy ? "…" : "."}
+          </div>
+        )}
+        {lastVoteLatencyMs !== null && (
+          <div style={{ marginTop: 6, fontSize: 12, color: "#9fb2d6" }}>
+            Vote received in {lastVoteLatencyMs}ms
+          </div>
+        )}
+        {lastVoteBreakdown && (
+          <div style={{ marginTop: 4, fontSize: 11, color: "#7b8db1" }}>
+            c→s {lastVoteBreakdown.clientToServerMs ?? "?"}ms · server{" "}
+            {lastVoteBreakdown.serverProcessingMs ?? "?"}ms · s→c{" "}
+            {lastVoteBreakdown.serverToClientMs ?? "?"}ms · loop{" "}
+            {lastVoteBreakdown.eventLoopDelayMs ?? "?"}ms
           </div>
         )}
       </section>

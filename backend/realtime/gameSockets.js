@@ -15,8 +15,12 @@ const { applyAwards, computeTimeScore } = require('./scoring');
 const { scheduleRoundTimer, clearRoundTimer } = require('./timers');
 const minigameRegistry = require('./minigames');
 const { registerStagePlanListeners } = require('./stagePlanSockets');
+const { monitorEventLoopDelay } = require('perf_hooks');
 
 function initGameSockets(io) {
+  const eventLoopDelayMonitor = monitorEventLoopDelay({ resolution: 20 });
+  eventLoopDelayMonitor.enable();
+
   const broadcastGameState = (roomCode) => {
     const state = getGameState(roomCode);
     if (!state) return null;
@@ -45,6 +49,7 @@ function initGameSockets(io) {
         scheduleRoundTimer,
         clearRoundTimer,
         logger: console,
+        eventLoopDelayMonitor,
       });
     } catch (err) {
       console.error('Failed to register minigame listeners for socket', socket.id, err);
