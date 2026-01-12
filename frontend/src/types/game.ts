@@ -18,6 +18,15 @@ export type MinigameId =
   // // | 'MATCHING' // Pull stat for each user, have everyone match whose is whose
   // // | 'OUTLIER' // One of these is not like the others. One song or artist with a different genre
   // // | 'CALENDAR' // Guess which day of the year the user stat bundle comes from
+  // // | 'HIGHER/LOWER' // Guess which day of the year the user stat bundle comes from
+
+  // Types of stats: 
+  // - Artist / Album / Track / Genre stream counts
+  // - Listened first
+  // - Listened most in group
+  // - Listened most in one day
+  // - Wrapped with timeframes / day snapshot
+  // - Top artist / album / track / genres
 
 export type StageConfig = {
   index: number;

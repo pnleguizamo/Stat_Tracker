@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage.jsx';
 import CurrentlyPlaying from './pages/CurrentlyPlaying.jsx';
 import RecentlyPlayed from './pages/RecentlyPlayed.jsx';
@@ -14,11 +14,24 @@ import PlayerScreen from 'game/player/PlayerScreen.tsx';
 import HostGameScreen from 'game/host/HostGame.tsx';
 import Wrapped from 'pages/Wrapped.jsx';
 
+const NAVBAR_HIDDEN_PATHS = [/^\/game(\/|$)/];
+
+function NavbarGate() {
+  const { pathname } = useLocation();
+  const hideNavbar = NAVBAR_HIDDEN_PATHS.some((pattern) => pattern.test(pathname));
+  if (hideNavbar) return null;
+  return (
+    <ProtectedRoute>
+      <AppNavbar />
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <div>
     <Router>
-        <ProtectedRoute><AppNavbar /></ProtectedRoute>
+        <NavbarGate />
         <Routes>
           <Route path="/" element={<LandingPage/>} />
           <Route path="/dashboard" element={<ProtectedRoute><CurrentlyPlaying/></ProtectedRoute>} />

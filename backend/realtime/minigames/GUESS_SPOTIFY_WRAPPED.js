@@ -51,7 +51,7 @@ function computeResults(round, room) {
   const ownerPlayer = room.players.get(round.ownerSocketId);
 
   return {
-    votes: tally,
+    votes: tally, // TODOo evaluate naming convention. Keep consistent between games
     ownerSocketId: round.ownerSocketId,
     ownerProfile: clonePlayerSnapshot(ownerPlayer, round.ownerSocketId),
     winners,

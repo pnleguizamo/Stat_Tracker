@@ -5,7 +5,7 @@ function ensureScoreboard(room) {
 }
 
 function computeTimeScore(round, socketId, opts = {}) {
-  const { maxPoints = 1000, decayPerSecond = 0.05, minPoints = 10 } = opts;
+  const { maxPoints = 1000, decayPerSecond = 0.025, minPoints = 10 } = opts;
   if (!round || !round.startedAt) return minPoints;
   const submittedAt = round.answers?.[socketId]?.at;
   if (!submittedAt) return minPoints;

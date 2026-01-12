@@ -1,17 +1,18 @@
 // HostGameScreen.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { WhoListenedMost } from "./minigames/WhoListenedMost";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
-import { GameState, MinigameId } from "types/game";
+import { GameState, GuessWrappedRoundState, MinigameId, WhoListenedMostRoundState } from "types/game";
 import { Leaderboard } from "./Leaderboard";
 
 type HostMinigameProps = {
   roomCode: string;
   gameState: GameState;
   onAdvance: () => void;
+  onRevealComplete?: () => void;
 };
 
 const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<HostMinigameProps>>> = {
@@ -29,7 +30,9 @@ const HostGame = () => {
   const roomCode = params.roomCode || "";
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [lastRevealedRoundId, setLastRevealedRoundId] = useState<string | null>(null);
+  const lastRevealedRoundIdRef = useRef<string | null>(null);
+  const leaderboardShowRef = useRef<number | null>(null);
+  const leaderboardHideRef = useRef<number | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
   useEffect(() => {
@@ -50,13 +53,50 @@ const HostGame = () => {
   useEffect(() => {
     if (!gameState?.currentRoundState) return;
     const round = gameState.currentRoundState;
-    if (round.status === "revealed" && round.id !== lastRevealedRoundId) {
-      setShowLeaderboard(true);
-      setLastRevealedRoundId(round.id);
-      const timer = setTimeout(() => setShowLeaderboard(false), 6000);
-      return () => clearTimeout(timer);
+    if (round.status !== "revealed") return;
+    if (round.id === lastRevealedRoundIdRef.current) return;
+
+    const minigameId = gameState.currentStageConfig?.minigameId;
+    if (minigameId === "WHO_LISTENED_MOST") return;
+
+    lastRevealedRoundIdRef.current = round.id;
+    if (leaderboardShowRef.current) {
+      window.clearTimeout(leaderboardShowRef.current);
+      leaderboardShowRef.current = null;
     }
-  }, [gameState, lastRevealedRoundId]);
+    if (leaderboardHideRef.current) {
+      window.clearTimeout(leaderboardHideRef.current);
+      leaderboardHideRef.current = null;
+    }
+    leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
+    leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
+  }, [gameState]);
+
+  const handleRevealComplete = () => {
+    if (leaderboardShowRef.current) {
+      window.clearTimeout(leaderboardShowRef.current);
+      leaderboardShowRef.current = null;
+    }
+    if (leaderboardHideRef.current) {
+      window.clearTimeout(leaderboardHideRef.current);
+      leaderboardHideRef.current = null;
+    }
+    leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
+    leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (leaderboardShowRef.current) {
+        window.clearTimeout(leaderboardShowRef.current);
+        leaderboardShowRef.current = null;
+      }
+      if (leaderboardHideRef.current) {
+        window.clearTimeout(leaderboardHideRef.current);
+        leaderboardHideRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -109,6 +149,7 @@ const HostGame = () => {
             gameState={gameState}
             roomCode={roomCode}
             onAdvance={handleAdvance}
+            onRevealComplete={handleRevealComplete}
           />
         ) : (
           <div style={{ padding: "2rem", textAlign: "center" }}>
@@ -119,14 +160,13 @@ const HostGame = () => {
         )}
       </main>
 
-      {showLeaderboard && gameState.currentRoundState?.status === "revealed" && (
-        <Leaderboard
-          scoreboard={gameState.scoreboard}
-          players={gameState.players}
-          roundId={gameState.currentRoundState?.id}
-          onClose={() => setShowLeaderboard(false)}
-        />
-      )}
+      <Leaderboard
+        scoreboard={gameState.scoreboard}
+        players={gameState.players}
+        roundId={gameState.currentRoundState?.id}
+        onClose={() => setShowLeaderboard(false)}
+        isVisible={showLeaderboard && gameState.currentRoundState?.status === "revealed"}
+      />
     </div>
   );
 };

@@ -55,7 +55,6 @@ const GameLobby: React.FC = () => {
       if (me.displayName) setDisplayName(me.displayName);
       if (me.avatar) setSelectedAvatar(me.avatar);
     }
-    console.log("EFFECT ROOM ", room)
   }, [room]);
 
 
