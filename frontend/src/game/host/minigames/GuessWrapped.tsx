@@ -130,7 +130,7 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance }) 
           })}
         </div>
         {ownerPlayer && round.status === "revealed" && (
-          <div style={{ marginTop: 12, fontWeight: 600 }}>
+          <div style={{ marginTop: 12, fontWeight: 600, background: "#102038" }}>
             Correct answer: {ownerPlayer.displayName || ownerPlayer.name}
           </div>
         )}

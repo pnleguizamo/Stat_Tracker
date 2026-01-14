@@ -92,15 +92,20 @@ async function getRecentlyPlayedSongs(accessToken, afterMs = null, limit = 50) {
   }
 }
 
-async function getPreviewLink(songName, artistName, limit = 5) {
+async function getTrackPreview(songName, artistName, limit = 5) {
   try {
     if (!songName) {
       throw new Error('Song name is required');
     }
 
+    const cleanedSongName = songName.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+    if (!cleanedSongName) {
+      throw new Error('Song name is required');
+    }
+
     const searchQuery = artistName
-      ? `track:"${songName}" artist:"${artistName}"`
-      : songName;
+      ? `track:"${cleanedSongName}" artist:"${artistName}"`
+      : cleanedSongName;
 
     const url = new URL('https://api.deezer.com/search');
     url.search = new URLSearchParams({
@@ -146,6 +151,73 @@ async function getPreviewLink(songName, artistName, limit = 5) {
   }
 }
 
+async function getArtistPreview(artistName, limit = 1) {
+  try {
+    if (!artistName) {
+      throw new Error('Artist name is required');
+    }
+
+    const searchUrl = new URL('https://api.deezer.com/search/artist');
+    searchUrl.search = new URLSearchParams({
+      q: artistName,
+      limit: '1',
+    }).toString();
+
+    const searchResponse = await fetch(searchUrl.toString());
+    if (!searchResponse.ok) {
+      const text = await searchResponse.text().catch(() => '');
+      const err = new Error(`Deezer artist search error ${searchResponse.status}: ${text}`);
+      err.status = searchResponse.status;
+      throw err;
+    }
+
+    const searchData = await searchResponse.json();
+    const artist = searchData.data?.[0];
+    if (!artist?.id) {
+      return { tracks: [], artistId: null, searchQuery: artistName };
+    }
+
+    const topUrl = new URL(`https://api.deezer.com/artist/${artist.id}/top`);
+    topUrl.search = new URLSearchParams({
+      limit: String(limit),
+    }).toString();
+
+    const topResponse = await fetch(topUrl.toString());
+    if (!topResponse.ok) {
+      const text = await topResponse.text().catch(() => '');
+      const err = new Error(`Deezer artist top tracks error ${topResponse.status}: ${text}`);
+      err.status = topResponse.status;
+      throw err;
+    }
+
+    const topData = await topResponse.json();
+    const tracks = topData.data || [];
+
+    if (!tracks.length) {
+      return { tracks: [], artistId: artist.id, searchQuery: artistName };
+    }
+
+    const results = tracks.map((track) => ({
+      name: `${track.title} - ${track.artist && track.artist.name}`,
+      previewUrl: track.preview || null,
+      trackId: track.id,
+      albumName: track.album && track.album.title,
+      releaseDate: track.release_date || (track.album && track.album.release_date),
+      popularity: track.rank,
+      durationMs: track.duration ? track.duration * 1000 : undefined,
+    }));
+
+    return { tracks: results, artistId: artist.id, searchQuery: artistName };
+  } catch (error) {
+    console.error('deezer artist preview failed', {
+      artistName,
+      error: error.message,
+      status: error.status,
+    });
+    return { tracks: [], artistId: null, searchQuery: null };
+  }
+}
+
 
 async function getAlbumCover(accessToken, trackIds) {
     try {
@@ -167,4 +239,4 @@ async function getAlbumCover(accessToken, trackIds) {
 
 
 
-module.exports = {getRecentlyPlayedSongs, getAlbumCover, getCurrentlyPlayingTrack, getPreviewLink}
+module.exports = {getRecentlyPlayedSongs, getAlbumCover, getCurrentlyPlayingTrack, getTrackPreview, getArtistPreview}

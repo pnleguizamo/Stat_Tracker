@@ -136,9 +136,12 @@ const HostGame = () => {
             : "Waiting for first stage"}
         </div>
         <div>
-          {remainingMs !== null
-            ? `Time left: ${Math.max(0, Math.ceil(remainingMs / 1000))}s`
-            : "No timer running"}
+          <h2 style={{ fontSize: 28 }}>
+            {remainingMs !== null
+              ? `Time left: ${Math.max(0, Math.ceil(remainingMs / 1000))}s`
+              : "No timer running"}
+
+          </h2>
         </div>
       </header>
 

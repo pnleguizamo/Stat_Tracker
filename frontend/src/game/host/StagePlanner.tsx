@@ -49,10 +49,10 @@ const StagePlanner: React.FC = () => {
     { id: 'HEARDLE', name: 'Heardle' },
     { id: 'WHO_LISTENED_MOST', name: 'Who Listened Most' },
     { id: 'GUESS_SPOTIFY_WRAPPED', name: 'Guess the Wrapped' },
-    { id: 'FIRST_PLAY', name: 'First Play' },
-    { id: 'GENRE_GUESS', name: 'Genre Guess' },
-    { id: 'GRAPH_GUESS', name: 'Graph Guess' },
-    { id: 'OUTLIER_MODE', name: 'Outlier Mode' },
+    // { id: 'FIRST_PLAY', name: 'First Play' },
+    // { id: 'GENRE_GUESS', name: 'Genre Guess' },
+    // { id: 'GRAPH_GUESS', name: 'Graph Guess' },
+    // { id: 'OUTLIER_MODE', name: 'Outlier Mode' },
   ];
 
   function onDragStart(e: React.DragEvent, id: MinigameId) {

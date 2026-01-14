@@ -1,3 +1,4 @@
+import { useTrackPreview } from "game/hooks/useTrackPreview";
 import { FC, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, Player, WhoListenedMostRoundState } from "types/game";
@@ -73,6 +74,21 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
     });
     return tally;
   }, [revealedVoteMap]);
+
+  const isArtistPrompt = round?.prompt?.type === "ARTIST";
+  const promptTrackName = !isArtistPrompt ? round?.prompt?.track_name ?? undefined : undefined;
+  const promptArtistName = isArtistPrompt
+    ? round?.prompt?.artist_name || round?.prompt?.artist_names?.[0]
+    : round?.prompt?.artist_names?.[0];
+
+  useTrackPreview({
+    trackName: promptTrackName,
+    artistName: promptArtistName ?? undefined,
+    previewKey: (round?.prompt?.id || promptTrackName || promptArtistName) ?? undefined,
+    enabled: round?.status !== "revealed",
+    volume: 0.1,
+    kind: isArtistPrompt ? "artist" : "track",
+  });
 
   useEffect(() => {
     if (roundStatus !== "revealed") {

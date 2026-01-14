@@ -172,8 +172,6 @@ const GameLobby: React.FC = () => {
           }
           return;
         }
-        console.log("SET ROOM")
-        console.log(response)
         setRoom({
           roomCode: response.roomCode!,
           hostSocketId: response.hostSocketId,

@@ -412,7 +412,6 @@ mongoService.getSharedTopArtists = async function (userIds, accessToken, minAcco
                 users: artist.users,
                 topUserId: (artist.users || []).reduce((best, u) => (u && u.plays > (best?.plays || 0) ? u : best), null)?.userId,
                 artist_name: meta.name || null,
-                weight: artist.weight,
                 imageUrl: meta.images?.[0]?.url || null
             };
         });

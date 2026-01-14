@@ -2,6 +2,7 @@ import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import api from 'lib/api';
 import { socket } from 'socket';
 import { GameState, HeardleRoundState } from 'types/game';
+import { useTrackPreview } from '../../hooks/useTrackPreview';
 
 declare global {
   interface Window {
@@ -74,8 +75,6 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const loopInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pauseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrackRef = useRef<string | null>(null);
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const lastPreviewKeyRef = useRef<string | null>(null);
   const playbackSessionRef = useRef(0);
 
   const currentSnippetMs = round?.snippetPlan?.[round.currentSnippetIndex || 0] || 0;
@@ -166,31 +165,13 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     };
   }, [round?.song?.id, round?.currentSnippetIndex, deviceId, token, round?.status, currentSnippetMs]);
 
-  useEffect(() => {
-    if (!round || round.status !== 'revealed') return;
-    const trackName = round.song?.track_name || '';
-    if (!trackName) return;
-    const artistName = round.song.artist_names?.[0] || "";
-    const previewKey = round.song?.id || trackName;
-    if (lastPreviewKeyRef.current === previewKey) return;
-    lastPreviewKeyRef.current = previewKey;
-
-    stopSnippetLoop();
-    const params = new URLSearchParams({trackName, artistName});
-
-    api.get(`/api/spotify/track_preview?${params.toString()}`).then((res: any) => {
-      const previewUrl = res?.previewUrl || res?.[0]?.previewUrls || null;
-      if (!previewUrl) return;
-      const audio = new Audio(previewUrl);
-      audio.volume = 0.5;
-      previewAudioRef.current = audio;
-      audio.play().catch((err) => {
-        console.warn('Preview playback failed', err);
-      });
-    }).catch((err: any) => {
-      console.warn('Preview fetch failed', err);
-    });
-  }, [round?.status, round?.song?.id, round?.song?.track_name]);
+  useTrackPreview({
+    trackName: round?.song?.track_name ?? undefined,
+    artistName: round?.song?.artist_names?.[0] ?? undefined,
+    previewKey: (round?.song?.id || round?.song?.track_name) ?? undefined,
+    enabled: round?.status === 'revealed',
+    volume: 0.5,
+  });
 
   useEffect(() => {
     return () => {
@@ -243,10 +224,6 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     pauseTimeout.current = null;
     loopInterval.current = null;
     playerRef.current?.pause?.().catch(() => { });
-    if (previewAudioRef.current) {
-      previewAudioRef.current.pause();
-      previewAudioRef.current = null;
-    }
   };
 
   const waitForPlaybackStart = (sessionId: number, timeoutMs = 3000) =>
