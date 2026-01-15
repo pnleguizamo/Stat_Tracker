@@ -76,7 +76,7 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance, on
       }
       nextPromptTimeoutRef.current = window.setTimeout(() => {
         handleStartRound();
-      }, 5000);
+      }, 3500);
     });
   }, [revealComplete]);
 
@@ -96,7 +96,7 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance, on
     artistName: promptArtistName,
     previewKey: (previewTrackName || promptArtistName) ?? undefined,
     enabled: round?.status !== "revealed",
-    volume: 0.1,
+    volume: 0.3,
     kind: "track",
   });
 

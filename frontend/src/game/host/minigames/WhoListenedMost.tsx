@@ -52,7 +52,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
     artistName: promptArtistName ?? undefined,
     previewKey: (round?.prompt?.id || promptTrackName || promptArtistName) ?? undefined,
     enabled: round?.status !== "revealed",
-    volume: 0.1,
+    volume: 0.3,
     kind: isArtistPrompt ? "artist" : "track",
   });
 

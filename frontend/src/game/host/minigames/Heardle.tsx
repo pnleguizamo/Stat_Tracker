@@ -170,7 +170,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     artistName: round?.song?.artist_names?.[0] ?? undefined,
     previewKey: (round?.song?.id || round?.song?.track_name) ?? undefined,
     enabled: round?.status === 'revealed',
-    volume: 0.5,
+    volume: 0.4,
   });
 
   useEffect(() => {

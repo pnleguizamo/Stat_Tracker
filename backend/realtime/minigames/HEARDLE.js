@@ -48,8 +48,8 @@ async function ensureSongPool(room, stageIndex, opts = {}) {
   const songs = await getSharedTopSongs(uniqueUserIds, accessToken, 0.5, opts.sampleSize || 120);
 
 
-  stageState.pool = (songs || []);
-  // stageState.pool = (songs || []).sort((a, b) => (b?.user_count || 0) - (a?.user_count || 0));
+  // stageState.pool = (songs || []);
+  stageState.pool = (songs || []).sort((a, b) => (b?.user_count || 0) - (a?.user_count || 0));
   stageState.pointer = 0;
   stageState.usedSongIds = new Set();
   return stageState.pool;
