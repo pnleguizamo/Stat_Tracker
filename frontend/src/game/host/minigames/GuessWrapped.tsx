@@ -1,5 +1,5 @@
 import { useVoteTally } from "game/hooks/useVoteTally";
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, GuessWrappedRoundState } from "types/game";
 import { PlayerVotes } from "./components/PlayerVotes";
@@ -10,7 +10,7 @@ type Props = {
   roomCode: string;
   gameState: GameState;
   onAdvance: () => void;
-  onRevealComplete?: () => void;
+  onRevealComplete: (onSequenceComplete?: () => void) => void;
 };
 
 export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance, onRevealComplete }) => {
@@ -18,6 +18,7 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance, on
   const players = gameState.players || [];
   const [busy, setBusy] = useState<"prompt" | "reveal" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const nextPromptTimeoutRef = useRef<number | null>(null);
 
   const votes = round?.results?.votes || {}; 
   const ownerSocketId = round?.results?.ownerSocketId;
@@ -65,8 +66,28 @@ export const GuessWrappedHost: FC<Props> = ({ roomCode, gameState, onAdvance, on
 
   useEffect(() => {
     if (!revealComplete) return;
-    onRevealComplete?.();
+    onRevealComplete(() => {
+      if (!roomCode) return;
+      if (busy === "prompt") return;
+      
+      if (nextPromptTimeoutRef.current) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+        nextPromptTimeoutRef.current = null;
+      }
+      nextPromptTimeoutRef.current = window.setTimeout(() => {
+        handleStartRound();
+      }, 5000);
+    });
   }, [revealComplete]);
+
+  useEffect(() => {
+    return () => {
+      if (nextPromptTimeoutRef.current) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+        nextPromptTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const previewTrackName = round?.prompt?.topSongs?.[0]?.track;
   const promptArtistName = round?.prompt?.topSongs?.[0]?.artist;

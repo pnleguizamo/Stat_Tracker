@@ -12,7 +12,7 @@ type HostMinigameProps = {
   roomCode: string;
   gameState: GameState;
   onAdvance: () => void;
-  onRevealComplete?: () => void;
+  onRevealComplete: (onSequenceComplete?: () => void) => void;
 };
 
 const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<HostMinigameProps>>> = {
@@ -73,7 +73,7 @@ const HostGame = () => {
     leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
   }, [gameState]);
 
-  const handleRevealComplete = () => {
+  const handleRevealComplete = (onSequenceComplete?: () => void) => {
     if (leaderboardShowRef.current) {
       window.clearTimeout(leaderboardShowRef.current);
       leaderboardShowRef.current = null;
@@ -83,7 +83,10 @@ const HostGame = () => {
       leaderboardHideRef.current = null;
     }
     leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
-    leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
+    leaderboardHideRef.current = window.setTimeout(() => {
+      setShowLeaderboard(false);
+      onSequenceComplete?.();
+    }, 6000);
   };
 
   useEffect(() => {

@@ -114,7 +114,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     const player = new window.Spotify.Player({
       name: 'Stat Tracker — Heardle Host',
       getOAuthToken: (cb: (token: string) => void) => cb(token),
-      volume: 1,
+      volume: 0.8,
     });
 
     player.addListener('ready', ({ device_id }: { device_id: string }) => {

@@ -45,6 +45,10 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   );
   const guessedTrackIds = useMemo(() => new Set(myGuesses.map((g) => g.trackId).filter(Boolean)), [myGuesses]);
 
+  const players = gameState.players || [];
+  const myPlayer = players.find((p) => p.socketId === mySocketId);
+  const isPrivilegedUser = myPlayer?.userId === "pnleguizamo";
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TrackOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -138,6 +142,18 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
         }
       }
     );
+  }; 
+
+  const handleStart = () => {
+    if (!roomCode) return;
+    socket.emit('minigame:HEARDLE:startRound', { roomCode }, (resp?: { ok: boolean; error?: string }) => {
+      if (!resp?.ok) {
+        const message =
+          resp?.error === 'NO_SONGS_REMAINING'
+            ? 'No songs left in this stage — advance or adjust the plan.'
+            : resp?.error || 'Failed to start Heardle round';
+      }
+    });
   };
 
   if (!round) {
@@ -245,6 +261,10 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
           ) : null}
         </div>
       )}
+
+      {isPrivilegedUser && <button onClick={handleStart} disabled={round.status !== 'revealed'}>
+          {'Next Song'}
+      </button>}
 
       {submitError && <div style={{ color: 'salmon' }}>{submitError}</div>}
     </div>

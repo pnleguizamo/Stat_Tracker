@@ -1,7 +1,7 @@
 import { useTrackPreview } from "game/hooks/useTrackPreview";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useVoteTally } from "game/hooks/useVoteTally";
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, WhoListenedMostRoundState } from "types/game";
 import { PlayerVotes } from "./components/PlayerVotes";
@@ -10,7 +10,7 @@ type Props = {
   roomCode: string;
   gameState: GameState;
   onAdvance: () => void;
-  onRevealComplete?: () => void;
+  onRevealComplete: (onSequenceComplete?: () => void) => void;
 };
 
 export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onRevealComplete }) => {
@@ -21,6 +21,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
   const players = gameState.players || [];
   const [actionBusy, setActionBusy] = useState<"prompt" | "reveal" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const nextPromptTimeoutRef = useRef<number | null>(null);
 
   const submissions = round ? Object.keys(round.answers || {}).length : 0;
   const voteTotals = round?.results?.tally || {};
@@ -57,8 +58,35 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
 
   useEffect(() => {
     if (!revealComplete) return;
-    onRevealComplete?.();
+    onRevealComplete(() => {
+      if (!roomCode) return;
+      if (actionBusy === "prompt") return;
+      
+      if (nextPromptTimeoutRef.current) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+        nextPromptTimeoutRef.current = null;
+      }
+      nextPromptTimeoutRef.current = window.setTimeout(() => {
+        handleNewPrompt();
+      }, 5000);
+    });
+
+    return () => {
+      if (nextPromptTimeoutRef.current) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+        nextPromptTimeoutRef.current = null;
+      }
+    };
   }, [revealComplete]);
+
+  useEffect(() => {
+    return () => {
+      if (nextPromptTimeoutRef.current) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+        nextPromptTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleNewPrompt = () => {
     if (!roomCode) return;
