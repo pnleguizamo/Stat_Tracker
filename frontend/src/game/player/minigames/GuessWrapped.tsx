@@ -61,7 +61,7 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
           {prompt.year} Spotify Wrapped
         </div>
         <h3 style={{ margin: "6px 0", color: "#ffffffff" }}>{prompt.minutesListened.toLocaleString()} minutes listened</h3>
-        {prompt.topGenre && <div style={{ color: "#ffffffff" }}>Top genre: {prompt.topGenre}</div>}
+        {prompt.topGenres?.length && <div style={{ color: "#ffffffff" }}>Top genres: {prompt.topGenres.join(", ")}</div>}
       </section> */}
 
       {/* <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24, color : "#ffffffff" }}>

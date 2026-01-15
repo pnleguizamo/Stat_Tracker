@@ -91,7 +91,10 @@ export type WhoListenedMostRoundState = {
 export type GuessWrappedSummary = {
   year: number;
   minutesListened: number;
-  topGenre?: string | null;
+  topGenres: Array<{
+    genre: string;
+    plays: number;
+  }>;
   topArtists: Array<{
     name: string;
     playCount: number;
@@ -103,6 +106,7 @@ export type GuessWrappedSummary = {
     artist: string;
     playCount: number;
     totalMsPlayed?: number;
+    imageUrl?: string | null;
   }>;
 };
 

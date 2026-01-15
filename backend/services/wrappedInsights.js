@@ -4,17 +4,6 @@ const MIN_MINUTES_PER_YEAR = 500;
 const MIN_TRACKS_PER_YEAR = 100;
 const MAX_YEAR_CANDIDATES = 5;
 
-function pickTopGenre(artists = []) {
-  const tally = {};
-  for (const artist of artists) {
-    for (const genre of artist.genres || []) {
-      tally[genre] = (tally[genre] || 0) + (artist.plays || 0);
-    }
-  }
-  const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[0] || null;
-}
-
 async function buildWrappedSummaryForUser(userId) {
   const db = await initDb();
   const snapshotsCol = db.collection(COLLECTIONS.userSnapshots);
@@ -52,12 +41,12 @@ async function buildWrappedSummaryForUser(userId) {
 
   if (!topArtists.length || !topTracks.length) return null;
 
-  const topGenre = pickTopGenre(topArtists);
+  const topGenres = (window.topGenres || []).slice(0, 5)
 
   return {
     year: choice.year || null,
     minutesListened: choice.minutes || 0,
-    topGenre,
+    topGenres,
     topArtists: topArtists.map((artist) => ({
       name: artist.name || null,
       playCount: artist.plays || 0,

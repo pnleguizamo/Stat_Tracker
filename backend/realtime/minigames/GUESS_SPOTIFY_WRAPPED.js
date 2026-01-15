@@ -18,22 +18,37 @@ function clonePlayerSnapshot(player = {}, socketId) {
 async function pickWrappedSummary(room) {
   const players = Array.from(room.players.entries()).filter(([, player]) => player.userId);
   if (!players.length) return null;
-  const shuffled = players.sort(() => Math.random() - 0.5);
+  const seenWrapped = room.wrappedSeen || new Set();
 
-  for (const [socketId, player] of shuffled) {
-    try {
-      const summary = await buildWrappedSummaryForUser(player.userId);
-      if (summary) {
+  for (let pass = 0; pass < 2; pass += 1) {
+    const shuffled = players.sort(() => Math.random() - 0.5);
+    let availableCount = 0;
+
+    for (const [socketId, player] of shuffled) {
+      try {
+        const summary = await buildWrappedSummaryForUser(player.userId);
+        if (!summary) continue;
+        availableCount += 1;
+        const summaryKey = `${player.userId}:${summary.year ?? 'unknown'}`;
+        if (seenWrapped.has(summaryKey)) continue;
+
+        seenWrapped.add(summaryKey);
+        room.wrappedSeen = seenWrapped;
         return {
           ownerSocketId: socketId,
           ownerProfile: clonePlayerSnapshot(player, socketId),
           summary,
         };
+      } catch (err) {
+        console.warn('Failed to build wrapped summary for', player.userId, err.message || err);
       }
-    } catch (err) {
-      console.warn('Failed to build wrapped summary for', player.userId, err.message || err);
     }
+
+    if (!availableCount || pass > 0) break;
+    seenWrapped.clear();
   }
+
+  room.wrappedSeen = seenWrapped;
   return null;
 }
 

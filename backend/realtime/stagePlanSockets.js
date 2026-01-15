@@ -11,10 +11,10 @@ const ensureStageState = async (room) => {
     if (room.roundState[stageIndex]) return;
 
     const stageModule = minigameRegistry.modules?.[stageConfig.minigameId];
-    if (stageModule?.createRoundState) {
+    // if (stageModule?.createRoundState) {
       // await stageModule.createRoundState(room, { stageIndex });
       return;
-    }
+    // }
 
     room.roundState[stageIndex] = {
       id: `pending-${stageConfig.minigameId}-${Date.now()}`,

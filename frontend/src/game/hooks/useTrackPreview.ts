@@ -13,6 +13,7 @@ type TrackPreviewOptions = {
 type TrackPreviewState = {
   stop: () => void;
   error: string | null;
+  isPlaying: boolean;
 };
 
 export const useTrackPreview = ({
@@ -26,11 +27,13 @@ export const useTrackPreview = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastPreviewKeyRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const stop = useCallback(() => {
     if (!audioRef.current) return;
     audioRef.current.pause();
     audioRef.current = null;
+    setIsPlaying(false);
   }, []);
 
   useEffect(() => {
@@ -52,6 +55,7 @@ export const useTrackPreview = ({
 
     stop();
     setError(null);
+    setIsPlaying(false);
 
     const params =
       kind === 'artist'
@@ -72,14 +76,19 @@ export const useTrackPreview = ({
         const audio = new Audio(previewUrl);
         audio.volume = volume;
         audioRef.current = audio;
+        audio.addEventListener('play', () => setIsPlaying(true));
+        audio.addEventListener('pause', () => setIsPlaying(false));
+        audio.addEventListener('ended', () => setIsPlaying(false));
         audio.play().catch((err) => {
           console.warn('Preview playback failed', err);
+          setIsPlaying(false);
         });
       })
       .catch((err: any) => {
         if (cancelled) return;
         console.warn('Preview fetch failed', err);
         setError('Unable to load preview');
+        setIsPlaying(false);
       });
 
     return () => {
@@ -89,5 +98,5 @@ export const useTrackPreview = ({
 
   useEffect(() => stop, [stop]);
 
-  return { stop, error };
+  return { stop, error, isPlaying };
 };

@@ -1,0 +1,59 @@
+import { useMemo } from "react";
+import { Player } from "types/game";
+
+export type VoteEntry = {
+  voterSocketId: string;
+  targetSocketId: string;
+  at: number;
+};
+
+type VoteAnswer = {
+  answer?: { targetSocketId?: string | null } | null;
+  at?: number | null;
+};
+
+type UseVoteTallyArgs = {
+  players: Player[];
+  answers?: Record<string, VoteAnswer>;
+  totals?: Record<string, number>;
+};
+
+export const useVoteTally = ({ players, answers, totals }: UseVoteTallyArgs) => {
+  const voteEntries = useMemo(() => {
+    if (!answers) return [];
+    return Object.entries(answers)
+      .map(([voterSocketId, submission]) => ({
+        voterSocketId,
+        targetSocketId: submission?.answer?.targetSocketId || "",
+        at: submission?.at || 0,
+      }))
+      .filter((entry) => entry.targetSocketId)
+      .sort((a, b) => a.at - b.at);
+  }, [answers]);
+
+  const finalTally = useMemo(() => {
+    if (totals && Object.keys(totals).length) return totals;
+    const tally: Record<string, number> = {};
+    voteEntries.forEach((entry) => {
+      tally[entry.targetSocketId] = (tally[entry.targetSocketId] || 0) + 1;
+    });
+    return tally;
+  }, [totals, voteEntries]);
+
+  const totalVotes = useMemo(() => {
+    if (voteEntries.length) return voteEntries.length;
+    return Object.values(finalTally).reduce((sum, count) => sum + count, 0);
+  }, [finalTally, voteEntries.length]);
+
+  const maxVotes = useMemo(() => {
+    const values = Object.values(finalTally);
+    return values.length ? Math.max(1, ...values) : 1;
+  }, [finalTally]);
+
+  return {
+    voteEntries,
+    finalTally,
+    totalVotes,
+    maxVotes,
+  };
+};

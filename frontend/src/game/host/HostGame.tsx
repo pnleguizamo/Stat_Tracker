@@ -58,6 +58,7 @@ const HostGame = () => {
 
     const minigameId = gameState.currentStageConfig?.minigameId;
     if (minigameId === "WHO_LISTENED_MOST") return;
+    if (minigameId === "GUESS_SPOTIFY_WRAPPED") return;
 
     lastRevealedRoundIdRef.current = round.id;
     if (leaderboardShowRef.current) {
