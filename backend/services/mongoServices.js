@@ -305,19 +305,43 @@ mongoService.getSharedTopArtists = async function (userIds, accessToken, minAcco
         db = await initDb();
 
         const start = Date.now();
-
-        const streamsCol = db.collection(COLLECTIONS.streams);
+        
         const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
         const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
-
-        // hasRollups is never false
-        const hasRollups = await artistCountsCol.findOne({ userId: { $in: userIds } }, { projection: { _id: 1 } });
+        const minDepthUsers = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
 
         const weightMultiplier = 4;
         const playCountStifler = 1000;
 
-        const basePipeline = [
-            { $addFields:
+        const pipeline = [
+            { $match: { userId: { $in: userIds } } },
+            {
+                $group: {
+                    _id: "$artistId",
+                    play_count: { $sum: "$plays" },
+                    unique_users: { $addToSet: "$userId" },
+                    users: {
+                        $push: { userId: '$userId', plays: '$plays', uniqueTracks: "$uniqueTracks", }
+                    },
+                }
+            },
+            {
+                $addFields: {
+                    user_count: { $size: "$unique_users" }, 
+                    depth_user_count: {
+                        $size: {
+                            $filter: {
+                                input: "$users",
+                                as: "u",
+                                cond: { $gte: ["$$u.uniqueTracks", 3] },
+                            },
+                        },
+                    },
+                },
+            },
+            { $match: { user_count: { $gte: minAccounts }, depth_user_count: { $gte: minDepthUsers } } },
+            {
+                $addFields:
                 {
                     playCountWeight: {
                         $divide: [
@@ -339,6 +363,8 @@ mongoService.getSharedTopArtists = async function (userIds, accessToken, minAcco
                     play_count: 1,
                     user_count: 1,
                     users: 1,
+                    user_count: 1,
+                    depth_user_count: 1,
                     listener_percentage: {
                         $multiply: [
                             { $divide: ["$user_count", userIds.length] },
@@ -349,46 +375,7 @@ mongoService.getSharedTopArtists = async function (userIds, accessToken, minAcco
             }
         ];
 
-        const sourcePipeline = hasRollups
-            ? [
-                { $match: { userId: { $in: userIds } } },
-                {
-                    $group: {
-                        _id: "$artistId",
-                        play_count: { $sum: "$plays" },
-                        unique_users: { $addToSet: "$userId" },
-                        users: {
-                            $push: { userId: '$userId', plays: '$plays' }
-                        },
-                    }
-                },
-                { $addFields: { user_count: { $size: "$unique_users" } } },
-                { $match: { user_count: { $gte: minAccounts } } },
-            ]
-            : [
-                {
-                    $match: {
-                        userId: { $in: userIds },
-                        reasonEnd: "trackdone",
-                        canonicalTrackId: { $ne: null },
-                        artistId: { $ne: null },
-                    }
-                },
-                {
-                    $group: {
-                        _id : "$artistId",
-                        play_count: { $sum: 1 },
-                        unique_users: { $addToSet: "$userId" }
-                    }
-                },
-                { $addFields: { user_count: { $size: "$unique_users" } } },
-                { $match: { user_count: { $gte: minAccounts } } },
-            ];
-
-        const pipeline = [...sourcePipeline, ...basePipeline];
-        const sourceCol = hasRollups ? artistCountsCol : streamsCol;
-        const sharedArtists = await sourceCol.aggregate(pipeline).toArray();
-
+        const sharedArtists = await artistCountsCol.aggregate(pipeline).toArray();
 
         const artistIds = sharedArtists.map(artist => artist?._id).filter(Boolean);
         const artistsCol = db.collection(COLLECTIONS.artists);
@@ -437,18 +424,28 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
 
         const start = Date.now();
 
-        const streamsCol = db.collection(COLLECTIONS.streams);
         const minAccounts = Math.max(Math.ceil(userIds.length * minAccountsPercentage), 2);
-
         const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
-        // hasRollups is never false
-        const hasRollups = await trackCountsCol.findOne({ userId: { $in: userIds } }, { projection: { _id: 1 } });
 
         const weightMultiplier = 4;
         const playCountStifler = 500;
 
-        const basePipeline = [
-            { $addFields:
+        const pipeline = [
+            { $match: { userId: { $in: userIds } } },
+            {
+                $group: {
+                    _id: "$trackId",
+                    play_count: { $sum: "$plays" },
+                    unique_users: { $addToSet: "$userId" },
+                    users: {
+                        $push: { userId: '$userId', plays: '$plays' }
+                    },
+                }
+            },
+            { $addFields: { user_count: { $size: "$unique_users" } } },
+            { $match: { user_count: { $gte: minAccounts } } },
+            {
+                $addFields:
                 {
                     playCountWeight: {
                         $divide: [
@@ -480,44 +477,7 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
             }
         ];
 
-        const sourcePipeline = hasRollups
-            ? [
-                { $match: { userId: { $in: userIds } } },
-                {
-                    $group: {
-                        _id: "$trackId",
-                        play_count: { $sum: "$plays" },
-                        unique_users: { $addToSet: "$userId" },
-                        users: {
-                            $push: { userId: '$userId', plays: '$plays' }
-                        },
-                    }
-                },
-                { $addFields: { user_count: { $size: "$unique_users" } } },
-                { $match: { user_count: { $gte: minAccounts } } },
-            ]
-            : [
-                {
-                    $match: {
-                        userId: { $in: userIds },
-                        reasonEnd: "trackdone",
-                        canonicalTrackId: { $ne: null }
-                    }
-                },
-                {
-                    $group: {
-                        _id : "$canonicalTrackId",
-                        play_count: { $sum: 1 },
-                        unique_users: { $addToSet: "$userId" }
-                    }
-                },
-                { $addFields: { user_count: { $size: "$unique_users" } } },
-                { $match: { user_count: { $gte: minAccounts } } },
-            ];
-
-        const pipeline = [...sourcePipeline, ...basePipeline];
-        const sourceCol = hasRollups ? trackCountsCol : streamsCol;
-        const sharedSongs = await sourceCol.aggregate(pipeline).toArray();
+        const sharedSongs = await trackCountsCol.aggregate(pipeline).toArray();
 
         
         const trackIds = sharedSongs.map(song => song?._id).filter(Boolean);
@@ -688,7 +648,8 @@ mongoService.rollupUserCounts = async function (options = {}) {
             const { userId, trackId } = doc._id || {};
             if (!userId || !trackId) continue;
             const artistIds = metaMap.get(trackId) || [];
-            for (const artistId of artistIds) {
+            const uniqueArtistIds = new Set(artistIds.filter(Boolean));
+            for (const artistId of uniqueArtistIds) {
                 artistOpsPayload.push({
                     updateOne: {
                         filter: { userId, artistId },
@@ -696,6 +657,7 @@ mongoService.rollupUserCounts = async function (options = {}) {
                             $inc: {
                                 plays: doc.plays || 0,
                                 msPlayed: doc.msPlayed || 0,
+                                uniqueTracks: 1,
                             },
                             $max: { lastStreamTs: doc.lastStreamTs || null },
                         },

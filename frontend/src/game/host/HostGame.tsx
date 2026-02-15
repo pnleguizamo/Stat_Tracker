@@ -13,6 +13,7 @@ type HostMinigameProps = {
   gameState: GameState;
   onAdvance: () => void;
   onRevealComplete: (onSequenceComplete?: () => void) => void;
+  remainingMs: number | null;
 };
 
 const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<HostMinigameProps>>> = {
@@ -31,6 +32,7 @@ const HostGame = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const lastRevealedRoundIdRef = useRef<string | null>(null);
+  const activeRoundRef = useRef<GameState["currentRoundState"] | null>(null);
   const leaderboardShowRef = useRef<number | null>(null);
   const leaderboardHideRef = useRef<number | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
@@ -73,7 +75,14 @@ const HostGame = () => {
     leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
   }, [gameState]);
 
-  const handleRevealComplete = (onSequenceComplete?: () => void) => {
+  useEffect(() => {
+    activeRoundRef.current = gameState?.currentRoundState ?? null;
+  }, [gameState?.currentRoundState]);
+
+  useEffect(() => {
+    const round = gameState?.currentRoundState;
+    if (!round || round.status === "revealed") return;
+
     if (leaderboardShowRef.current) {
       window.clearTimeout(leaderboardShowRef.current);
       leaderboardShowRef.current = null;
@@ -82,8 +91,29 @@ const HostGame = () => {
       window.clearTimeout(leaderboardHideRef.current);
       leaderboardHideRef.current = null;
     }
+    setShowLeaderboard(false);
+  }, [gameState?.currentRoundState?.id, gameState?.currentRoundState?.status]);
+
+  const handleRevealComplete = (onSequenceComplete?: () => void) => {
+    const revealRoundId = activeRoundRef.current?.id ?? null;
+    if (leaderboardShowRef.current) {
+      window.clearTimeout(leaderboardShowRef.current);
+      leaderboardShowRef.current = null;
+    }
+    if (leaderboardHideRef.current) {
+      window.clearTimeout(leaderboardHideRef.current);
+      leaderboardHideRef.current = null;
+    }
+    
     leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
     leaderboardHideRef.current = window.setTimeout(() => {
+      const currentRound = activeRoundRef.current;
+      const isStillSameRevealedRound =
+        !!currentRound &&
+        currentRound.status === "revealed" &&
+        currentRound.id === revealRoundId;
+      if (!isStillSameRevealedRound) return;
+
       setShowLeaderboard(false);
       onSequenceComplete?.();
     }, 6000);
@@ -157,6 +187,7 @@ const HostGame = () => {
             roomCode={roomCode}
             onAdvance={handleAdvance}
             onRevealComplete={handleRevealComplete}
+            remainingMs={remainingMs}
           />
         ) : (
           <div style={{ padding: "2rem", textAlign: "center" }}>

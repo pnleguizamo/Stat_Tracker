@@ -9,7 +9,7 @@ async function main() {
 
   const start = Date.now();
 
-  const result = await runFullBackfill(userIds);
+  const result = await runFullBackfill({userIds});
   await rollupUserCounts();
   
   const duration = Date.now() - start;

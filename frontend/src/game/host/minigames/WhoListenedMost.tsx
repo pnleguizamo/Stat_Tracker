@@ -22,6 +22,8 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
   const [actionBusy, setActionBusy] = useState<"prompt" | "reveal" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const nextPromptTimeoutRef = useRef<number | null>(null);
+  const busyRef = useRef<"prompt" | "reveal" | null>(null);
+  const roundIdRef = useRef<string | null>(null);
 
   const submissions = round ? Object.keys(round.answers || {}).length : 0;
   const voteTotals = round?.results?.tally || {};
@@ -34,6 +36,14 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
   });
 
   const roundStatus = round?.status || "pending";
+
+  useEffect(() => {
+    busyRef.current = actionBusy;
+  }, [actionBusy]);
+
+  useEffect(() => {
+    roundIdRef.current = round?.id ?? null;
+  }, [round?.id]);
 
   const { revealComplete, revealedVoteMap, revealedTally } = useVoteReveal({
     status: roundStatus,
@@ -58,17 +68,21 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
 
   useEffect(() => {
     if (!revealComplete) return;
+    const revealRoundId = roundIdRef.current;
     onRevealComplete(() => {
       if (!roomCode) return;
-      if (actionBusy === "prompt") return;
+      if (!revealRoundId || roundIdRef.current !== revealRoundId) return;
+      if (busyRef.current === "prompt") return;
       
       if (nextPromptTimeoutRef.current) {
         window.clearTimeout(nextPromptTimeoutRef.current);
         nextPromptTimeoutRef.current = null;
       }
       nextPromptTimeoutRef.current = window.setTimeout(() => {
+        if (!revealRoundId || roundIdRef.current !== revealRoundId) return;
+        if (busyRef.current === "prompt") return;
         handleNewPrompt();
-      }, 5000);
+      }, 3500);
     });
 
     return () => {
@@ -90,6 +104,10 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
 
   const handleNewPrompt = () => {
     if (!roomCode) return;
+    if (nextPromptTimeoutRef.current) {
+      window.clearTimeout(nextPromptTimeoutRef.current);
+      nextPromptTimeoutRef.current = null;
+    }
     setActionBusy("prompt");
     setError(null);
     socket.emit("minigame:WHO_LISTENED_MOST:startRound", { roomCode }, (resp?: { ok: boolean; error?: string }) => {
