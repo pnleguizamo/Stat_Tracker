@@ -16,11 +16,17 @@ type TrackOption = {
   imageUrl?: string | null;
 };
 
+type PendingGiveUp = {
+  expectedRoundId: string;
+  expectedSnippetIndex: number;
+};
+
 function outcomeLabel(outcome: HeardleGuessOutcome | null) {
   if (outcome === 'correct') return { text: 'Correct', color: '#22c55e', icon: '✓' };
   if (outcome === 'album_match') return { text: 'Album match', color: '#fbbf24', icon: '✕' };
   if (outcome === 'artist_match') return { text: 'Artist match', color: '#f59e0b', icon: '✕' };
   if (outcome === 'wrong') return { text: 'Wrong', color: '#f87171', icon: '✕' };
+  if (outcome === 'gave_up') return { text: 'Gave up', color: '#60a5fa', icon: '>>' };
   return { text: 'No guess yet', color: '#94a3b8', icon: '…' };
 }
 
@@ -56,9 +62,10 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const [selected, setSelected] = useState<TrackOption | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [submitBusy, setSubmitBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState<'submit' | 'giveup' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [pendingGiveUp, setPendingGiveUp] = useState<PendingGiveUp | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -117,7 +124,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const handleSubmit = () => {
     if (!roomCode || !round || !selected) return;
     if (hasGuessedCurrent || round.status === 'revealed') return;
-    setSubmitBusy(true);
+    setActionBusy('submit');
     setSubmitError(null);
     socket.emit(
       'minigame:HEARDLE:submitGuess',
@@ -132,18 +139,72 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
         },
       },
       (resp?: { ok: boolean; error?: string; outcome?: HeardleGuessOutcome }) => {
-        setSubmitBusy(false);
+        setActionBusy(null);
         if (!resp?.ok) {
           const msg =
             resp?.error === 'ALREADY_GUESSED_THIS_SNIPPET'
-              ? 'You already guessed this snippet.'
+              ? 'You already responded for this snippet.'
               : resp?.error || 'Failed to submit guess';
           setSubmitError(msg);
         }
       }
     );
-  }; 
+  };
 
+  const handleGiveUp = () => {
+    if (!roomCode || !round) return;
+    if (hasGuessedCurrent || round.status === 'revealed') return;
+    setSubmitError(null);
+    setPendingGiveUp({
+      expectedRoundId: round.id,
+      expectedSnippetIndex: round.currentSnippetIndex,
+    });
+  };
+
+  const handleCancelGiveUp = () => {
+    if (actionBusy === 'giveup') return;
+    setPendingGiveUp(null);
+  };
+
+  const handleConfirmGiveUp = () => {
+    if (!roomCode || !round || !pendingGiveUp) return;
+    if (round.status === 'revealed' || hasGuessedCurrent) {
+      setPendingGiveUp(null);
+      return;
+    }
+    if (
+      round.id !== pendingGiveUp.expectedRoundId ||
+      round.currentSnippetIndex !== pendingGiveUp.expectedSnippetIndex
+    ) {
+      setPendingGiveUp(null);
+      setSubmitError('Snippet changed before confirmation. Please try again.');
+      return;
+    }
+
+    setActionBusy('giveup');
+    setSubmitError(null);
+    socket.emit(
+      'minigame:HEARDLE:giveUp',
+      {
+        roomCode,
+        expectedRoundId: pendingGiveUp.expectedRoundId,
+        expectedSnippetIndex: pendingGiveUp.expectedSnippetIndex,
+      },
+      (resp?: { ok: boolean; error?: string; outcome?: HeardleGuessOutcome }) => {
+        setActionBusy(null);
+        setPendingGiveUp(null);
+        if (!resp?.ok) {
+          const msg =
+            resp?.error === 'ROUND_CHANGED'
+              ? 'Snippet changed before confirmation. Please try again.'
+              : resp?.error === 'ALREADY_GUESSED_THIS_SNIPPET'
+              ? 'You already responded for this snippet.'
+              : resp?.error || 'Failed to give up';
+          setSubmitError(msg);
+        }
+      }
+    );
+  };
   const handleStart = () => {
     if (!roomCode) return;
     socket.emit('minigame:HEARDLE:startRound', { roomCode }, (resp?: { ok: boolean; error?: string }) => {
@@ -161,6 +222,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   }
 
   const { text: outcomeText, color: outcomeColor, icon } = outcomeLabel(myLatestOutcome || null);
+  const isBusy = actionBusy !== null || !!pendingGiveUp;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -178,7 +240,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
         </div>
       </div>
 
-      {round.status !== 'revealed' && !hasAnsweredCorrectly && (
+      {round.status !== 'revealed' && !hasAnsweredCorrectly && !hasGuessedCurrent && (
         <div style={{ padding: '1rem', borderRadius: 12, background: '#0b1220' }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <input
@@ -187,18 +249,29 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search for a song"
               style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #1f2937', background: '#0f172a', color: '#fff' }}
-              disabled={hasAnsweredCorrectly}
+              disabled={hasAnsweredCorrectly || hasGuessedCurrent || isBusy}
             />
             <button
               onClick={handleSubmit}
-              disabled={!selected || submitBusy || hasGuessedCurrent || hasAnsweredCorrectly}
-              style={{ minWidth: 120}}
+              disabled={!selected || isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
+              style={{ minWidth: 120 }}
             >
-              {submitBusy
+              {actionBusy === 'submit'
                 ? 'Submitting…'
                 : hasGuessedCurrent
                 ? 'Locked'
                 : 'Submit guess'}
+            </button>
+            <button
+              onClick={handleGiveUp}
+              disabled={isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
+              style={{ minWidth: 100 }}
+            >
+              {actionBusy === 'giveup'
+                ? 'Giving up…'
+                : hasGuessedCurrent
+                ? 'Locked'
+                : 'Give up'}
             </button>
           </div>
           {searchError && <div style={{ color: 'salmon', marginBottom: 8 }}>{searchError}</div>}
@@ -222,7 +295,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
                     textAlign: 'left',
                     opacity: isGuessed ? 0.5 : 1,
                   }}
-                  disabled={submitBusy || hasGuessedCurrent || isGuessed}
+                  disabled={isBusy || hasGuessedCurrent || isGuessed}
                 >
                   <div>
                     <div style={{ fontWeight: 700 }}>{track.name}</div>
@@ -244,11 +317,17 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
           </div>
           {hasMore && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => performSearch(query, offset, false)} disabled={searching}>
+              <button onClick={() => performSearch(query, offset, false)} disabled={searching || isBusy || hasGuessedCurrent}>
                 {searching ? 'Loading…' : 'Show more'}
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {round.status !== 'revealed' && !hasAnsweredCorrectly && hasGuessedCurrent && (
+        <div style={{ padding: '1rem', borderRadius: 12, background: '#0b1220', color: '#cbd5e1' }}>
+          Waiting for the next snippet...
         </div>
       )}
 
@@ -267,6 +346,45 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
       </button>}
 
       {submitError && <div style={{ color: 'salmon' }}>{submitError}</div>}
+
+      {pendingGiveUp && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 23, 0.78)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              width: 'min(420px, 100%)',
+              background: '#0b1220',
+              border: '1px solid #1f2937',
+              borderRadius: 12,
+              padding: '1rem',
+              color: '#e2e8f0',
+            }}
+          >
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Give up this snippet?</div>
+            <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 12 }}>
+              This action is final for the current snippet.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={handleCancelGiveUp} disabled={actionBusy === 'giveup'}>
+                Cancel
+              </button>
+              <button onClick={handleConfirmGiveUp} disabled={actionBusy === 'giveup'}>
+                {actionBusy === 'giveup' ? 'Giving up…' : 'Confirm give up'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

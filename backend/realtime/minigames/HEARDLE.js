@@ -1,10 +1,16 @@
 const { getSharedTopSongs } = require('../../services/mongoServices');
 const { getAccessToken } = require('../../services/authService');
 
-const SNIPPET_WINDOWS_MS = [500, 1000, 3000, 7000, 12000, 17000];
-const GUESS_WINDOW_MS = 60_000;
-const DEFAULT_POINTS_PER_SNIPPET = [1200, 1000, 900, 750, 600, 500];
+const SNIPPET_WINDOWS_MS = [500, 1000, 3000, 7000, 12000, 17000, 30000];
+const SNIPPET_REPLAY_GAP_MS = [6000, 5000, 4000, 2000, 2000, 2000, 11000];
+const GUESS_WINDOW_MS = 40_000;
+const DEFAULT_POINTS_PER_SNIPPET = [1200, 1000, 900, 750, 600, 500, 300];
 const DEFAULT_SONGS_PER_GAME = 10;
+const HINT_PATTERN_START_SNIPPET_INDEX = 1;
+const HINT_YEAR_SNIPPET_INDEX = 2;
+const HINT_ARTIST_INITIAL_SNIPPET_INDEX = 5;
+const HINT_PROGRESSIVE_REVEAL_START_SNIPPET_INDEX = 3;
+const DEFAULT_PROGRESSIVE_REVEAL_CAP = 0.6;
 
 function safeRoomLookup(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -130,6 +136,137 @@ function evaluateGuess(guess, song) {
   return { outcome: 'wrong' };
 }
 
+function isLetterChar(char) {
+  return !!char && char.toLowerCase() !== char.toUpperCase();
+}
+
+function isDigitChar(char) {
+  return /[0-9]/.test(char);
+}
+
+function getMaskableIndexes(text = '') {
+  const chars = Array.from(text || '');
+  return chars
+    .map((char, idx) => ({ char, idx }))
+    .filter(({ char }) => isLetterChar(char))
+    .map(({ idx }) => idx);
+}
+
+function hashSeed(seedText = '') {
+  let hash = 2166136261;
+  for (let i = 0; i < seedText.length; i += 1) {
+    hash ^= seedText.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createSeededRng(seedText = '') {
+  let seed = hashSeed(seedText);
+  return () => {
+    seed += 0x6D2B79F5;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffledRevealOrder(text = '', seedText = '') {
+  const indices = getMaskableIndexes(text);
+  const rng = createSeededRng(seedText);
+  for (let i = indices.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
+function toMaskedPattern(text = '', revealSet = new Set()) {
+  const chars = Array.from(text || '');
+  return chars
+    .map((char, idx) => {
+      if (char === ' ') return ' ';
+      if (isDigitChar(char)) return '_';
+      if (isLetterChar(char)) return revealSet.has(idx) ? char : '_';
+      return char;
+    })
+    .join('');
+}
+
+function getReleaseYear(song = {}) {
+  const releaseDate = song?.releaseDate || song?.release_date;
+  if (!releaseDate || typeof releaseDate !== 'string') return null;
+  const match = releaseDate.match(/^(\d{4})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (!Number.isFinite(year)) return null;
+  return String(year);
+}
+
+function getArtistHintSource(song = {}) {
+  const artists = song?.artist_names || song?.artistNames || [];
+  return Array.isArray(artists) ? artists.join(', ') : '';
+}
+
+function getWordInitialLetterIndexes(text = '') {
+  const chars = Array.from(text || '');
+  const indexes = [];
+  for (let idx = 0; idx < chars.length; idx += 1) {
+    const char = chars[idx];
+    const prevChar = idx > 0 ? chars[idx - 1] : null;
+    if (!isLetterChar(char)) continue;
+    if (!isLetterChar(prevChar || '')) {
+      indexes.push(idx);
+    }
+  }
+  return indexes;
+}
+
+function getProgressiveRevealRatio(round = {}) {
+  const snippetCount = Array.isArray(round.snippetPlan) ? round.snippetPlan.length : 0;
+  const snippetIndex = typeof round.currentSnippetIndex === 'number' ? round.currentSnippetIndex : 0;
+  if (snippetIndex < HINT_PROGRESSIVE_REVEAL_START_SNIPPET_INDEX) return 0;
+
+  const revealCap = Math.max(0, Math.min(1, Number(DEFAULT_PROGRESSIVE_REVEAL_CAP)));
+  const totalRevealSteps = Math.max(1, snippetCount - HINT_PROGRESSIVE_REVEAL_START_SNIPPET_INDEX);
+  const currentStep = Math.min(totalRevealSteps, snippetIndex - HINT_PROGRESSIVE_REVEAL_START_SNIPPET_INDEX + 1);
+  return Math.min(revealCap, (revealCap * currentStep) / totalRevealSteps);
+}
+
+function computeRoundHints(round = {}) {
+  const snippetIndex = typeof round.currentSnippetIndex === 'number' ? round.currentSnippetIndex : 0;
+  const showPattern = snippetIndex >= HINT_PATTERN_START_SNIPPET_INDEX;
+  const showYear = snippetIndex >= HINT_YEAR_SNIPPET_INDEX;
+  const showArtistWordInitials = snippetIndex >= HINT_ARTIST_INITIAL_SNIPPET_INDEX;
+  const revealRatio = getProgressiveRevealRatio(round);
+
+  const titleText = round?.song?.track_name || '';
+  const artistText = getArtistHintSource(round.song);
+
+  const titleOrder = shuffledRevealOrder(titleText, `${round.id || 'heardle'}:title:${round?.song?.id || 'song'}`);
+  const artistOrder = shuffledRevealOrder(artistText, `${round.id || 'heardle'}:artist:${round?.song?.id || 'song'}`);
+  const titleRevealCount = Math.floor(titleOrder.length * revealRatio);
+  const artistRevealCount = Math.floor(artistOrder.length * revealRatio);
+
+  const titleRevealSet = new Set(titleOrder.slice(0, titleRevealCount));
+  const artistRevealSet = new Set(artistOrder.slice(0, artistRevealCount));
+  if (showArtistWordInitials) {
+    const artistInitialIndexes = getWordInitialLetterIndexes(artistText);
+    artistInitialIndexes.forEach((idx) => artistRevealSet.add(idx));
+  }
+
+
+  return {
+    showPattern,
+    titlePattern: showPattern ? toMaskedPattern(titleText, titleRevealSet) : null,
+    artistPattern: showPattern ? toMaskedPattern(artistText, artistRevealSet) : null,
+    showYear: showPattern && showYear,
+    year: showPattern && showYear ? getReleaseYear(round.song) : null,
+    revealProgressPct: Math.round(revealRatio * 100),
+  };
+}
+
 function computeHeardlePoints(round, guess) {
   if (!round || !guess) return 0;
   const maxPointsArr = Array.isArray(round.maxPointsPerSnippet) ? round.maxPointsPerSnippet : DEFAULT_POINTS_PER_SNIPPET;
@@ -185,6 +322,8 @@ async function createRoundState(room, params = {}) {
   if (!song) throw new Error('NO_SONG_AVAILABLE');
 
   const snippetPlan = SNIPPET_WINDOWS_MS;
+  const snippetReplayGapPlanMs = SNIPPET_REPLAY_GAP_MS;
+
   const maxPointsPerSnippet = DEFAULT_POINTS_PER_SNIPPET;
 
   const now = Date.now();
@@ -200,15 +339,18 @@ async function createRoundState(room, params = {}) {
     startedAt: now,
     snippetStartedAt: now,
     snippetPlan,
+    snippetReplayGapPlanMs,
     snippetHistory: [{ index: 0, startedAt: now, durationMs: snippetPlan[0] || null }],
     currentSnippetIndex: 0,
     guessWindowMs: GUESS_WINDOW_MS,
     maxPointsPerSnippet,
+    hints: null,
     stageProgress: {
       songNumber: stageState.songsStarted + 1,
       songsPerGame,
     },
   };
+  roundState.hints = computeRoundHints(roundState);
 
   stageState.songsStarted += 1;
   room.roundState[stageIndex] = roundState;
@@ -275,6 +417,29 @@ function registerHeardle(io, socket, deps = {}) {
     return { ok: true, results: round.results };
   };
 
+  const maybeAdvanceAfterResponse = (room, roomCode, idx) => {
+    const round = room.roundState?.[idx];
+    if (!round || round.minigameId !== 'HEARDLE') return;
+    const totalPlayers = room.players.size;
+    const winners = getWinners(round);
+
+    if (totalPlayers > 0 && winners.length >= totalPlayers) {
+      reveal(room, roomCode, idx);
+      return;
+    }
+
+    if (totalPlayers > 0) {
+      const satisfiedCount = countSatisfiedPlayers(room, round);
+      if (satisfiedCount >= totalPlayers && round.status !== 'revealed') {
+        if (round.currentSnippetIndex + 1 >= round.snippetPlan.length) {
+          reveal(room, roomCode, idx);
+        } else {
+          advanceSnippet(room, roomCode, idx);
+        }
+      }
+    }
+  };
+
   const advanceSnippet = (room, roomCode, idx) => {
     const round = room.roundState?.[idx];
     if (!round || round.minigameId !== 'HEARDLE') return;
@@ -308,6 +473,7 @@ function registerHeardle(io, socket, deps = {}) {
       startedAt: now,
       durationMs: round.snippetPlan[round.currentSnippetIndex],
     };
+    round.hints = computeRoundHints(round);
 
     round.expiresAt = scheduleRoundTimer?.(room, idx, round.guessWindowMs || GUESS_WINDOW_MS, () => {
       try {
@@ -384,29 +550,64 @@ function registerHeardle(io, socket, deps = {}) {
 
       broadcastGameState?.(roomCode);
 
-      const totalPlayers = room.players.size;
-      const winners = getWinners(round);
-      if (totalPlayers > 0 && winners.length >= totalPlayers) {
-        reveal(room, roomCode, idx);
-      }
-
-      // If everyone has guessed for this snippet or is already correct, advance without waiting.
-      if (totalPlayers > 0) {
-        const satisfiedCount = countSatisfiedPlayers(room, round);
-
-        if (satisfiedCount >= totalPlayers && round.status !== 'revealed') {
-          if (round.currentSnippetIndex + 1 >= round.snippetPlan.length) {
-            reveal(room, roomCode, idx);
-          } else {
-            advanceSnippet(room, roomCode, idx);
-          }
-        }
-      }
+      maybeAdvanceAfterResponse(room, roomCode, idx);
 
       cb?.({ ok: true, outcome: evaluated.outcome, snippetIndex: entry.snippetIndex });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
       logger.error('HEARDLE submitGuess error', err);
+      cb?.({ ok: false, error: 'server_error' });
+    }
+  });
+
+  socket.on('minigame:HEARDLE:giveUp', ({ roomCode, expectedRoundId, expectedSnippetIndex } = {}, cb) => {
+    try {
+      const room = safeRoomLookup(getRoom, roomCode);
+      const idx = getStageIndex(room);
+      room.roundState = room.roundState || {};
+      const round = room.roundState[idx];
+      if (!round || round.minigameId !== 'HEARDLE') {
+        return cb?.({ ok: false, error: 'ROUND_NOT_READY' });
+      }
+      if (round.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
+      if (expectedRoundId && round.id !== expectedRoundId) {
+        return cb?.({ ok: false, error: 'ROUND_CHANGED' });
+      }
+      if (
+        typeof expectedSnippetIndex === 'number' &&
+        expectedSnippetIndex !== round.currentSnippetIndex
+      ) {
+        return cb?.({ ok: false, error: 'ROUND_CHANGED' });
+      }
+
+      const priorGuesses = round.answers[socket.id]?.guesses || [];
+      if (priorGuesses.some((g) => g.outcome === 'correct')) {
+        return cb?.({ ok: false, error: 'ALREADY_CORRECT' });
+      }
+      if (priorGuesses.some((g) => g.snippetIndex === round.currentSnippetIndex)) {
+        return cb?.({ ok: false, error: 'ALREADY_GUESSED_THIS_SNIPPET' });
+      }
+
+      const entry = {
+        snippetIndex: round.currentSnippetIndex,
+        trackId: null,
+        trackName: null,
+        artistNames: [],
+        albumName: null,
+        outcome: 'gave_up',
+        at: Date.now(),
+      };
+
+      round.answers[socket.id] = round.answers[socket.id] || { guesses: [] };
+      round.answers[socket.id].guesses.push(entry);
+
+      broadcastGameState?.(roomCode);
+      maybeAdvanceAfterResponse(room, roomCode, idx);
+
+      cb?.({ ok: true, outcome: 'gave_up', snippetIndex: entry.snippetIndex });
+    } catch (err) {
+      if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
+      logger.error('HEARDLE giveUp error', err);
       cb?.({ ok: false, error: 'server_error' });
     }
   });

@@ -143,7 +143,7 @@ export type GuessWrappedRoundState = {
   };
 };
 
-export type HeardleGuessOutcome = 'wrong' | 'artist_match' | 'album_match' | 'correct';
+export type HeardleGuessOutcome = 'wrong' | 'artist_match' | 'album_match' | 'correct' | 'gave_up';
 
 export type HeardleGuess = {
   snippetIndex: number;
@@ -161,6 +161,7 @@ export type HeardleSong = {
   artist_names?: string[];
   album_name?: string | null;
   imageUrl?: string | null;
+  releaseDate?: string | null;
   uri?: string | null;
 };
 
@@ -178,6 +179,7 @@ export type HeardleRoundState = {
   startedAt?: number;
   snippetStartedAt?: number;
   snippetPlan: number[];
+  snippetReplayGapPlanMs?: number[];
   snippetHistory?: Array<{
     index?: number;
     startedAt?: number | null;
@@ -187,6 +189,17 @@ export type HeardleRoundState = {
   currentSnippetIndex: number;
   guessWindowMs?: number;
   maxPointsPerSnippet?: number[];
+  hintConfig?: {
+    progressiveRevealCap?: number;
+  };
+  hints?: {
+    showPattern?: boolean;
+    titlePattern?: string | null;
+    artistPattern?: string | null;
+    showYear?: boolean;
+    year?: string | null;
+    revealProgressPct?: number;
+  };
   expiresAt?: number;
   stageProgress?: { songNumber?: number; songsPerGame?: number };
   results?: {

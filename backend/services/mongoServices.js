@@ -482,18 +482,30 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
         
         const trackIds = sharedSongs.map(song => song?._id).filter(Boolean);
         const tracksCol = db.collection(COLLECTIONS.tracks);
+        const albumsCol = db.collection(COLLECTIONS.albums);
         const metadata = trackIds.length
             ? await tracksCol
                 .find(
                     { _id: { $in: trackIds } },
-                    { projection: { name: 1, artistNames: 1, albumName: 1, images: 1, durationMs: 1 } }
+                    { projection: { name: 1, artistNames: 1, albumName: 1, albumId: 1, images: 1, durationMs: 1 } }
                 )
                 .toArray()
             : [];
         const metaMap = new Map(metadata.map(doc => [doc._id, doc]));
+        const albumIds = Array.from(new Set(metadata.map(doc => doc?.albumId).filter(Boolean)));
+        const albumMetadata = albumIds.length
+            ? await albumsCol
+                .find(
+                    { _id: { $in: albumIds } },
+                    { projection: { releaseDate: 1 } }
+                )
+                .toArray()
+            : [];
+        const albumMap = new Map(albumMetadata.map(doc => [doc._id, doc]));
 
         const resultSongs = sharedSongs.map(song => {
             const meta = metaMap.get(song._id) || {};
+            const albumMeta = meta?.albumId ? albumMap.get(meta.albumId) : null;
             return {
                 id: song._id,
                 play_count: song.play_count,
@@ -506,6 +518,7 @@ mongoService.getSharedTopSongs = async function (userIds, accessToken, minAccoun
                 album_name: meta.albumName || null,
                 imageUrl: meta.images?.[0]?.url || null,
                 durationMs: meta.durationMs || null,
+                releaseDate: albumMeta?.releaseDate || null,
             };
         });
         
