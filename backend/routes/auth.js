@@ -25,30 +25,38 @@ async function generateCodeChallenge(verifier) {
 router.get('/status', authenticate, async (req, res) => {
   try {
     const accountId = req.accountId;
+    const isGuest = !!(req.authPayload && req.authPayload.guest);
+
+    if (isGuest) {
+      return res.json({
+        accountId,
+        spotifyUser: {
+          id: accountId,
+          display_name: req.authPayload?.displayName || 'Guest',
+          email: null,
+          images: [],
+          is_guest: true,
+        },
+      });
+    }
+
     const db = await initDb();
     const row = await db.collection('oauth_tokens').findOne({ accountId });
-    
-    spotifyUser = {
-      id: row.accountId,
-      display_name: row.display_name || null,
-      email: row.email || null,
-      images: row.avatar_url ? [{ url: row.avatar_url }] : [],
+
+    const spotifyUser = {
+      id: row?.accountId || accountId,
+      display_name: row?.display_name || null,
+      email: row?.email || null,
+      images: row?.avatar_url ? [{ url: row.avatar_url }] : [],
       is_guest: false,
     };
-    
 
-    if (req.authPayload && req.authPayload.guest){
-      spotifyUser.is_guest = true;
-      spotifyUser.display_name = "Guest";
-    }
-    
     res.json({ accountId, spotifyUser });
   } catch (err) {
     console.error('/api/auth/status error', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 
 router.post('/start', async (req, res) => {
   try {

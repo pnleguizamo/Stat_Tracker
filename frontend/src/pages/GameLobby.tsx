@@ -5,7 +5,7 @@ import { socket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 
 type Player = {
-  socketId?: string;
+  playerId: string;
   name: string;
   userId?: string | null;
   displayName?: string | null;
@@ -49,8 +49,8 @@ const GameLobby: React.FC = () => {
 
   useEffect(() => {
     if (!room) return;
-    const mySocketId = socket.id;
-    const me = room.players.find((p) => p.socketId === mySocketId);
+    const myPlayerId = ((socket as any).playerId || socket.id) as string;
+    const me = room.players.find((p) => p.playerId === myPlayerId);
     if (me) {
       if (me.displayName) setDisplayName(me.displayName);
       if (me.avatar) setSelectedAvatar(me.avatar);
@@ -236,7 +236,7 @@ const GameLobby: React.FC = () => {
           <h4>Players</h4>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {room.players.map((p, idx) => (
-              <li key={p.socketId || idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <li key={p.playerId || idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 {p.avatar ? (
                   <img
                     src={p.avatar}

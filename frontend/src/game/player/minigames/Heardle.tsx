@@ -36,15 +36,15 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
       ? (gameState.currentRoundState as HeardleRoundState)
       : null;
 
-  const mySocketId = socket.id as string;
-  const myGuesses = useMemo(() => (round && mySocketId ? round.answers?.[mySocketId]?.guesses || [] : []), [round, mySocketId]);
+  const myPlayerId = ((socket as any).playerId || socket.id) as string;
+  const myGuesses = useMemo(() => (round && myPlayerId ? round.answers?.[myPlayerId]?.guesses || [] : []), [round, myPlayerId]);
   const hasGuessedCurrent = round ? myGuesses.some((g) => g.snippetIndex === round.currentSnippetIndex) : false;
   const myLatestOutcome = useMemo(() => {
-    const summary = round?.results?.guessSummary?.[mySocketId];
+    const summary = round?.results?.guessSummary?.[myPlayerId];
     if (summary?.outcome) return summary.outcome as HeardleGuessOutcome;
     const latest = myGuesses[myGuesses.length - 1];
     return (latest?.outcome as HeardleGuessOutcome) || null;
-  }, [round?.results?.guessSummary, myGuesses, mySocketId]);
+  }, [round?.results?.guessSummary, myGuesses, myPlayerId]);
   const hasAnsweredCorrectly = useMemo(
     () => myGuesses.some((g) => g.outcome === 'correct'),
     [myGuesses]
@@ -52,7 +52,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const guessedTrackIds = useMemo(() => new Set(myGuesses.map((g) => g.trackId).filter(Boolean)), [myGuesses]);
 
   const players = gameState.players || [];
-  const myPlayer = players.find((p) => p.socketId === mySocketId);
+  const myPlayer = players.find((p) => p.playerId === myPlayerId);
   const isPrivilegedUser = myPlayer?.userId === "pnleguizamo";
 
   const [query, setQuery] = useState('');

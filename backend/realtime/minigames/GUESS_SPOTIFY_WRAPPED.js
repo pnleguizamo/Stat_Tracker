@@ -6,10 +6,10 @@ function safeRoom(getRoom, roomCode) {
   return room;
 }
 
-function clonePlayerSnapshot(player = {}, socketId) {
+function clonePlayerSnapshot(player = {}, playerId) {
   if (!player) return null;
   return {
-    socketId,
+    playerId,
     displayName: player.displayName || player.name || 'Player',
     avatar: player.avatar || null,
   };
@@ -24,7 +24,7 @@ async function pickWrappedSummary(room) {
     const shuffled = players.sort(() => Math.random() - 0.5);
     let availableCount = 0;
 
-    for (const [socketId, player] of shuffled) {
+    for (const [playerId, player] of shuffled) {
       try {
         const summary = await buildWrappedSummaryForUser(player.userId);
         if (!summary) continue;
@@ -35,8 +35,8 @@ async function pickWrappedSummary(room) {
         seenWrapped.add(summaryKey);
         room.wrappedSeen = seenWrapped;
         return {
-          ownerSocketId: socketId,
-          ownerProfile: clonePlayerSnapshot(player, socketId),
+          ownerPlayerId: playerId,
+          ownerProfile: clonePlayerSnapshot(player, playerId),
           summary,
         };
       } catch (err) {
@@ -55,20 +55,24 @@ async function pickWrappedSummary(room) {
 function computeResults(round, room) {
   const tally = {};
   for (const submission of Object.values(round.answers || {})) {
-    const target = submission?.answer?.targetSocketId;
+    const target = submission?.answer?.targetPlayerId;
     if (!target) continue;
     tally[target] = (tally[target] || 0) + 1;
   }
+  const ownerPlayerId = round.ownerPlayerId;
   const winners = Object.entries(round.answers || {})
-    .filter(([, submission]) => submission?.answer?.targetSocketId === round.ownerSocketId)
-    .map(([socketId]) => socketId);
+    .filter(([, submission]) => {
+      const target = submission?.answer?.targetPlayerId;
+      return target === ownerPlayerId;
+    })
+    .map(([playerId]) => playerId);
 
-  const ownerPlayer = room.players.get(round.ownerSocketId);
+  const ownerPlayer = room.players.get(ownerPlayerId);
 
   return {
     votes: tally, // TODOo evaluate naming convention. Keep consistent between games
-    ownerSocketId: round.ownerSocketId,
-    ownerProfile: clonePlayerSnapshot(ownerPlayer, round.ownerSocketId),
+    ownerPlayerId,
+    ownerProfile: clonePlayerSnapshot(ownerPlayer, ownerPlayerId),
     winners,
   };
 }
@@ -127,7 +131,7 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
         minigameId: 'GUESS_SPOTIFY_WRAPPED',
         status: 'collecting',
         prompt: prepared.summary,
-        ownerSocketId: prepared.ownerSocketId,
+        ownerPlayerId: prepared.ownerPlayerId,
         ownerProfile: prepared.ownerProfile,
         answers: {},
         startedAt: Date.now(),
@@ -164,11 +168,19 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
 
       round.answers = round.answers || {};
       if (round.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
-      round.answers[socket.id] = { answer, at: Date.now() };
+      const targetPlayerId = answer?.targetPlayerId || null;
+      if (!targetPlayerId) return cb?.({ ok: false, error: 'TARGET_REQUIRED' });
+      round.answers[socket.playerId] = {
+        answer: { targetPlayerId },
+        at: Date.now(),
+      };
       broadcastGameState?.(roomCode);
 
-      const totalPlayers = room.players.size;
-      const answersCount = Object.keys(round.answers || {}).length;
+      const connectedPlayerIds = Array.from(room.players.entries())
+        .filter(([, player]) => player?.connected !== false)
+        .map(([playerId]) => playerId);
+      const totalPlayers = connectedPlayerIds.length;
+      const answersCount = connectedPlayerIds.filter((playerId) => !!round.answers?.[playerId]).length;
       if (totalPlayers > 0 && answersCount >= totalPlayers) {
         reveal(room, roomCode, idx);
       }

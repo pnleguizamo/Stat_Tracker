@@ -7,6 +7,16 @@ function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
+  /*
+    guestPayload = {
+      sub: impersonate,
+      gid,
+      guest: true,
+      displayName: 'Guest',
+    };
+
+    spotifyUserPayload = { sub: accountId }
+  */ 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.accountId = payload.sub;

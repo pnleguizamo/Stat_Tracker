@@ -90,14 +90,14 @@ export const PlayerVotes: FC<Props> = ({
         }}
       >
         {players.map((player) => {
-          const socketId = player.socketId;
-          if (!socketId) return null;
-          const isTop = topSocketIds?.includes(socketId);
-          const hasSubmitted = submittedSocketIds?.includes(socketId);
+          const playerId = player.playerId;
+          if (!playerId) return null;
+          const isTop = topSocketIds?.includes(playerId);
+          const hasSubmitted = submittedSocketIds?.includes(playerId);
 
           return (
             <div
-              key={socketId}
+              key={playerId}
               style={{
                 border: `2px solid ${isTop ? "#48bb78" : "#2d3748"}`,
                 borderRadius: 8,
@@ -155,14 +155,14 @@ export const PlayerVotes: FC<Props> = ({
         </div>
         <div style={{ display: "flex", gap: 18, alignItems: "flex-end", minHeight: 260 }}>
           {players.map((player) => {
-            if (!player.socketId) return null;
-            const socketId = player.socketId;
-            const isTop = topSocketIds?.includes(socketId);
-            const currentVotes = activeTally[socketId] || 0;
-            const finalVotes = finalTally[socketId] || 0;
+            if (!player.playerId) return null;
+            const playerId = player.playerId;
+            const isTop = topSocketIds?.includes(playerId);
+            const currentVotes = activeTally[playerId] || 0;
+            const finalVotes = finalTally[playerId] || 0;
             const votesToShow = revealComplete ? finalVotes : currentVotes;
             const barHeight = Math.round((votesToShow / maxVotes) * 220);
-            const voters = revealedVoteMap?.[socketId] || [];
+            const voters = revealedVoteMap?.[playerId] || [];
             const barPixelHeight = Math.max(18, barHeight);
             const avatarGap = 4;
             const barInnerHeight = Math.max(0, barPixelHeight - 16);
@@ -189,7 +189,7 @@ export const PlayerVotes: FC<Props> = ({
 
             return (
               <div
-                key={socketId}
+                key={playerId}
                 style={{
                   flex: 1,
                   minWidth: 90,
@@ -276,11 +276,11 @@ export const PlayerVotes: FC<Props> = ({
                       }}
                     >
                       {voters.map((voterSocketId) => {
-                        const voter = players.find((p) => p.socketId === voterSocketId);
+                        const voter = players.find((p) => p.playerId === voterSocketId);
                         if (!voter) return null;
                         return (
                           <div
-                            key={`${socketId}-${voterSocketId}`}
+                            key={`${playerId}-${voterSocketId}`}
                             style={{
                               width: avatarSize,
                               height: avatarSize,

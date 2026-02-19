@@ -43,8 +43,8 @@ async function ensureSongPool(room, stageIndex, opts = {}) {
   if (stageState.pool?.length) return stageState.pool;
 
   const userIds = [];
-  room.players.forEach((player, socketId) => {
-    if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
+  room.players.forEach((player, playerId) => {
+    if (player.userId && playerId !== room.hostPlayerId) userIds.push(player.userId);
   });
 
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
@@ -67,14 +67,20 @@ function getWinners(round) {
     .map(([socketId]) => socketId);
 }
 
+function getConnectedPlayerIds(room) {
+  return Array.from(room.players.entries())
+    .filter(([, player]) => player?.connected !== false)
+    .map(([playerId]) => playerId);
+}
+
 function countSatisfiedPlayers(room, round) {
   let satisfiedCount = 0;
-  room.players.forEach((_, playerSocketId) => {
-    const gList = round.answers[playerSocketId]?.guesses || [];
+  for (const playerId of getConnectedPlayerIds(room)) {
+    const gList = round.answers[playerId]?.guesses || [];
     const alreadyCorrect = gList.some((g) => g.outcome === 'correct');
     const guessedThisSnippet = gList.some((g) => g.snippetIndex === round.currentSnippetIndex);
     if (alreadyCorrect || guessedThisSnippet) satisfiedCount += 1;
-  });
+  }
   return satisfiedCount;
 }
 
@@ -420,8 +426,10 @@ function registerHeardle(io, socket, deps = {}) {
   const maybeAdvanceAfterResponse = (room, roomCode, idx) => {
     const round = room.roundState?.[idx];
     if (!round || round.minigameId !== 'HEARDLE') return;
-    const totalPlayers = room.players.size;
-    const winners = getWinners(round);
+    const connectedPlayerIds = getConnectedPlayerIds(room);
+    const connectedSet = new Set(connectedPlayerIds);
+    const totalPlayers = connectedPlayerIds.length;
+    const winners = getWinners(round).filter((playerId) => connectedSet.has(playerId));
 
     if (totalPlayers > 0 && winners.length >= totalPlayers) {
       reveal(room, roomCode, idx);
@@ -445,8 +453,10 @@ function registerHeardle(io, socket, deps = {}) {
     if (!round || round.minigameId !== 'HEARDLE') return;
     if (round.status === 'revealed') return;
 
-    const totalPlayers = room.players.size;
-    const winners = getWinners(round);
+    const connectedPlayerIds = getConnectedPlayerIds(room);
+    const connectedSet = new Set(connectedPlayerIds);
+    const totalPlayers = connectedPlayerIds.length;
+    const winners = getWinners(round).filter((playerId) => connectedSet.has(playerId));
 
     if (totalPlayers > 0 && winners.length >= totalPlayers) {
       reveal(room, roomCode, idx);
@@ -524,12 +534,12 @@ function registerHeardle(io, socket, deps = {}) {
       if (round.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
 
       // Once correct, ignore further guesses.
-      const priorGuesses = round.answers[socket.id]?.guesses || [];
+      const priorGuesses = round.answers[socket.playerId]?.guesses || [];
       if (priorGuesses.some((g) => g.outcome === 'correct')) {
         return cb?.({ ok: false, error: 'ALREADY_CORRECT' });
       }
 
-      const guesses = round.answers[socket.id]?.guesses || [];
+      const guesses = round.answers[socket.playerId]?.guesses || [];
       if (guesses.some((g) => g.snippetIndex === round.currentSnippetIndex)) {
         return cb?.({ ok: false, error: 'ALREADY_GUESSED_THIS_SNIPPET' });
       }
@@ -545,8 +555,8 @@ function registerHeardle(io, socket, deps = {}) {
         at: Date.now(),
       };
 
-      round.answers[socket.id] = round.answers[socket.id] || { guesses: [] };
-      round.answers[socket.id].guesses.push(entry);
+      round.answers[socket.playerId] = round.answers[socket.playerId] || { guesses: [] };
+      round.answers[socket.playerId].guesses.push(entry);
 
       broadcastGameState?.(roomCode);
 
@@ -580,7 +590,7 @@ function registerHeardle(io, socket, deps = {}) {
         return cb?.({ ok: false, error: 'ROUND_CHANGED' });
       }
 
-      const priorGuesses = round.answers[socket.id]?.guesses || [];
+      const priorGuesses = round.answers[socket.playerId]?.guesses || [];
       if (priorGuesses.some((g) => g.outcome === 'correct')) {
         return cb?.({ ok: false, error: 'ALREADY_CORRECT' });
       }
@@ -598,8 +608,8 @@ function registerHeardle(io, socket, deps = {}) {
         at: Date.now(),
       };
 
-      round.answers[socket.id] = round.answers[socket.id] || { guesses: [] };
-      round.answers[socket.id].guesses.push(entry);
+      round.answers[socket.playerId] = round.answers[socket.playerId] || { guesses: [] };
+      round.answers[socket.playerId].guesses.push(entry);
 
       broadcastGameState?.(roomCode);
       maybeAdvanceAfterResponse(room, roomCode, idx);

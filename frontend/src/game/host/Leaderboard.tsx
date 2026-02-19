@@ -15,9 +15,9 @@ function formatAward(award: ScoreAward) {
   return `${reason}: ${points > 0 ? "+" : ""}${points}`;
 }
 
-function resolvePlayer(players: Player[], socketId: string) {
+function resolvePlayer(players: Player[], playerId: string) {
   return (
-    players.find((p) => p.socketId === socketId) || { socketId, displayName: "Unknown" }
+    players.find((p) => p.playerId === playerId) || { playerId, displayName: "Unknown" }
   );
 }
 
@@ -31,7 +31,7 @@ export const Leaderboard: React.FC<Props> = ({
   const entries = useMemo(
     () =>
       Object.entries(scoreboard || {}).map(([socketId, entry]) => ({
-        socketId,
+        playerId: socketId,
         entry: entry as ScoreboardEntry,
       })),
     [scoreboard]
@@ -51,7 +51,7 @@ export const Leaderboard: React.FC<Props> = ({
     [entries]
   );
   const rankMap = useMemo(
-    () => new Map(sortedEntries.map((entry, index) => [entry.socketId, index])),
+    () => new Map(sortedEntries.map((entry, index) => [entry.playerId, index])),
     [sortedEntries]
   );
 
@@ -62,11 +62,11 @@ export const Leaderboard: React.FC<Props> = ({
     const deltas: Record<string, number> = {};
     const bases: Record<string, number> = {};
 
-    entries.forEach(({ socketId, entry }) => {
+    entries.forEach(({ playerId, entry }) => {
       const awards = (entry.awards || []).filter((a) => (roundId ? a.meta?.roundId === roundId : false));
       const delta = awards.reduce((sum, award) => sum + (award.points || 0), 0);
-      deltas[socketId] = delta;
-      bases[socketId] = (entry.points || 0) - delta;
+      deltas[playerId] = delta;
+      bases[playerId] = (entry.points || 0) - delta;
     });
 
     const durationMs = 1400;
@@ -75,10 +75,10 @@ export const Leaderboard: React.FC<Props> = ({
     const step = (now: number) => {
       const progress = Math.min(1, (now - start) / durationMs);
       const next: Record<string, number> = {};
-      entries.forEach(({ socketId, entry }) => {
-        const base = bases[socketId] ?? entry.points ?? 0;
-        const delta = deltas[socketId] ?? 0;
-        next[socketId] = Math.round(base + delta * progress);
+      entries.forEach(({ playerId, entry }) => {
+        const base = bases[playerId] ?? entry.points ?? 0;
+        const delta = deltas[playerId] ?? 0;
+        next[playerId] = Math.round(base + delta * progress);
       });
       setAnimatedPoints(next);
       if (progress < 1) {
@@ -95,9 +95,9 @@ export const Leaderboard: React.FC<Props> = ({
   useLayoutEffect(() => {
     if (!isVisible) return;
     const nextPositions = new Map<string, DOMRect>();
-    rowRefs.current.forEach((node, socketId) => {
+    rowRefs.current.forEach((node, playerId) => {
       if (!node) return;
-      nextPositions.set(socketId, node.getBoundingClientRect());
+      nextPositions.set(playerId, node.getBoundingClientRect());
     });
 
     if (prevPositionsRef.current.size === 0) {
@@ -105,10 +105,10 @@ export const Leaderboard: React.FC<Props> = ({
       return;
     }
 
-    rowRefs.current.forEach((node, socketId) => {
+    rowRefs.current.forEach((node, playerId) => {
       if (!node) return;
-      const prevBox = prevPositionsRef.current.get(socketId);
-      const nextBox = nextPositions.get(socketId);
+      const prevBox = prevPositionsRef.current.get(playerId);
+      const nextBox = nextPositions.get(playerId);
       if (!prevBox || !nextBox) return;
       const deltaY = prevBox.top - nextBox.top;
       if (!deltaY) return;
@@ -176,21 +176,21 @@ export const Leaderboard: React.FC<Props> = ({
         </div>
         <div style={{ marginTop: 16 }}>
           {sortedEntries.length === 0 && <div>No scores yet.</div>}
-          {sortedEntries.map(({ socketId, entry }, idx) => {
-            const player = resolvePlayer(players, socketId);
+          {sortedEntries.map(({ playerId, entry }, idx) => {
+            const player = resolvePlayer(players, playerId);
             const recentAwards = (entry.awards || []).filter((a) =>
               roundId ? a.meta?.roundId === roundId : true
             );
-            const displayPoints = animatedPoints[socketId] ?? entry.points ?? 0;
-            const prevRank = prevRankMapRef.current.get(socketId);
+            const displayPoints = animatedPoints[playerId] ?? entry.points ?? 0;
+            const prevRank = prevRankMapRef.current.get(playerId);
             const rankDelta = typeof prevRank === "number" ? prevRank - idx : 0;
 
             return (
               <div
-                key={socketId}
+                key={playerId}
                 ref={(node) => {
-                  if (node) rowRefs.current.set(socketId, node);
-                  else rowRefs.current.delete(socketId);
+                  if (node) rowRefs.current.set(playerId, node);
+                  else rowRefs.current.delete(playerId);
                 }}
                 style={{
                   display: "flex",
@@ -206,7 +206,7 @@ export const Leaderboard: React.FC<Props> = ({
                     <div style={{ fontWeight: 700 }}>{player.displayName}{" "}
                     {rankDelta > 0 && <span style={{ color: "#38a169", fontSize: 12 }}>▲</span>}
                     {rankDelta < 0 && <span style={{ color: "#e53e3e", fontSize: 12 }}>▼</span>}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>{player.socketId}</div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>{player.playerId}</div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>

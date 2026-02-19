@@ -2,13 +2,13 @@ import { useMemo } from "react";
 import { Player } from "types/game";
 
 export type VoteEntry = {
-  voterSocketId: string;
-  targetSocketId: string;
+  voterPlayerId: string;
+  targetPlayerId: string;
   at: number;
 };
 
 type VoteAnswer = {
-  answer?: { targetSocketId?: string | null } | null;
+  answer?: { targetPlayerId?: string | null } | null;
   at?: number | null;
 };
 
@@ -22,12 +22,12 @@ export const useVoteTally = ({ players, answers, totals }: UseVoteTallyArgs) => 
   const voteEntries = useMemo(() => {
     if (!answers) return [];
     return Object.entries(answers)
-      .map(([voterSocketId, submission]) => ({
-        voterSocketId,
-        targetSocketId: submission?.answer?.targetSocketId || "",
+      .map(([voterPlayerId, submission]) => ({
+        voterPlayerId,
+        targetPlayerId: submission?.answer?.targetPlayerId || "",
         at: submission?.at || 0,
       }))
-      .filter((entry) => entry.targetSocketId)
+      .filter((entry) => entry.targetPlayerId)
       .sort((a, b) => a.at - b.at);
   }, [answers]);
 
@@ -35,7 +35,7 @@ export const useVoteTally = ({ players, answers, totals }: UseVoteTallyArgs) => 
     if (totals && Object.keys(totals).length) return totals;
     const tally: Record<string, number> = {};
     voteEntries.forEach((entry) => {
-      tally[entry.targetSocketId] = (tally[entry.targetSocketId] || 0) + 1;
+      tally[entry.targetPlayerId] = (tally[entry.targetPlayerId] || 0) + 1;
     });
     return tally;
   }, [totals, voteEntries]);

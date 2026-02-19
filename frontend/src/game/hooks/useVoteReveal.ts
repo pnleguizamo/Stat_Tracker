@@ -99,16 +99,16 @@ export const useVoteReveal = ({
     const map: Record<string, string[]> = {};
     const activeVotes = voteEntries.slice(0, revealProgress);
     activeVotes.forEach((entry) => {
-      map[entry.targetSocketId] = map[entry.targetSocketId] || [];
-      map[entry.targetSocketId].push(entry.voterSocketId);
+      map[entry.targetPlayerId] = map[entry.targetPlayerId] || [];
+      map[entry.targetPlayerId].push(entry.voterPlayerId);
     });
     return map;
   }, [voteEntries, revealProgress]);
 
   const revealedTally = useMemo(() => {
     const tally: Record<string, number> = {};
-    Object.entries(revealedVoteMap).forEach(([targetSocketId, voters]) => {
-      tally[targetSocketId] = voters.length;
+    Object.entries(revealedVoteMap).forEach(([targetPlayerId, voters]) => {
+      tally[targetPlayerId] = voters.length;
     });
     return tally;
   }, [revealedVoteMap]);

@@ -30,7 +30,7 @@ export const GuessWrappedHost: FC<Props> = ({
   const roundIdRef = useRef<string | null>(null);
 
   const votes = round?.results?.votes || {}; 
-  const ownerSocketId = round?.results?.ownerSocketId;
+  const ownerPlayerId = round?.results?.ownerPlayerId;
   const roundStatus = round?.status || "pending";
 
   useEffect(() => {
@@ -415,7 +415,7 @@ export const GuessWrappedHost: FC<Props> = ({
           revealedTally={revealedTally}
           revealedVoteMap={revealedVoteMap}
           revealComplete={revealComplete}
-          topSocketIds={ownerSocketId ? [ownerSocketId] : []}
+          topSocketIds={ownerPlayerId ? [ownerPlayerId] : []}
           submittedSocketIds={Object.keys(round.answers || {})}
           showSubmissionChecks
         />

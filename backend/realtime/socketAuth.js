@@ -12,6 +12,16 @@ function socketAuthMiddleware(socket, next) {
       return next(new Error('Authentication error: no auth cookie'));
     } 
 
+    /*
+      guestPayload = {
+        sub: impersonate,
+        gid,
+        guest: true,
+        displayName: 'Guest',
+      };
+
+      spotifyUserPayload = { sub: accountId }
+    */ 
     let payload;
     try {
       payload = jwt.verify(token, process.env.JWT_SECRET);
@@ -25,8 +35,19 @@ function socketAuthMiddleware(socket, next) {
       return next(new Error('Authentication error: missing account id'));
     }
 
-    socket.accountId = payload.guest ? null : payload.sub;
+    const isGuest = !!payload.guest;
+    const playerId = isGuest ? `g:${payload.gid}` : `u:${payload.sub}`;
+
+    if (!playerId || playerId.endsWith(':')) {
+      console.log('Authentication error: missing player id');
+      return next(new Error('Authentication error: missing player id'));
+    }
+
+    socket.accountId = isGuest ? null : payload.sub;
     socket.authPayload = payload;
+    socket.isGuest = isGuest;
+    socket.playerId = playerId;
+
     return next();
   } catch (err) {
     return next(new Error('Authentication error'));

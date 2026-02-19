@@ -34,7 +34,7 @@ export type StageConfig = {
 };
 
 export type Player = {
-  socketId?: string;
+  playerId: string;
   name: string;
   userId?: string | null;
   displayName?: string | null;
@@ -49,7 +49,7 @@ export type RoomState = {
 };
 
 export type WhoListenedMostAnswer = {
-  targetSocketId: string;
+  targetPlayerId: string;
 };
 
 // TODOo ensure types are right
@@ -122,9 +122,9 @@ export type GuessWrappedRoundState = {
       at: number;
     }
   >;
-  ownerSocketId?: string | null;
+  ownerPlayerId?: string | null;
   ownerProfile?: {
-    socketId?: string;
+    playerId?: string;
     displayName?: string | null;
     avatar?: string | null;
   } | null;
@@ -133,9 +133,9 @@ export type GuessWrappedRoundState = {
   revealedAt?: number;
   results?: {
     votes: Record<string, number>;
-    ownerSocketId: string;
+    ownerPlayerId: string;
     ownerProfile?: {
-      socketId?: string;
+      playerId?: string;
       displayName?: string | null;
       avatar?: string | null;
     } | null;

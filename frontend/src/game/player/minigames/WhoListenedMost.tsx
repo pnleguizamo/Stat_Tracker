@@ -16,10 +16,10 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
-  const mySocketId = socket.id;
-  const myPlayer = players.find((p) => p.socketId === mySocketId);
-  const myVote = mySocketId && round?.answers?.[mySocketId]?.answer?.targetSocketId
-    ? round.answers[mySocketId].answer!.targetSocketId
+  const myPlayerId = ((socket as any).playerId || socket.id) as string;
+  const myPlayer = players.find((p) => p.playerId === myPlayerId);
+  const myVote = myPlayerId && round?.answers?.[myPlayerId]?.answer?.targetPlayerId
+    ? round.answers[myPlayerId].answer!.targetPlayerId
     : null;
   const isPrivilegedUser = myPlayer?.userId === "pnleguizamo";
   const isResultsShown = round?.status === "revealed";
@@ -65,13 +65,13 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
     );
   };
 
-  function handleVote(targetSocketId: string) {
-    if (!roomCode || !targetSocketId) return;
+  function handleVote(targetPlayerId: string) {
+    if (!roomCode || !targetPlayerId) return;
     setVoteBusy(true);
     setVoteError(null);
     socket.emit(
       "minigame:WHO_LISTENED_MOST:submitAnswer",
-      { roomCode, answer: { targetSocketId } },
+      { roomCode, answer: { targetPlayerId } },
       (resp?: { ok: boolean; error?: string }) => {
         setVoteBusy(false);
         if (!resp?.ok) setVoteError(resp?.error || "Failed to submit vote");
@@ -123,7 +123,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
         
         <div style={{ marginBottom: 12, fontSize: 15 }}>
           {myVote
-            ? `You voted for ${players.find((p) => p.socketId === myVote)?.displayName || "someone"}`
+            ? `You voted for ${players.find((p) => p.playerId === myVote)?.displayName || "someone"}`
             : "Vote for who listened most"}
         </div>
         <div
@@ -133,14 +133,14 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
           }}
         >
           {players.map((player) => {
-            const socketId = player.socketId;
-            if (!socketId) return null;
-            const isSelf = socketId === mySocketId;
-            const isSelected = socketId === myVote;
+            const playerId = player.playerId;
+            if (!playerId) return null;
+            const isSelf = playerId === myPlayerId;
+            const isSelected = playerId === myVote;
             return (
               <button
-                key={socketId}
-                onClick={() => handleVote(socketId)}
+                key={playerId}
+                onClick={() => handleVote(playerId)}
                 disabled={voteBusy || isResultsShown}
                 style={{
                   padding: "0.95rem",

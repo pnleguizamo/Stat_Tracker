@@ -16,20 +16,20 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
-  const mySocketId = socket.id;
-  const myVote = mySocketId && round?.answers?.[mySocketId]?.answer?.targetSocketId
-    ? round.answers[mySocketId].answer!.targetSocketId
+  const myPlayerId = ((socket as any).playerId || socket.id) as string;
+  const myVote = myPlayerId && round?.answers?.[myPlayerId]?.answer?.targetPlayerId
+    ? round.answers[myPlayerId].answer!.targetPlayerId
     : null;
 
-  const ownerSocketId = round?.results?.ownerSocketId;
+  const ownerPlayerId = round?.results?.ownerPlayerId;
 
-  function handleVote(targetSocketId: string) {
-    if (!roomCode || !targetSocketId) return;
+  function handleVote(targetPlayerId: string) {
+    if (!roomCode || !targetPlayerId) return;
     setVoteBusy(true);
     setVoteError(null);
     socket.emit(
       "minigame:GUESS_SPOTIFY_WRAPPED:submitAnswer",
-      { roomCode, answer: { targetSocketId } },
+      { roomCode, answer: { targetPlayerId } },
       (resp?: { ok: boolean; error?: string }) => {
         setVoteBusy(false);
         if (!resp?.ok) setVoteError(resp?.error || "Failed to submit vote");
@@ -48,7 +48,7 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       <section style={{ marginBottom: 24, color : "#ffffffff" }}>
         <div style={{ marginBottom: 8 }}>
           {myVote
-            ? `You guessed ${players.find((p) => p.socketId === myVote)?.displayName || "someone"}`
+            ? `You guessed ${players.find((p) => p.playerId === myVote)?.displayName || "someone"}`
             : "Whose Spotify Wrapped is this?"}
         </div>
         <div
@@ -59,14 +59,14 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
           }}
         >
           {players.map((player) => {
-            const socketId = player.socketId;
-            if (!socketId) return null;
-            const isSelected = socketId === myVote;
-            const isOwner = isRevealed && socketId === ownerSocketId;
+            const playerId = player.playerId;
+            if (!playerId) return null;
+            const isSelected = playerId === myVote;
+            const isOwner = isRevealed && playerId === ownerPlayerId;
             return (
               <button
-                key={socketId}
-                onClick={() => handleVote(socketId)}
+                key={playerId}
+                onClick={() => handleVote(playerId)}
                 disabled={voteBusy || isRevealed}
                 style={{
                   padding: "0.85rem",

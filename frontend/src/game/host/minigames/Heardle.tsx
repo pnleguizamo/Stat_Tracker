@@ -371,7 +371,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const guessesThisSnippet = useMemo(() => {
     if (!round) return 0;
     return players.reduce((count, p) => {
-      const g = p.socketId ? round.answers?.[p.socketId]?.guesses || [] : [];
+      const g = p.playerId ? round.answers?.[p.playerId]?.guesses || [] : [];
       return g.some((guess) => guess.snippetIndex === round.currentSnippetIndex) ? count + 1 : count;
     }, 0);
   }, [players, round]);
@@ -379,10 +379,10 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const playerGuessStates = useMemo(() => {
     if (!round) return [];
     return players.map((p) => {
-      const guesses = p.socketId ? round.answers?.[p.socketId]?.guesses || [] : [];
+      const guesses = p.playerId ? round.answers?.[p.playerId]?.guesses || [] : [];
       const latest = guesses[guesses.length - 1] || null;
       const currentSnippetEntry = [...guesses].reverse().find((g) => g.snippetIndex === round.currentSnippetIndex) || null;
-      const summary = p.socketId ? round.results?.guessSummary?.[p.socketId] : null;
+      const summary = p.playerId ? round.results?.guessSummary?.[p.playerId] : null;
       const outcome = summary?.outcome || latest?.outcome || null;
       return {
         player: p,
@@ -586,7 +586,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
       >
         {playerGuessStates.map(({ player, outcome, guessedThisSnippet, thisSnippetOutcome }) => (
           <div
-            key={player.socketId || player.name}
+            key={player.playerId || player.name}
             style={{
               padding: '0.85rem',
               borderRadius: 10,
@@ -623,10 +623,10 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Guess history</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
           {players.map((player) => {
-            const guesses = player.socketId ? round.answers?.[player.socketId]?.guesses || [] : [];
+            const guesses = player.playerId ? round.answers?.[player.playerId]?.guesses || [] : [];
             return (
               <div
-                key={player.socketId || player.name}
+                key={player.playerId || player.name}
                 style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #1f2937', background: '#0b1220' }}
               >
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>{player.displayName || player.name}</div>

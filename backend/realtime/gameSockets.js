@@ -7,6 +7,8 @@ const {
   startGame,
   removePlayer,
   removePlayerFromAll,
+  reconnectPlayerToRooms,
+  isPlayerInRoom,
   getRoomPayload,
   updatePlayerProfile,
   getGameState,
@@ -16,6 +18,8 @@ const { scheduleRoundTimer, clearRoundTimer } = require('./timers');
 const minigameRegistry = require('./minigames');
 const { registerStagePlanListeners } = require('./stagePlanSockets');
 
+const DISCONNECT_GRACE_MS = 300_000;
+
 function initGameSockets(io) {
   const broadcastGameState = (roomCode) => {
     const state = getGameState(roomCode);
@@ -24,8 +28,35 @@ function initGameSockets(io) {
     return state;
   };
 
+  const emitRoomUpdate = (roomCode) => {
+    const payload = getRoomPayload(roomCode);
+    if (payload) io.to(roomCode).emit('roomUpdated', payload);
+    return payload;
+  };
+
   io.on('connection', (socket) => {
-    console.log('Client connected', socket.id, 'accountId:', socket.accountId);
+    console.log(
+      'Client connected',
+      socket.id,
+      'playerId:',
+      socket.playerId,
+      'accountId:',
+      socket.accountId
+    );
+
+    socket.emit('sessionIdentity', {
+      playerId: socket.playerId,
+      accountId: socket.accountId,
+      isGuest: !!socket.isGuest,
+    });
+
+    const rejoinedRoomCodes = reconnectPlayerToRooms(socket.playerId, socket.id);
+    for (const roomCode of rejoinedRoomCodes) {
+      socket.join(roomCode);
+      emitRoomUpdate(roomCode);
+      broadcastGameState(roomCode);
+    }
+
     // register minigame-specific listeners for this socket
     try {
       minigameRegistry.registerAll(io, socket, {
@@ -72,7 +103,7 @@ function initGameSockets(io) {
         cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
         return;
       }
-      if (room.hostSocketId !== socket.id) {
+      if (room.hostPlayerId !== socket.playerId) {
         cb?.({ ok: false, error: 'NOT_HOST' });
         return;
       }
@@ -91,7 +122,7 @@ function initGameSockets(io) {
         cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
         return;
       }
-      if (!room.players.has(socket.id)) {
+      if (!isPlayerInRoom(roomCode, socket.playerId)) {
         cb?.({ ok: false, error: 'NOT_IN_ROOM' });
         return;
       }
@@ -102,19 +133,31 @@ function initGameSockets(io) {
 
     socket.on('createRoom', ({ displayName }, callback) => {
       const profile = socket.profile || {};
-      const { roomCode, room } = createRoom(socket.id, profile, displayName, socket.accountId);
+      const { roomCode } = createRoom(
+        socket.id,
+        socket.playerId,
+        profile,
+        displayName,
+        socket.accountId
+      );
 
       socket.join(roomCode);
 
-      const payload = getRoomPayload(roomCode);
-      io.to(roomCode).emit('roomUpdated', payload);
+      const payload = emitRoomUpdate(roomCode);
       if (callback) callback({ ok: true, ...payload });
     });
 
     socket.on('joinRoom', ({ roomCode, displayName }, callback) => {
       roomCode = roomCode?.toUpperCase?.();
       const profile = socket.profile || {};
-      const room = addPlayer(roomCode, socket.id, profile, displayName, socket.accountId);
+      const room = addPlayer(
+        roomCode,
+        socket.playerId,
+        socket.id,
+        profile,
+        displayName,
+        socket.accountId
+      );
       if (!room) {
         if (callback) callback({ ok: false, error: 'ROOM_NOT_FOUND' });
         return;
@@ -122,8 +165,7 @@ function initGameSockets(io) {
 
       socket.join(roomCode);
 
-      const payload = getRoomPayload(roomCode);
-      io.to(roomCode).emit('roomUpdated', payload);
+      const payload = emitRoomUpdate(roomCode);
       if (callback) callback({ ok: true, ...payload });
     });
 
@@ -133,12 +175,10 @@ function initGameSockets(io) {
         if (typeof displayName === 'string') socket.profile.displayName = displayName || null;
         if (typeof avatar === 'string') socket.profile.avatar = avatar || null;
 
-        const affectedRoomCodes = updatePlayerProfile(socket.id, socket.profile);
+        const affectedRoomCodes = updatePlayerProfile(socket.playerId, socket.profile);
 
         for (const roomCode of affectedRoomCodes) {
-          const payload = getRoomPayload(roomCode);
-          if (!payload) continue;
-          io.to(roomCode).emit('roomUpdated', payload);
+          emitRoomUpdate(roomCode);
         }
 
         if (callback) callback({ ok: true });
@@ -150,22 +190,29 @@ function initGameSockets(io) {
 
     socket.on('leaveRoom', ({ roomCode } = {}) => {
       if (!roomCode) return;
-      const room = removePlayer(roomCode, socket.id);
+      const room = removePlayer(roomCode, socket.playerId);
       socket.leave(roomCode);
 
-      if (!room) return; // room deleted
+      if (!room) return;
 
-      const payload = getRoomPayload(roomCode);
-      io.to(roomCode).emit('roomUpdated', payload);
+      emitRoomUpdate(roomCode);
+      broadcastGameState(roomCode);
     });
 
     socket.on('disconnect', () => {
-      const updated = removePlayerFromAll(socket.id);
+      const updated = removePlayerFromAll(socket.id, {
+        graceMs: DISCONNECT_GRACE_MS,
+        onRoomChanged: (roomCode) => {
+          emitRoomUpdate(roomCode);
+          broadcastGameState(roomCode);
+        },
+      });
+
       for (const { roomCode } of updated) {
-        const payload = getRoomPayload(roomCode);
-        if (payload) io.to(roomCode).emit('roomUpdated', payload);
+        emitRoomUpdate(roomCode);
+        broadcastGameState(roomCode);
       }
-      console.log('Client disconnected', socket.id);
+      console.log('Client disconnected', socket.id, 'playerId:', socket.playerId);
     });
   });
 }

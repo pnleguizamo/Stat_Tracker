@@ -1,5 +1,6 @@
 const { initDb } = require('../mongo.js');
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 
 async function storeTokensAndCreateSession(accessToken, refreshToken, expiresIn, spotifyUser) {
   const db = await initDb();
@@ -48,7 +49,7 @@ async function refreshAccessTokenWithSpotify(row) {
   }
 
   const json = await r.json();
-  return json; 
+  return json;
 }
 
 async function getAccessToken(accountId) {
@@ -83,12 +84,18 @@ async function getAccessToken(accountId) {
 }
 
 async function createGuestSession() {
-  const impersonate = process.env.GUEST_IMPERSONATE_ACCOUNT
+  const impersonate = process.env.GUEST_IMPERSONATE_ACCOUNT;
+  if (!impersonate) throw new Error('Missing GUEST_IMPERSONATE_ACCOUNT for guest session');
+
+  const gid = typeof randomUUID === 'function'
+    ? randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
   const claims = {
     sub: impersonate,
+    gid,
     guest: true,
-    displayName: "Guest",
+    displayName: 'Guest',
   };
 
   const appToken = jwt.sign(claims, process.env.JWT_SECRET, {

@@ -11,8 +11,8 @@ async function buildPromptPool(room) {
   if (room.promptPool?.length) return room.promptPool;
 
   const userIds = [];
-  room.players.forEach((player, socketId) => {
-    if (player.userId && socketId !== room.hostSocketId) userIds.push(player.userId);
+  room.players.forEach((player, playerId) => {
+    if (player.userId && playerId !== room.hostPlayerId) userIds.push(player.userId);
   });
 
   const accessToken = await getAccessToken(userIds[0]);
@@ -178,14 +178,15 @@ function computeResults(roundState, room) {
 
   const tally = {};
   for (const submission of Object.values(roundState.answers)) {
-    const target = submission?.answer?.targetSocketId;
+    const target = submission?.answer?.targetPlayerId;
     if (!target) continue;
     tally[target] = (tally[target] || 0) + 1;
   }
 
   const winners = [];
   for (const [voterSocketId, submission] of Object.entries(roundState.answers)) {
-    if (correctSocketsSet.has(submission?.answer?.targetSocketId)) {
+    const target = submission?.answer?.targetPlayerId;
+    if (correctSocketsSet.has(target)) {
       winners.push(voterSocketId);
     }
   }
@@ -271,14 +272,19 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       room.roundState[idx] = room.roundState[idx] || { answers: {} };
       const activeRound = room.roundState[idx];
       if (activeRound.status === 'revealed') return cb?.({ ok: false, error: 'ROUND_REVEALED' });
-      activeRound.answers[socket.id] = {
-        answer,
+      const targetPlayerId = answer?.targetPlayerId || null;
+      if (!targetPlayerId) return cb?.({ ok: false, error: 'TARGET_REQUIRED' });
+      activeRound.answers[socket.playerId] = {
+        answer: { targetPlayerId },
         at: Date.now(),
       };
       broadcastGameState?.(roomCode);
 
-      const totalPlayers = room.players.size;
-      const answersCount = Object.keys(activeRound.answers || {}).length;
+      const connectedPlayerIds = Array.from(room.players.entries())
+        .filter(([, player]) => player?.connected !== false)
+        .map(([playerId]) => playerId);
+      const totalPlayers = connectedPlayerIds.length;
+      const answersCount = connectedPlayerIds.filter((playerId) => !!activeRound.answers?.[playerId]).length;
       if (totalPlayers > 0 && answersCount >= totalPlayers) {
         reveal(room, idx, roomCode);
       }
