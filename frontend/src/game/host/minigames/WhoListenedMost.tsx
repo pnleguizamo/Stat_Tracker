@@ -50,6 +50,20 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
     voteEntries,
     totalVotes,
   });
+  const promptTypeLabel =
+    roundStatus === "revealed"
+      ? "Results"
+      : round?.prompt?.type === "TRACK"
+        ? "Track"
+        : round?.prompt?.type === "ARTIST"
+          ? "Artist"
+          : "Prompt";
+  const roundStatusLabel =
+    roundStatus === "revealed"
+      ? "Revealed"
+      : roundStatus === "collecting"
+        ? "Collecting"
+        : "Pending";
 
   const isArtistPrompt = round?.prompt?.type === "ARTIST";
   const promptTrackName = !isArtistPrompt ? round?.prompt?.track_name ?? undefined : undefined;
@@ -150,8 +164,10 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
           display: "flex",
           gap: "1.5rem",
           padding: "1.5rem",
-          background: "#14181f",
-          borderRadius: 12,
+          borderRadius: 16,
+          border: "1px solid rgba(148, 163, 184, 0.25)",
+          background: "linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86))",
+          boxShadow: "0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04)",
         }}
       >
         {round.prompt.imageUrl ? (
@@ -162,8 +178,37 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
           />
         ) : null}
         <div>
-          <div style={{ fontSize: 12, textTransform: "uppercase", color: "#8f9bb3", letterSpacing: 1 }}>
-            {round.prompt.type === "TRACK" ? "Track" : round.prompt.type === "ARTIST" ? "Artist" : "Info"}
+          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: "1px solid rgba(96, 165, 250, 0.45)",
+                background: "rgba(30, 64, 175, 0.25)",
+                color: "#bfdbfe",
+                fontSize: 11,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                fontWeight: 700,
+              }}
+            >
+              {promptTypeLabel}
+            </span>
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: roundStatus === "revealed" ? "1px solid rgba(74, 222, 128, 0.45)" : "1px solid rgba(45, 212, 191, 0.45)",
+                background: roundStatus === "revealed" ? "rgba(22, 101, 52, 0.3)" : "rgba(15, 118, 110, 0.24)",
+                color: roundStatus === "revealed" ? "#bbf7d0" : "#99f6e4",
+                fontSize: 11,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                fontWeight: 700,
+              }}
+            >
+              {roundStatusLabel}
+            </span>
           </div>
           <h2 style={{ margin: "0.5rem 0", color: "#ffffffff", fontSize: 28 }}>{round.prompt.type === "TRACK" ? round.prompt.track_name : round.prompt.artist_name}</h2>
           {round.prompt.artist_names && <div style={{ fontSize: 16, color: "#ffffffff" }}>{round.prompt.artist_names.join(', ')}</div>}

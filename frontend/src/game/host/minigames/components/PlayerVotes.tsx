@@ -75,23 +75,26 @@ export const PlayerVotes: FC<Props> = ({
     );
   };
 
-  return (
-    <div style={{ position: "relative" }}>
+  if (!isRevealed) {
+    return (
       <div
         style={{
+          borderRadius: 16,
+          border: "0.5px solid rgba(148, 163, 184, 0.25)",
+          background: "linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86))",
+          boxShadow: "0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04)",
+          padding: "1rem",
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           gap: 12,
-          opacity: isRevealed ? 0 : 1,
-          maxHeight: isRevealed ? 0 : 600,
-          overflow: "hidden",
-          transform: isRevealed ? "translateY(-12px)" : "translateY(0)",
-          transition: "opacity 0.4s ease, transform 0.4s ease, max-height 0.5s ease",
+          alignContent: "center",
+          alignItems: "center",
         }}
       >
         {players.map((player) => {
           const playerId = player.playerId;
           if (!playerId) return null;
+
           const isTop = topSocketIds?.includes(playerId);
           const hasSubmitted = submittedSocketIds?.includes(playerId);
 
@@ -99,93 +102,88 @@ export const PlayerVotes: FC<Props> = ({
             <div
               key={playerId}
               style={{
-                border: `2px solid ${isTop ? "#48bb78" : "#2d3748"}`,
+                border: `1px solid ${isTop ? "rgba(94, 234, 212, 0.85)" : "rgba(125, 211, 252, 0.45)"}`,
                 borderRadius: 8,
                 padding: "0.85rem",
-                background: isTop ? "#1d2738" : "#10131a",
+                background: isTop
+                  ? "linear-gradient(145deg, rgba(13, 148, 136, 0.28), rgba(15, 23, 42, 0.92))"
+                  : "linear-gradient(145deg, rgba(30, 64, 175, 0.22), rgba(15, 23, 42, 0.9))",
                 display: "flex",
                 gap: 12,
                 alignItems: "center",
               }}
             >
               {renderAvatar(player, 44)}
-              <div>
-                <div style={{ fontWeight: 600, color: "#ffffffff", display: "flex", gap: 6, alignItems: "center" }}>
-                  {player.displayName || player.name}
-                  {showSubmissionChecks && hasSubmitted && status === "collecting" && (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "2px 6px",
-                        borderRadius: 999,
-                        background: "#2f855a",
-                        color: "#fff",
-                        fontSize: 11,
-                        fontWeight: 700,
-                      }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </div>
+              <div style={{ fontWeight: 600, color: "#ffffffff", display: "flex", gap: 6, alignItems: "center" }}>
+                {player.displayName || player.name}
+                {showSubmissionChecks && hasSubmitted && status === "collecting" && (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "2px 6px",
+                      borderRadius: 999,
+                      background: "#2f855a",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+    );
+  }
 
-      <div
+  return (
+    <div
         style={{
-          marginTop: 12,
-          padding: "1rem",
-          borderRadius: 12,
-          background: "#101522",
-          border: "1px solid #1f2b3d",
-          opacity: isRevealed ? 1 : 0,
-          maxHeight: isRevealed ? 520 : 0,
-          overflow: "hidden",
-          transform: isRevealed ? "translateY(0)" : "translateY(12px)",
-          transition: "opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s, max-height 0.6s ease",
-        }}
-      >
-        <div style={{ fontWeight: 600, color: "#dbe7ff", marginBottom: 12 }}>
-          {title}
-        </div>
-        <div style={{ display: "flex", gap: 18, alignItems: "flex-end", minHeight: 260 }}>
-          {players.map((player) => {
-            if (!player.playerId) return null;
-            const playerId = player.playerId;
-            const isTop = topSocketIds?.includes(playerId);
-            const currentVotes = activeTally[playerId] || 0;
-            const finalVotes = finalTally[playerId] || 0;
-            const votesToShow = revealComplete ? finalVotes : currentVotes;
-            const barHeight = Math.round((votesToShow / maxVotes) * 220);
-            const voters = revealedVoteMap?.[playerId] || [];
-            const barPixelHeight = Math.max(18, barHeight);
-            const avatarGap = 4;
-            const barInnerHeight = Math.max(0, barPixelHeight - 16);
-            const minAvatarSize = 30;
-            const maxAvatarSize = 100;
-            const maxRowsPerColumn = Math.max(
-              1,
-              Math.floor((barInnerHeight + avatarGap) / (minAvatarSize + avatarGap))
-            );
-            const columnCount = voters.length
-              ? Math.max(1, Math.ceil(voters.length / maxRowsPerColumn))
-              : 1;
-            const rows = voters.length ? Math.ceil(voters.length / columnCount) : 0;
-            const avatarSize = voters.length
-              ? Math.max(
-                  minAvatarSize,
-                  Math.min(
-                    maxAvatarSize,
-                    Math.floor((barInnerHeight - avatarGap * Math.max(0, rows - 1)) / rows)
-                  )
+        borderRadius: 16,
+        border: "0.5px solid rgba(148, 163, 184, 0.25)",
+        background: "linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86))",
+        boxShadow: "0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04)",
+        padding: "1rem",
+      }}
+    >
+      <div style={{ fontWeight: 600, color: "#dbe7ff", marginBottom: 12 }}>{title}</div>
+      <div style={{ display: "flex", gap: 18, alignItems: "flex-end", minHeight: 260 }}>
+        {players.map((player) => {
+          if (!player.playerId) return null;
+
+          const playerId = player.playerId;
+          const isTop = topSocketIds?.includes(playerId);
+          const currentVotes = activeTally[playerId] || 0;
+          const finalVotes = finalTally[playerId] || 0;
+          const votesToShow = revealComplete ? finalVotes : currentVotes;
+          const barHeight = Math.round((votesToShow / maxVotes) * 220);
+          const voters = revealedVoteMap?.[playerId] || [];
+          const barPixelHeight = Math.max(18, barHeight);
+          const avatarGap = 4;
+          const barInnerHeight = Math.max(0, barPixelHeight - 16);
+          const minAvatarSize = 30;
+          const maxAvatarSize = 100;
+          const maxRowsPerColumn = Math.max(
+            1,
+            Math.floor((barInnerHeight + avatarGap) / (minAvatarSize + avatarGap))
+          );
+          const columnCount = voters.length ? Math.max(1, Math.ceil(voters.length / maxRowsPerColumn)) : 1;
+          const rows = voters.length ? Math.ceil(voters.length / columnCount) : 0;
+          const avatarSize = voters.length
+            ? Math.max(
+                minAvatarSize,
+                Math.min(
+                  maxAvatarSize,
+                  Math.floor((barInnerHeight - avatarGap * Math.max(0, rows - 1)) / rows)
                 )
-              : 0;
-            const actualListens = player.userId ? listenCounts?.[player.userId] || 0 : 0;
+              )
+            : 0;
+          const actualListens = player.userId ? listenCounts?.[player.userId] || 0 : 0;
 
             return (
               <div
@@ -309,6 +307,5 @@ export const PlayerVotes: FC<Props> = ({
           })}
         </div>
       </div>
-    </div>
   );
 };

@@ -7,6 +7,7 @@ import { useParams } from "react-router-dom";
 import { socket } from "socket";
 import { GameState, GuessWrappedRoundState, MinigameId, WhoListenedMostRoundState } from "types/game";
 import { Leaderboard } from "./Leaderboard";
+import "../../styles/gameShell.css";
 
 type HostMinigameProps = {
   roomCode: string;
@@ -152,7 +153,13 @@ const HostGame = () => {
     return MINIGAME_HOST_COMPONENTS[currentStage.minigameId] || null;
   }, [currentStage]);
   
-  if (!gameState) return <div>Loading game…</div>;
+  if (!gameState) {
+    return (
+      <div className="host-layout host-layout--center">
+        <div className="game-shell-loading">Loading game…</div>
+      </div>
+    );
+  }
 
   const handleAdvance = () => {
     if (!roomCode) return;

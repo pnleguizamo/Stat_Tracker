@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from 'lib/api';
 import { socket } from '../socket';
 import { useNavigate } from 'react-router-dom';
+import '../styles/gameShell.css';
 
 type Player = {
   playerId: string;
@@ -189,143 +190,152 @@ const GameLobby: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
-      <h2>Spotify Stats Game</h2>
+    <div className="game-shell-layout">
+      <div className="game-shell-content game-shell-content--narrow">
+        <div className="game-shell-surface">
+          <h2 className="player-title">Spotify Stats Game</h2>
 
-      {!room && (
-        <>
-          <div style={{ marginBottom: '1rem' }}>
-            <label>
-              {isGuest ? 'Display name:' : 'Change display name (Optional):'}
-              <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              onBlur={() => handleUpdateProfile()}
-              style={{ marginLeft: '0.5rem' }}
-              />
-            </label>
-          </div>
-
-          <div style={{ marginBottom: '0.5rem' }}>
-            <button onClick={handleCreateRoom}>Create Room</button>
-          </div>
-
-          <div>
-            <input
-              placeholder="Room code"
-              value={roomCodeInput}
-              onChange={(e) => setRoomCodeInput(e.target.value)}
-              style={{ marginRight: '0.5rem' }}
-            />
-            <button onClick={handleJoinRoom}>Join Room</button>
-          </div>
-        </>
-      )}
-
-      {room && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>Room: {room.roomCode}</h3>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                {room.hostSocketId === socket.id ? 'You are the host' : 'Player'}
-              </div>
-              <button onClick={handleLeaveRoom}>Leave</button>
-            </div>
-          </div>
-          <h4>Players</h4>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {room.players.map((p, idx) => (
-              <li key={p.playerId || idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                {p.avatar ? (
-                  <img
-                    src={p.avatar}
-                    alt={p.displayName || p.name}
-                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', marginRight: 12 }}
+          {!room && (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>
+                  {isGuest ? 'Display name:' : 'Change display name (Optional):'}
+                  <input
+                    className="game-shell-input"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    onBlur={() => handleUpdateProfile()}
+                    style={{ marginTop: '0.5rem' }}
                   />
-                ) : (
+                </label>
+              </div>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <button className="game-shell-button" onClick={handleCreateRoom}>Create Room</button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  className="game-shell-input"
+                  placeholder="Room code"
+                  value={roomCodeInput}
+                  onChange={(e) => setRoomCodeInput(e.target.value)}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <button className="game-shell-button" onClick={handleJoinRoom}>Join Room</button>
+              </div>
+            </>
+          )}
+
+          {room && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Room: {room.roomCode}</h3>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div className="game-shell-muted" style={{ fontSize: 12 }}>
+                    {room.hostSocketId === socket.id ? 'You are the host' : 'Player'}
+                  </div>
+                  <button className="game-shell-button" onClick={handleLeaveRoom}>Leave</button>
+                </div>
+              </div>
+              <h4>Players</h4>
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {room.players.map((p, idx) => (
+                  <li key={p.playerId || idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt={p.displayName || p.name}
+                        style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', marginRight: 12 }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          background: '#2b6cb0',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {(p.displayName || p.name || '').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 600 }}>
+                        {p.displayName || p.name}
+                        {p.isHost ? <span style={{ fontSize: 12, color: '#38bdf8', marginLeft: 6 }}>(host)</span> : null}
+                      </div>
+                      <div className="game-shell-muted" style={{ fontSize: 12 }}>{p.userId ? `ID: ${p.userId}` : 'Guest'}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginBottom: '1rem', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ marginBottom: 6, fontSize: 14 }}>Your name</div>
+                  <input
+                    className="game-shell-input"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    onBlur={() => handleUpdateProfile()}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ marginBottom: 6, fontSize: 14 }}>Change avatar</div>
                   <div
                     style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      background: '#2b6cb0',
-                      color: 'white',
-                      display: 'flex',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, 56px)',
+                      gap: 8,
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 12,
-                      fontWeight: 600,
                     }}
                   >
-                    {(p.displayName || p.name || '').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase()}
+                    {computedAvatarOptions.map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => handleSelectAvatar(a)}
+                        style={{
+                          border: a === selectedAvatar ? '2px solid #38bdf8' : '2px solid transparent',
+                          padding: 0,
+                          borderRadius: 6,
+                          background: 'transparent',
+                          width: 56,
+                          height: 56,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img src={a} alt="avatar" style={{ width: 48, height: 48, borderRadius: 6 }} />
+                      </button>
+                    ))}
                   </div>
-                )}
-                <div>
-                  <div style={{ fontWeight: 600 }}>{p.displayName || p.name} {p.isHost ? <span style={{ fontSize: 12, color: '#2b6cb0', marginLeft: 6 }}>(host)</span> : null}</div>
-                  <div style={{ fontSize: 12, color: '#666' }}>{p.userId ? `ID: ${p.userId}` : 'Guest'}</div>
                 </div>
-              </li>
-            ))}
-          </ul>
-          <div style={{ marginBottom: '1rem', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ marginBottom: 6, fontSize: 14 }}>Your name</div>
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                onBlur={() => handleUpdateProfile()}
-                style={{ marginRight: '0.5rem' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ marginBottom: 6, fontSize: 14 }}>Change avatar</div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, 56px)',
-                  gap: 8,
-                  alignItems: 'center',
-                }}
-              >
-                {computedAvatarOptions.map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => handleSelectAvatar(a)}
-                    style={{
-                      border: a === selectedAvatar ? '2px solid #2b6cb0' : '2px solid transparent',
-                      padding: 0,
-                      borderRadius: 6,
-                      background: 'transparent',
-                      width: 56,
-                      height: 56,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <img src={a} alt="avatar" style={{ width: 48, height: 48, borderRadius: 6 }} />
-                  </button>
-                ))}
               </div>
+              <button
+                className="game-shell-button"
+                onClick={() => navigate(`/game/host/${room.roomCode}/setup`)}
+                disabled={room.hostSocketId !== socket.id}
+              >
+                {room.hostSocketId === socket.id ? 'Start Game' : 'Waiting for host'}
+              </button>
             </div>
-          </div>
-          <button onClick={() => navigate(`/game/host/${room.roomCode}/setup`)} disabled={room.hostSocketId !== socket.id} style={{ background: room.hostSocketId === socket.id ? undefined : '#ccc' }}>
-            {room.hostSocketId === socket.id ? 'Start Game' : 'Waiting for host'}
-          </button>
-          
-          <>{room?.hostSocketId}</>
+          )}
 
+          {error && (
+            <p className="game-shell-error" style={{ marginTop: '1rem' }}>
+              {error}
+            </p>
+          )}
         </div>
-        
-      )}
-
-      {error && (
-        <p style={{ marginTop: '1rem', color: 'red' }}>
-          {error}
-        </p>
-      )}
+      </div>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { GameState, MinigameId } from 'types/game';
 import { WhoListenedMostPlayerView } from './minigames/WhoListenedMost';
 import { GuessWrappedPlayerView } from './minigames/GuessWrapped';
 import { HeardlePlayerView } from './minigames/Heardle';
+import '../../styles/gameShell.css';
 
 type PlayerMinigameProps = {
   roomCode: string;
@@ -59,28 +60,27 @@ const PlayerScreen = () => {
     currentStage && gameState ? PLAYER_MINIGAME_COMPONENTS[currentStage.minigameId] || null : null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <header style={{ marginBottom: 20 }}>
-        <h2 style={{ marginBottom: 4 }}>Room {roomCode}</h2>
-        <div style={{ color: '#667085', fontSize: 14 }}>Phase: {phaseLabel}</div>
-        {typeof currentStageIndex === 'number' && currentStage && (
-          <div style={{ color: '#94a3b8', fontSize: 13 }}>
-            Stage {currentStageIndex + 1}: {currentStage.minigameId}
-          </div>
-        )}
+    <div className="player-layout">
+      <header className="player-header">
+        <div>
+          <h2 className="player-title">Room {roomCode}</h2>
+          <div className="player-meta">Phase: {phaseLabel}</div>
+          {typeof currentStageIndex === 'number' && currentStage && (
+            <div className="player-stage">
+              Stage {currentStageIndex + 1}: {currentStage.minigameId}
+            </div>
+          )}
+        </div>
+        <button className="game-shell-button" onClick={handleLeave}>Leave Room</button>
       </header>
 
-      <main style={{ minHeight: 320 }}>
+      <main className="player-main">
         {gameState && MinigameComponent ? (
           <MinigameComponent roomCode={roomCode} gameState={gameState} />
         ) : (
           <div>Waiting for the host to start the next minigame…</div>
         )}
       </main>
-
-      <footer style={{ marginTop: 24 }}>
-        <button onClick={handleLeave}>Leave Room</button>
-      </footer>
     </div>
   );
 };

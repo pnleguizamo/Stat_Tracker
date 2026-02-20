@@ -1,0 +1,474 @@
+/*
+  GameShell tokens.
+  Configure globally in :root or per screen by overriding variables on:
+  .game-shell-layout, .host-layout, or .player-layout.
+*/
+:root {
+  --gs-font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+
+  --gs-text: #e2e8f0;
+  --gs-text-strong: #f8fafc;
+  --gs-muted: #94a3b8;
+  --gs-error: #fca5a5;
+
+  --gs-layout-min-height: 100vh;
+  --gs-layout-padding: 1.25rem 1rem 2rem;
+  --gs-layout-background:
+    radial-gradient(110% 90% at 0% 0%, rgba(56, 189, 248, 0.22), transparent 60%),
+    radial-gradient(85% 70% at 100% 0%, rgba(14, 165, 233, 0.2), transparent 58%),
+    linear-gradient(180deg, #050a1b 0%, #060d23 56%, #071229 100%);
+  --gs-layout-overlay:
+    linear-gradient(115deg, rgba(15, 23, 42, 0.55) 0%, rgba(2, 6, 23, 0.7) 100%),
+    repeating-linear-gradient(
+      -34deg,
+      transparent 0 22px,
+      rgba(148, 163, 184, 0.03) 22px 23px
+    );
+
+  --gs-content-max-width: 1100px;
+  --gs-content-max-width-narrow: 760px;
+
+  --gs-surface-radius: 20px;
+  --gs-surface-border: 1px solid rgba(148, 163, 184, 0.2);
+  --gs-surface-bg: rgba(3, 8, 21, 0.56);
+  --gs-surface-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.04);
+  --gs-surface-padding: 1rem;
+
+  --gs-two-col-right-width: 550px;
+  --gs-two-col-gap: 24px;
+  --gs-list-gap: 8px;
+
+  --gs-draggable-padding: 0.7rem;
+  --gs-draggable-radius: 10px;
+  --gs-draggable-border: 1px solid rgba(148, 163, 184, 0.35);
+  --gs-draggable-bg: rgba(15, 23, 42, 0.68);
+  --gs-draggable-border-active: 1px solid rgba(56, 189, 248, 0.72);
+  --gs-draggable-bg-active: rgba(8, 47, 73, 0.92);
+  --gs-draggable-shadow-active: 0 16px 30px rgba(2, 6, 23, 0.45);
+
+  --gs-slot-min-height: 72px;
+  --gs-slot-radius: 12px;
+  --gs-slot-border: 1px solid rgba(56, 189, 248, 0.4);
+  --gs-slot-padding: 12px 14px;
+  --gs-slot-bg: linear-gradient(135deg, rgba(12, 20, 39, 0.94), rgba(8, 15, 30, 0.92));
+  --gs-slot-bg-hover: linear-gradient(135deg, rgba(16, 28, 52, 0.98), rgba(10, 23, 43, 0.96));
+  --gs-slot-border-hover: 1px solid rgba(125, 211, 252, 0.9);
+  --gs-slot-shadow: 0 10px 22px rgba(2, 6, 23, 0.45), inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+  --gs-slot-shadow-hover: 0 16px 30px rgba(8, 47, 73, 0.5), inset 0 0 0 1px rgba(125, 211, 252, 0.26);
+
+  --gs-header-max-width: 1200px;
+  --gs-header-radius: 18px;
+  --gs-header-border: 1px solid rgba(148, 163, 184, 0.25);
+  --gs-header-bg: rgba(8, 14, 32, 0.8);
+  --gs-header-shadow: 0 20px 42px rgba(2, 6, 23, 0.35);
+  --gs-header-blur: blur(10px);
+  --gs-host-header-padding: 0.95rem 1.25rem;
+  --gs-player-header-padding: 1rem 1.25rem;
+
+  --gs-main-max-width: 1200px;
+  --gs-main-margin-top: 1rem;
+  --gs-main-min-height: 320px;
+  --gs-main-padding: 1rem;
+
+  --gs-loading-radius: 16px;
+  --gs-loading-border: 1px solid rgba(148, 163, 184, 0.2);
+  --gs-loading-bg: rgba(8, 14, 32, 0.85);
+  --gs-loading-padding: 1rem 1.25rem;
+
+  --gs-button-border: 1px solid rgba(56, 189, 248, 0.45);
+  --gs-button-radius: 999px;
+  --gs-button-padding: 0.45rem 0.9rem;
+  --gs-button-bg: rgba(14, 116, 144, 0.35);
+  --gs-button-bg-hover: rgba(8, 145, 178, 0.45);
+  --gs-button-text: #e2e8f0;
+  --gs-button-weight: 600;
+  --gs-button-disabled-opacity: 0.55;
+
+  --gs-input-border: 1px solid rgba(148, 163, 184, 0.45);
+  --gs-input-radius: 10px;
+  --gs-input-padding: 0.55rem 0.7rem;
+  --gs-input-bg: rgba(2, 6, 23, 0.62);
+  --gs-input-text: #e2e8f0;
+  --gs-input-placeholder: #94a3b8;
+}
+
+/* Optional presets */
+.game-shell-theme-sunset {
+  --gs-layout-background:
+    radial-gradient(95% 95% at 0% 0%, rgba(244, 114, 182, 0.2), transparent 58%),
+    radial-gradient(90% 80% at 100% 0%, rgba(251, 146, 60, 0.2), transparent 56%),
+    linear-gradient(180deg, #140a13 0%, #1a1020 52%, #201425 100%);
+  --gs-button-border: 1px solid rgba(251, 146, 60, 0.45);
+  --gs-button-bg: rgba(234, 88, 12, 0.3);
+  --gs-button-bg-hover: rgba(194, 65, 12, 0.45);
+}
+
+.game-shell-theme-forest {
+  --gs-layout-background:
+    radial-gradient(105% 90% at 0% 0%, rgba(16, 185, 129, 0.22), transparent 58%),
+    radial-gradient(88% 80% at 100% 0%, rgba(52, 211, 153, 0.18), transparent 55%),
+    linear-gradient(180deg, #07140f 0%, #0b1d16 56%, #10241a 100%);
+  --gs-button-border: 1px solid rgba(16, 185, 129, 0.45);
+  --gs-button-bg: rgba(5, 150, 105, 0.35);
+  --gs-button-bg-hover: rgba(4, 120, 87, 0.45);
+}
+
+.game-shell-layout,
+.host-layout,
+.player-layout {
+  position: relative;
+  min-height: var(--gs-layout-min-height);
+  padding: var(--gs-layout-padding);
+  color: var(--gs-text);
+  font-family: var(--gs-font-family);
+  background: var(--gs-layout-background);
+}
+
+.game-shell-layout::before,
+.host-layout::before,
+.player-layout::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--gs-layout-overlay);
+  pointer-events: none;
+}
+
+.game-shell-layout > *,
+.host-layout > *,
+.player-layout > * {
+  position: relative;
+  z-index: 1;
+}
+
+.game-shell-content {
+  max-width: var(--gs-content-max-width);
+  margin: 0 auto;
+}
+
+.game-shell-content--narrow {
+  max-width: var(--gs-content-max-width-narrow);
+}
+
+.game-shell-surface {
+  border-radius: var(--gs-surface-radius);
+  border: var(--gs-surface-border);
+  background: var(--gs-surface-bg);
+  box-shadow: var(--gs-surface-shadow);
+  padding: var(--gs-surface-padding);
+}
+
+.game-shell-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gs-two-col-right-width);
+  gap: var(--gs-two-col-gap);
+}
+
+.game-shell-list {
+  display: grid;
+  gap: var(--gs-list-gap);
+}
+
+.game-shell-draggable {
+  padding: var(--gs-draggable-padding);
+  border: var(--gs-draggable-border);
+  border-radius: var(--gs-draggable-radius);
+  background: var(--gs-draggable-bg);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.game-shell-draggable:active {
+  cursor: grabbing;
+}
+
+.game-shell-draggable.is-source-hidden {
+  visibility: hidden;
+}
+
+.game-shell-slot {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: var(--gs-slot-min-height);
+  border: var(--gs-slot-border);
+  border-radius: var(--gs-slot-radius);
+  padding: var(--gs-slot-padding);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gs-slot-bg);
+  box-shadow: var(--gs-slot-shadow);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.game-shell-slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(100% 100% at 100% 0%, rgba(56, 189, 248, 0.2), transparent 58%),
+    linear-gradient(120deg, rgba(56, 189, 248, 0.1), transparent 36%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.game-shell-slot::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(125, 211, 252, 0.75) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.game-shell-slot > * {
+  position: relative;
+  z-index: 1;
+}
+
+.game-shell-slot.is-drop-target {
+  border: var(--gs-slot-border-hover);
+  background: var(--gs-slot-bg-hover);
+  box-shadow: var(--gs-slot-shadow-hover);
+  transform: translateY(-2px) scale(1.008);
+}
+
+.game-shell-slot.is-dropped {
+  animation: gs-slot-drop-pop 0.28s ease;
+}
+
+.game-shell-drag-float {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  z-index: 9999;
+  pointer-events: none;
+  cursor: grabbing;
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.5);
+  transform-origin: top left;
+  transition: none;
+  opacity: 1;
+}
+
+.game-shell-drag-float.is-snapback {
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.game-shell-drag-float.is-snaptarget {
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 420ms ease;
+  opacity: 0;
+}
+
+.game-shell-layout.is-pointer-dragging,
+.game-shell-layout.is-pointer-dragging * {
+  cursor: grabbing !important;
+}
+
+.game-shell-stage-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.game-shell-stage-index {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+
+.game-shell-stage-name {
+  display : 'flex';
+  align-items: 'center'; 
+  justify-content: 'center';
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gs-text-strong);
+  text-shadow: 0 1px 10px rgba(56, 189, 248, 0.18);
+}
+
+@keyframes gs-slot-drop-pop {
+  0% {
+    transform: scale(0.985);
+    filter: brightness(0.95);
+  }
+  55% {
+    transform: scale(1.02);
+    filter: brightness(1.08);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.game-shell-section-title {
+  margin: 0 0 0.75rem;
+  color: var(--gs-text-strong);
+}
+
+.game-shell-muted {
+  color: var(--gs-muted);
+}
+
+.game-shell-error {
+  color: var(--gs-error);
+}
+
+.game-shell-input {
+  width: 100%;
+  max-width: 100%;
+  border: var(--gs-input-border);
+  border-radius: var(--gs-input-radius);
+  padding: var(--gs-input-padding);
+  background: var(--gs-input-bg);
+  color: var(--gs-input-text);
+}
+
+.game-shell-input::placeholder {
+  color: var(--gs-input-placeholder);
+}
+
+.host-layout--center {
+  display: grid;
+  place-items: center;
+}
+
+.host-header,
+.player-header {
+  max-width: var(--gs-header-max-width);
+  margin: 0 auto;
+  border-radius: var(--gs-header-radius);
+  border: var(--gs-header-border);
+  background: var(--gs-header-bg);
+  box-shadow: var(--gs-header-shadow);
+  backdrop-filter: var(--gs-header-blur);
+}
+
+.host-header {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: center;
+  padding: var(--gs-host-header-padding);
+}
+
+.host-header > div:nth-child(2) {
+  text-align: center;
+}
+
+.host-header > div:nth-child(3) {
+  text-align: right;
+}
+
+.host-header h2 {
+  margin: 0;
+  color: var(--gs-text-strong);
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: var(--gs-player-header-padding);
+  margin-bottom: 1rem;
+}
+
+.player-title {
+  margin: 0 0 0.3rem;
+  color: var(--gs-text-strong);
+}
+
+.player-meta,
+.player-stage {
+  color: var(--gs-muted);
+}
+
+.player-meta {
+  font-size: 0.9rem;
+}
+
+.player-stage {
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+}
+
+.host-main,
+.player-main {
+  max-width: var(--gs-main-max-width);
+  margin: var(--gs-main-margin-top) auto 0;
+  padding: var(--gs-main-padding);
+  border-radius: var(--gs-surface-radius);
+  border: var(--gs-surface-border);
+  background: var(--gs-surface-bg);
+  box-shadow: var(--gs-surface-shadow);
+  min-height: var(--gs-main-min-height);
+}
+
+.game-shell-loading {
+  border-radius: var(--gs-loading-radius);
+  border: var(--gs-loading-border);
+  background: var(--gs-loading-bg);
+  padding: var(--gs-loading-padding);
+}
+
+.game-shell-button {
+  border: var(--gs-button-border);
+  border-radius: var(--gs-button-radius);
+  padding: var(--gs-button-padding);
+  background: var(--gs-button-bg);
+  color: var(--gs-button-text);
+  font-weight: var(--gs-button-weight);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.game-shell-button:hover {
+  background: var(--gs-button-bg-hover);
+  transform: translateY(-1px);
+}
+
+.game-shell-button:active {
+  transform: translateY(0);
+}
+
+.game-shell-button:disabled {
+  opacity: var(--gs-button-disabled-opacity);
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .host-header {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+
+  .host-header > div:nth-child(2),
+  .host-header > div:nth-child(3) {
+    text-align: left;
+  }
+
+  .host-main,
+  .player-main {
+    padding: 0.75rem;
+  }
+
+  .player-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .game-shell-two-col {
+    grid-template-columns: 1fr;
+  }
+}

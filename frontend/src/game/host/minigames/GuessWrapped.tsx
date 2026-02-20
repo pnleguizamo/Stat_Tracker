@@ -1,10 +1,11 @@
 import { useVoteTally } from "game/hooks/useVoteTally";
-import { FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, GuessWrappedRoundState, GuessWrappedSummary } from "types/game";
 import { PlayerVotes } from "./components/PlayerVotes";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useTrackPreview } from "game/hooks/useTrackPreview";
+import "./GuessWrappedHost.css";
 
 type Props = {
   roomCode: string;
@@ -142,10 +143,15 @@ export const GuessWrappedHost: FC<Props> = ({
   }, [round?.expiresAt, round?.startedAt]);
 
   const revealProgress = useMemo(() => {
-    if (!round || round.status === "revealed") return 1;
-    if (!round.expiresAt || remainingMs === null) return 1;
-    const elapsed = Math.min(totalDurationMs, Math.max(0, totalDurationMs - remainingMs));
-    return totalDurationMs ? Math.min(1, Math.max(0, elapsed / totalDurationMs)) : 1;
+    if (!round) return 0;
+    if (round.status === "revealed") return 1;
+    if (!round.expiresAt) return 0;
+
+    const liveRemainingMs =
+      remainingMs !== null ? remainingMs : Math.max(0, round.expiresAt - Date.now());
+    const elapsed = Math.min(totalDurationMs, Math.max(0, totalDurationMs - liveRemainingMs));
+
+    return totalDurationMs ? Math.min(1, Math.max(0, elapsed / totalDurationMs)) : 0;
   }, [round, remainingMs, totalDurationMs]);
 
   const revealIntervalCount = 8;
@@ -273,10 +279,28 @@ export const GuessWrappedHost: FC<Props> = ({
   const minutesLabel: ReactNode = isMinutesRevealed
     ? `${prompt.minutesListened.toLocaleString()} minutes listened`
     : renderRedacted(`${prompt.minutesListened.toLocaleString()} minutes listened`, false);
+  const revealPercent = Math.round(revealProgress * 100);
+
+  // TODO Centralize styles across wrapped + wlm + player votes
+  const cardStyle = {
+    borderRadius: 16,
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    background: "linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86))",
+    boxShadow: "0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04)",
+  };
+
+  const sectionTitleStyle = {
+    marginBottom: 12,
+    color: "#e2e8f0",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.8,
+    fontSize: 14,
+    fontWeight: 700,
+  };
 
   if (!round || round.minigameId !== "GUESS_SPOTIFY_WRAPPED") {
     return (
-      <div style={{ padding: "2rem", textAlign: "center" }}>
+      <div style={{ ...cardStyle, padding: "1.5rem", textAlign: "center" }}>
         <p>No Spotify Wrapped summary yet.</p>
         <button onClick={handleStartRound} disabled={busy === "prompt"}>
           {busy === "prompt" ? "Preparing..." : "Generate Wrapped"}
@@ -287,117 +311,213 @@ export const GuessWrappedHost: FC<Props> = ({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", color: "#ffffffff" }}>
-      <section style={{ background: "#14181f", padding: "1.5rem", borderRadius: 12 }}>
-        <div style={{ fontSize: 20, textTransform: "uppercase", letterSpacing: 1 }}>
-          {isYearRevealed ? prompt.year : renderRedacted(String(prompt.year), false)} Spotify Wrapped
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", color: "#ffffffff" }}>
+      <section style={{ ...cardStyle, padding: "1.5rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 20,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 30, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+              <span
+                className={`gw-host-hero-key gw-host-hero-key--year${isYearRevealed ? " gw-host-hero-key--revealed" : ""}`}
+                style={{ "--gw-key-delay": "0ms" } as CSSProperties}
+              >
+                {isYearRevealed ? prompt.year : renderRedacted(String(prompt.year), false)}
+              </span>{" "}
+              Spotify Wrapped
+            </div>
+            <h3 style={{ margin: "0.5rem 0 0.8rem", color: "#e2e8f0", fontSize: 22 }}>
+              <span
+                className={`gw-host-hero-key gw-host-hero-key--minutes${isMinutesRevealed ? " gw-host-hero-key--revealed" : ""}`}
+                style={{ "--gw-key-delay": "120ms" } as CSSProperties}
+              >
+                {minutesLabel}
+              </span>
+            </h3>
+          </div>
+          <div style={{ minWidth: 210, flex: "0 0 220px" }}>
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                fontWeight: 700,
+                color: "#93c5fd",
+                marginBottom: 8,
+              }}
+            >
+              Reveal Progress
+            </div>
+            <div
+              style={{
+                height: 10,
+                borderRadius: 999,
+                border: "1px solid rgba(59, 130, 246, 0.45)",
+                background: "rgba(15, 23, 42, 0.85)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${revealPercent}%`,
+                  background:
+                    roundStatus === "revealed"
+                      ? "linear-gradient(90deg, #4ade80, #22c55e)"
+                      : "linear-gradient(90deg, #60a5fa, #3b82f6)",
+                  transition: "width 0.2s ease",
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 8, color: "#dbeafe", fontSize: 13, fontWeight: 600 }}>{revealPercent}%</div>
+          </div>
         </div>
-        <h3 style={{ margin: "0.4rem 0 0.8rem" }}>{minutesLabel}</h3>
       </section>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        <div style={{ background: "#10141c", padding: "1rem", borderRadius: 12 }}>
-          <h3 style={{ marginBottom: 12 }}>Top Artists</h3>
-          <ol style={{ paddingLeft: 20, margin: 0 }}>
-            {prompt.topArtists.map((artist, index) => (
-              <li key={artist.name + index} style={{ marginBottom: 8 }}>
-                {(() => {
-                  const entryKey = `artist-${index}`;
-                  const isRevealed = revealedKeySet.has(entryKey);
-                  const isPreviewArtist =
-                    previewTarget?.type === "artist" && previewTarget.index === index && isRevealed;
-                  return (
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  {isRevealed && artist.imageUrl ? (
-                    <img
-                      src={artist.imageUrl}
-                      alt={artist.name}
-                      style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-                    />
-                  ) : null}
-                  <div>
-                    <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                      {renderRedacted(artist.name, isRevealed)}
-                      {isPreviewArtist && isPlaying && <span title="Preview playing">🔊</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      {renderRedacted(
-                        `${artist.playCount.toLocaleString()} play${artist.playCount === 1 ? "" : "s"}`,
-                        isRevealed
-                      )}
-                    </div>
-                  </div>
-                </div>
-                  );
-                })()}
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div style={{ background: "#10141c", padding: "1rem", borderRadius: 8 }}>
-          <h3 style={{ marginBottom: 12 }}>Top Songs</h3>
-          <ol style={{ paddingLeft: 20, margin: 0 }}>
-            {prompt.topSongs.map((song, index) => (
-              <li key={song.track + song.artist + index} style={{ marginBottom: 8 }}>
-                {(() => {
-                  const entryKey = `song-${index}`;
-                  const isRevealed = revealedKeySet.has(entryKey);
-                  const isPreviewSong =
-                    previewTarget?.type === "song" && previewTarget.index === index && isRevealed;
-                  return (
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  {isRevealed && song.imageUrl ? (
-                    <img
-                      src={song.imageUrl}
-                      alt={song.track}
-                      style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-                    />
-                  ) : null}
-                  <div>
-                    <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                      {renderRedacted(song.track, isRevealed)}
-                      {isPreviewSong && isPlaying && <span title="Preview playing">🔊</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      {renderRedacted(song.artist, isRevealed)}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      {renderRedacted(
-                        `${song.playCount.toLocaleString()} play${song.playCount === 1 ? "" : "s"}`,
-                        isRevealed
-                      )}
+        <div style={{ ...cardStyle, padding: "1rem" }}>
+          <h3 style={sectionTitleStyle}>Top Artists</h3>
+          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+            {prompt.topArtists.map((artist, index) => {
+              const entryKey = `artist-${index}`;
+              const isEntryRevealed = revealedKeySet.has(entryKey);
+              const isPreviewArtist =
+                previewTarget?.type === "artist" && previewTarget.index === index && isEntryRevealed;
+
+              return (
+                <li
+                  key={artist.name + index}
+                  className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                  style={{
+                    "--gw-reveal-delay": `${index * 70}ms`,
+                    borderRadius: 10,
+                    padding: "0.65rem 0.7rem",
+                    background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
+                  } as CSSProperties}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span className="gw-host-entry-rank" style={{ width: 14 }}>
+                      {index + 1}
+                    </span>
+                    {isEntryRevealed && artist.imageUrl ? (
+                      <img
+                        src={artist.imageUrl}
+                        alt={artist.name}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
+                      />
+                    ) : null}
+                    <div>
+                      <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                        {renderRedacted(artist.name, isEntryRevealed)}
+                        {isPreviewArtist && isPlaying && <span title="Preview playing">🔊</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        {renderRedacted(
+                          `${artist.playCount.toLocaleString()} play${artist.playCount === 1 ? "" : "s"}`,
+                          isEntryRevealed
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                  );
-                })()}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ol>
         </div>
-        <div style={{ background: "#10141c", padding: "1rem", borderRadius: 8 }}>
-          <h3 style={{ marginBottom: 12 }}>Top Genres</h3>
+        <div style={{ ...cardStyle, padding: "1rem" }}>
+          <h3 style={sectionTitleStyle}>Top Songs</h3>
+          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+            {prompt.topSongs.map((song, index) => {
+              const entryKey = `song-${index}`;
+              const isEntryRevealed = revealedKeySet.has(entryKey);
+              const isPreviewSong =
+                previewTarget?.type === "song" && previewTarget.index === index && isEntryRevealed;
+
+              return (
+                <li
+                  key={song.track + song.artist + index}
+                  className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                  style={{
+                    "--gw-reveal-delay": `${index * 70}ms`,
+                    borderRadius: 10,
+                    padding: "0.1em 0.7rem",
+                    background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
+                  } as CSSProperties}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span className="gw-host-entry-rank" style={{ width: 14 }}>
+                      {index + 1}
+                    </span>
+                    {isEntryRevealed && song.imageUrl ? (
+                      <img
+                        src={song.imageUrl}
+                        alt={song.track}
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
+                      />
+                    ) : null}
+                    <div>
+                      <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                        {renderRedacted(song.track, isEntryRevealed)}
+                        {isPreviewSong && isPlaying && <span title="Preview playing">🔊</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        {renderRedacted(song.artist, isEntryRevealed)}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        {renderRedacted(
+                          `${song.playCount.toLocaleString()} play${song.playCount === 1 ? "" : "s"}`,
+                          isEntryRevealed
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div style={{ ...cardStyle, padding: "1rem" }}>
+          <h3 style={sectionTitleStyle}>Top Genres</h3>
           {prompt.topGenres?.length ? (
-            <ol style={{ paddingLeft: 20, margin: 0 }}>
-              {prompt.topGenres.map((genre, index) => (
-                <li key={genre.genre} style={{ marginBottom: 8 }}>
-                  {(() => {
-                    const entryKey = `genre-${index}`;
-                    const isRevealed = revealedKeySet.has(entryKey);
-                    return (
-                      <>
-                        <div style={{ fontWeight: 600 }}>{renderRedacted(genre.genre, isRevealed)}</div>
+            <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+              {prompt.topGenres.map((genre, index) => {
+                const entryKey = `genre-${index}`;
+                const isEntryRevealed = revealedKeySet.has(entryKey);
+
+                return (
+                  <li
+                    key={genre.genre}
+                    className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                    style={{
+                      "--gw-reveal-delay": `${index * 70}ms`,
+                      borderRadius: 10,
+                      padding: "0.65rem 0.7rem",
+                      background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
+                    } as CSSProperties}
+                  >
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <span className="gw-host-entry-rank" style={{ width: 14 }}>
+                        {index + 1}
+                      </span>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{renderRedacted(genre.genre, isEntryRevealed)}</div>
                         <div style={{ fontSize: 12, color: "#94a3b8" }}>
                           {renderRedacted(
                             `${genre.plays.toLocaleString()} play${genre.plays === 1 ? "" : "s"}`,
-                            isRevealed
+                            isEntryRevealed
                           )}
                         </div>
-                      </>
-                    );
-                  })()}
-                </li>
-              ))}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           ) : (
             <div style={{ fontSize: 14, color: "#a0b9ff", fontWeight: 600 }}>
@@ -407,7 +527,7 @@ export const GuessWrappedHost: FC<Props> = ({
         </div>
       </section>
 
-      <div >
+      <div>
         <PlayerVotes
           status={round.status}
           players={players}
