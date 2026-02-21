@@ -5,7 +5,12 @@ import { GameState, GuessWrappedRoundState, GuessWrappedSummary } from "types/ga
 import { PlayerVotes } from "./components/PlayerVotes";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useTrackPreview } from "game/hooks/useTrackPreview";
-import "./GuessWrappedHost.css";
+import {
+  HostActionRow,
+  HostCard,
+  HostMinigameStack,
+} from "./components/HostMinigamePrimitives";
+import "./styles/GuessWrapped.css";
 
 type Props = {
   roomCode: string;
@@ -281,46 +286,23 @@ export const GuessWrappedHost: FC<Props> = ({
     : renderRedacted(`${prompt.minutesListened.toLocaleString()} minutes listened`, false);
   const revealPercent = Math.round(revealProgress * 100);
 
-  // TODO Centralize styles across wrapped + wlm + player votes
-  const cardStyle = {
-    borderRadius: 16,
-    border: "1px solid rgba(148, 163, 184, 0.25)",
-    background: "linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86))",
-    boxShadow: "0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04)",
-  };
-
-  const sectionTitleStyle = {
-    marginBottom: 12,
-    color: "#e2e8f0",
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.8,
-    fontSize: 14,
-    fontWeight: 700,
-  };
-
   if (!round || round.minigameId !== "GUESS_SPOTIFY_WRAPPED") {
     return (
-      <div style={{ ...cardStyle, padding: "1.5rem", textAlign: "center" }}>
+      <HostCard padded className="host-minigame-state">
         <p>No Spotify Wrapped summary yet.</p>
-        <button onClick={handleStartRound} disabled={busy === "prompt"}>
+        <button className="game-shell-button" onClick={handleStartRound} disabled={busy === "prompt"}>
           {busy === "prompt" ? "Preparing..." : "Generate Wrapped"}
         </button>
-        {error && <p style={{ color: "salmon" }}>{error}</p>}
-      </div>
+        {error && <p className="host-minigame-error">{error}</p>}
+      </HostCard>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", color: "#ffffffff" }}>
-      <section style={{ ...cardStyle, padding: "1.5rem" }}>
+    <HostMinigameStack className="gw-host-stack">
+      <HostCard padded>
         <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 20,
-            flexWrap: "wrap",
-          }}
+          className="gw-host-hero-row"
         >
           <div>
             <div style={{ fontSize: 30, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
@@ -341,49 +323,31 @@ export const GuessWrappedHost: FC<Props> = ({
               </span>
             </h3>
           </div>
-          <div style={{ minWidth: 210, flex: "0 0 220px" }}>
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                fontWeight: 700,
-                color: "#93c5fd",
-                marginBottom: 8,
-              }}
-            >
+          <div className="gw-host-progress">
+            <div className="host-minigame-progress-label">
               Reveal Progress
             </div>
-            <div
-              style={{
-                height: 10,
-                borderRadius: 999,
-                border: "1px solid rgba(59, 130, 246, 0.45)",
-                background: "rgba(15, 23, 42, 0.85)",
-                overflow: "hidden",
-              }}
-            >
+            <div className="host-minigame-progress-track">
               <div
+                className="host-minigame-progress-fill"
                 style={{
-                  height: "100%",
                   width: `${revealPercent}%`,
                   background:
                     roundStatus === "revealed"
                       ? "linear-gradient(90deg, #4ade80, #22c55e)"
                       : "linear-gradient(90deg, #60a5fa, #3b82f6)",
-                  transition: "width 0.2s ease",
                 }}
               />
             </div>
-            <div style={{ marginTop: 8, color: "#dbeafe", fontSize: 13, fontWeight: 600 }}>{revealPercent}%</div>
+            <div className="host-minigame-progress-value">{revealPercent}%</div>
           </div>
         </div>
-      </section>
+      </HostCard>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        <div style={{ ...cardStyle, padding: "1rem" }}>
-          <h3 style={sectionTitleStyle}>Top Artists</h3>
-          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+      <section className="host-minigame-grid">
+        <HostCard padded>
+          <h3 className="host-minigame-section-title">Top Artists</h3>
+          <ol className="host-minigame-list">
             {prompt.topArtists.map((artist, index) => {
               const entryKey = `artist-${index}`;
               const isEntryRevealed = revealedKeySet.has(entryKey);
@@ -429,10 +393,10 @@ export const GuessWrappedHost: FC<Props> = ({
               );
             })}
           </ol>
-        </div>
-        <div style={{ ...cardStyle, padding: "1rem" }}>
-          <h3 style={sectionTitleStyle}>Top Songs</h3>
-          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+        </HostCard>
+        <HostCard padded>
+          <h3 className="host-minigame-section-title">Top Songs</h3>
+          <ol className="host-minigame-list">
             {prompt.topSongs.map((song, index) => {
               const entryKey = `song-${index}`;
               const isEntryRevealed = revealedKeySet.has(entryKey);
@@ -481,11 +445,11 @@ export const GuessWrappedHost: FC<Props> = ({
               );
             })}
           </ol>
-        </div>
-        <div style={{ ...cardStyle, padding: "1rem" }}>
-          <h3 style={sectionTitleStyle}>Top Genres</h3>
+        </HostCard>
+        <HostCard padded>
+          <h3 className="host-minigame-section-title">Top Genres</h3>
           {prompt.topGenres?.length ? (
-            <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+            <ol className="host-minigame-list">
               {prompt.topGenres.map((genre, index) => {
                 const entryKey = `genre-${index}`;
                 const isEntryRevealed = revealedKeySet.has(entryKey);
@@ -524,7 +488,7 @@ export const GuessWrappedHost: FC<Props> = ({
               No genre data
             </div>
           )}
-        </div>
+        </HostCard>
       </section>
 
       <div>
@@ -541,17 +505,25 @@ export const GuessWrappedHost: FC<Props> = ({
         />
       </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={handleReveal} disabled={busy === "reveal" || round.status === "revealed"}>
+      <HostActionRow>
+        <button
+          className="game-shell-button"
+          onClick={handleReveal}
+          disabled={busy === "reveal" || round.status === "revealed"}
+        >
           {busy === "reveal" ? "Revealing..." : "Reveal Owner"}
         </button>
-        <button onClick={handleStartRound} disabled={busy === "prompt"}>
+        <button
+          className="game-shell-button"
+          onClick={handleStartRound}
+          disabled={busy === "prompt"}
+        >
           {busy === "prompt" ? "Preparing..." : "New Wrapped"}
         </button>
-        <button onClick={onAdvance}>Next Stage</button>
-      </div>
+        <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
+      </HostActionRow>
 
-      {error && <div style={{ color: "salmon" }}>{error}</div>}
-    </div>
+      {error && <div className="host-minigame-error">{error}</div>}
+    </HostMinigameStack>
   );
 };

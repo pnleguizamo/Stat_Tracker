@@ -3,6 +3,13 @@ import api from 'lib/api';
 import { socket } from 'socket';
 import { GameState, HeardleRoundState } from 'types/game';
 import { useTrackPreview } from '../../hooks/useTrackPreview';
+import {
+  HostActionRow,
+  HostCard,
+  HostMinigameStack,
+  HostStateMessage,
+} from './components/HostMinigamePrimitives';
+import './styles/Heardle.css';
 
 declare global {
   interface Window {
@@ -51,35 +58,18 @@ async function transferAndPlay(token: string, deviceId: string, uri: string) {
 
 function renderPatternSlots(pattern: string | null | undefined) {
   if (!pattern) {
-    return <div style={{ fontFamily: 'monospace', fontSize: 17 }}>—</div>;
+    return <div className="heardle-pattern-empty">—</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 4, rowGap: 8 }}>
+    <div className="heardle-pattern">
       {Array.from(pattern).map((char, idx) => {
         if (char === ' ') {
-          return <span key={`space-${idx}`} style={{ width: 14, display: 'inline-block' }} />;
+          return <span key={`space-${idx}`} className="heardle-pattern-space" />;
         }
 
         return (
-          <span
-            key={`char-${idx}`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 10,
-              // height: 24,
-              padding: '0 3px',
-              // borderRadius: 4,
-              // border: '1px solid #334155',
-              // background: '#0b1220',
-              color: '#e2e8f0',
-              // fontFamily: 'monospace',
-              fontSize: 30,
-              fontWeight: 700,
-            }}
-          >
+          <span key={`char-${idx}`} className="heardle-pattern-char">
             {char}
           </span>
         );
@@ -402,68 +392,56 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     return { text: '—', color: '#94a3b8' };
   };
 
+  const outcomeChip = (outcome?: string | null) => {
+    if (outcome === 'correct') return { text: '✓ Correct', className: 'heardle-player-outcome--correct' };
+    if (outcome === 'album_match') return { text: '✕ Album only', className: 'heardle-player-outcome--album' };
+    if (outcome === 'artist_match') return { text: '✕ Artist only', className: 'heardle-player-outcome--artist' };
+    if (outcome === 'wrong') return { text: '✕ Wrong', className: 'heardle-player-outcome--wrong' };
+    if (outcome === 'gave_up') return { text: '>> Gave up', className: 'heardle-player-outcome--gave-up' };
+    return { text: 'Waiting…', className: 'heardle-player-outcome--waiting' };
+  };
+
   if (!round) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <HostStateMessage>
         <p>Waiting to start Heardle…</p>
-        <button onClick={handleStart} disabled={actionBusy === 'start'}>
+        <button className="game-shell-button" onClick={handleStart} disabled={actionBusy === 'start'}>
           {actionBusy === 'start' ? 'Starting…' : 'Start first song'}
         </button>
-        {error && <div style={{ color: 'salmon', marginTop: 8 }}>{error}</div>}
-      </div>
+        {error && <div className="host-minigame-error heardle-empty-error">{error}</div>}
+      </HostStateMessage>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '1rem',
-          padding: '1.25rem',
-          background: '#0f172a',
-          borderRadius: 12,
-          width: '100%',
-        }}
-      >
-        <div style={{ color: '#e2e8f0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 1 }}>
+    <HostMinigameStack className="heardle-host-stack">
+      <HostCard padded className="heardle-main-card">
+        <div className="heardle-main-content">
+          <div className="heardle-round-meta">
             Heardle — Song {round.stageProgress?.songNumber || 1}
             {songsPerGame ? ` / ${songsPerGame}` : ''}
           </div>
-          {round.status !== 'revealed' && <div style={{ marginTop: 5, fontSize: 13, color: '#94a3b8', width: '100%', maxWidth: 960 }}>
-            Current round: {(round.currentSnippetIndex || 0) + 1} / {snippetPlan.length || 0} ({formatSnippetSeconds(currentSnippetMs)})
-          </div>}
-          <div
-            style={{
-              marginTop: 10,
-              // width: '100%',
-              // maxWidth: 960,
-              padding: '0.75rem',
-              // borderRadius: 10,
-              // border: '1px solid #1f2937',
-              // background: '#0f172a',
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'flex-start' }}>
-              <div style={{ display: 'grid', gap: 8, minWidth: 0, justifyItems: 'center' }}>
+          {round.status !== 'revealed' && (
+            <div className="heardle-round-submeta">
+              Current round: {(round.currentSnippetIndex || 0) + 1} / {snippetPlan.length || 0} ({formatSnippetSeconds(currentSnippetMs)})
+            </div>
+          )}
+          <div className="heardle-prompt-shell">
+            <div className="heardle-prompt-layout">
+              <div className="heardle-prompt-body">
                 {round.status === 'revealed' ? (
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, width: '100%' }}>
+                    <div className="heardle-revealed-row">
                       {round.song?.imageUrl ? (
                         <img
                           src={round.song.imageUrl}
                           alt={round.song.track_name || 'Song art'}
-                          style={{ width: 200, height: 200, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                          className="heardle-revealed-art"
                         />
                       ) : null}
-                      <div style={{ display: 'grid', gap: 6, justifyItems: 'start', textAlign: 'left' }}>
-                        {/* <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.8 }}>Title</div> */}
-                        <h2 style={{ margin: 0, color: '#fff' }}>{round.song?.track_name || '—'}</h2>
-                        {/* <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.8 }}>Artist</div> */}
-                        <div style={{ fontSize: 14, color: '#cbd5e1' }}>
+                      <div className="heardle-revealed-meta">
+                        <h2 className="heardle-revealed-title">{round.song?.track_name || '—'}</h2>
+                        <div className="heardle-revealed-artist">
                           {round.song?.artist_names?.length ? round.song.artist_names.join(', ') : '—'}
                         </div>
                       </div>
@@ -472,54 +450,35 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                 ) : showPatternHints ? (
                   <>
                     {renderPatternSlots(round.hints?.titlePattern)}
-                    <div style={{ fontSize: 18, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.8 }}>by</div>
+                    <div className="heardle-pattern-separator">by</div>
                     {renderPatternSlots(round.hints?.artistPattern)}
                   </>
                 ) : (
-                  <h2 style={{ margin: 0, color: '#fff' }}>Hidden until reveal</h2>
+                  <h2 className="heardle-hidden-title">Hidden until reveal</h2>
                 )}
               </div>
             </div>
-            {round.status !== 'revealed' && showPatternHints && <div
-              style={{
-                marginTop: 12,
-                minWidth: 56,
-                fontSize: 12, textTransform: 'uppercase',
-                color: '#94a3b8',
-                letterSpacing: 0.8,
-              }}
-            >
-              Released in: {yearDisplay}
-            </div>}
+            {round.status !== 'revealed' && showPatternHints && (
+              <div className="heardle-release-year">
+                Released in: {yearDisplay}
+              </div>
+            )}
           </div>
           {round.status !== 'revealed' && maxSnippetMs > 0 && (
-            <div style={{ marginTop: 12, width: '100%', maxWidth: 960 }}>
-              <div style={{ fontSize: 14, color: '#cbd5e1', marginBottom: 8, fontWeight: 700 }}>Playback progress</div>
-              <div
-                style={{
-                  position: 'relative',
-                  height: 40,
-                  borderRadius: 999,
-                  border: '1px solid #334155',
-                  background: '#0b1220',
-                  overflow: 'hidden',
-                }}
-              >
+            <div className="heardle-playback-section">
+              <div className="heardle-playback-title">Playback progress</div>
+              <div className="heardle-timeline-track">
                 <div
+                  className="heardle-timeline-stage-progress"
                   style={{
-                    position: 'absolute',
-                    inset: 0,
                     width: `${Math.max(0, Math.min(100, timelineMetrics.stageProgressPct))}%`,
-                    background: 'rgba(56, 189, 248, 0.18)',
                   }}
                 />
                 <div
+                  className="heardle-timeline-playhead"
                   style={{
-                    position: 'absolute',
-                    inset: 0,
                     width: `${Math.max(0, Math.min(100, timelineMetrics.playheadPct))}%`,
                     background: timelineMetrics.isInReplayGap ? 'rgba(56, 189, 248, 0.28)' : '#38bdf8',
-                    transition: 'width 90ms linear',
                   }}
                 />
                 {snippetPlan.map((ms, idx) => {
@@ -539,7 +498,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                   );
                 })}
               </div>
-              <div style={{ position: 'relative', height: 24, marginTop: 8 }}>
+              <div className="heardle-timeline-label-row">
                 {snippetPlan.map((ms, idx) => {
                   const hideFirstLabel = round.currentSnippetIndex > 0 && idx === 0;
                   const hideSecondLabel = round.currentSnippetIndex === 0 && idx === 1;
@@ -564,86 +523,68 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                   );
                 })}
               </div>
-              <div style={{ marginTop: 6, fontSize: 14, color: '#94a3b8' }}>
+              <div className="heardle-playback-caption">
                 {timelineMetrics.isInReplayGap
                   ? `Replaying in ${formatSnippetSeconds(currentSnippetGapMs)}`
                   : `Playing ${formatSnippetSeconds(timelineMetrics.playbackInSnippetMs)} / ${formatSnippetSeconds(currentSnippetMs)}`}
               </div>
-              <div style={{ marginTop: 4, fontSize: 12, color: '#cbd5e1' }}>
+              <div className="heardle-playback-status">
                 Playback: {playbackError ? playbackError : playbackStatus}
               </div>
             </div>
           )}
         </div>
-      </div>
+      </HostCard>
 
       <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 12,
-        }}
+        className="host-minigame-grid host-minigame-grid--tight"
       >
-        {playerGuessStates.map(({ player, outcome, guessedThisSnippet, thisSnippetOutcome }) => (
-          <div
-            key={player.playerId || player.name}
-            style={{
-              padding: '0.85rem',
-              borderRadius: 10,
-              border: '1px solid #1f2937',
-              background: '#0b1220',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: '#fff' }}>{player.displayName || player.name}</div>
-            <div style={{ marginTop: 4, fontSize: 13, color: '#94a3b8' }}>
-              {outcome === 'correct' ? (
-                <span style={{ color: '#22c55e' }}>✓ Correct</span>
-              ) : outcome === 'album_match' ? (
-                <span style={{ color: '#fbbf24' }}>✕ Album only</span>
-              ) : outcome === 'artist_match' ? (
-                <span style={{ color: '#f59e0b' }}>✕ Artist only</span>
-              ) : outcome === 'wrong' ? (
-                <span style={{ color: '#f87171' }}>✕ Wrong</span>
-              ) : outcome === 'gave_up' ? (
-                <span style={{ color: '#60a5fa' }}>{'>>'} Gave up</span>
-              ) : (
-                <span style={{ color: '#94a3b8' }}>Waiting…</span>
+        {playerGuessStates.map(({ player, outcome, guessedThisSnippet, thisSnippetOutcome }) => {
+          const chip = outcomeChip(outcome);
+          return (
+            <div
+              key={player.playerId || player.name}
+              className="heardle-player-card"
+            >
+              <div className="heardle-player-name">{player.displayName || player.name}</div>
+              <div className="heardle-player-outcome">
+                <span className={chip.className}>{chip.text}</span>
+              </div>
+              {round.status !== 'revealed' && guessedThisSnippet && (
+                <div className="heardle-player-snippet-note">
+                  {thisSnippetOutcome === 'gave_up' ? 'Gave up this snippet' : 'Guessed this snippet'}
+                </div>
               )}
             </div>
-            {round.status !== 'revealed' && guessedThisSnippet && (
-              <div style={{ marginTop: 4, fontSize: 12, color: '#38bdf8' }}>
-                {thisSnippetOutcome === 'gave_up' ? 'Gave up this snippet' : 'Guessed this snippet'}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div style={{ padding: '1rem', borderRadius: 12, background: '#0f172a', color: '#e2e8f0' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Guess history</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+      <HostCard padded subtle>
+        <div className="heardle-history-title">Guess history</div>
+        <div className="heardle-history-grid">
           {players.map((player) => {
             const guesses = player.playerId ? round.answers?.[player.playerId]?.guesses || [] : [];
             return (
               <div
                 key={player.playerId || player.name}
-                style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #1f2937', background: '#0b1220' }}
+                className="heardle-history-card"
               >
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>{player.displayName || player.name}</div>
-                {guesses.length === 0 && <div style={{ color: '#94a3b8', fontSize: 13 }}>No guesses yet</div>}
+                <div className="heardle-history-player">{player.displayName || player.name}</div>
+                {guesses.length === 0 && <div className="heardle-history-empty">No guesses yet</div>}
                 {guesses.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div className="heardle-history-list">
                     {guesses
                       .slice()
                       .sort((a, b) => (a.at || 0) - (b.at || 0))
                       .map((g, idx) => {
                         const o = outcomeLabel(g.outcome);
                         return (
-                          <div key={`${g.snippetIndex}-${idx}`} style={{ fontSize: 13, color: '#cbd5e1' }}>
-                            <span style={{ color: '#94a3b8' }}>Round {g.snippetIndex + 1}: </span>
-                            <span style={{ color: '#e2e8f0' }}>{o.text === "Wrong" ? g.trackName : ""}</span>
+                          <div key={`${g.snippetIndex}-${idx}`} className="heardle-history-item">
+                            <span className="heardle-history-round-label">Round {g.snippetIndex + 1}: </span>
+                            <span className="heardle-history-track">{o.text === "Wrong" ? g.trackName : ""}</span>
                             {g.artistNames?.length ? (
-                              <span style={{ color: '#94a3b8' }}> {o.text === "Wrong" ? g.artistNames.join(', ') : ""}</span>
+                              <span className="heardle-history-artist"> {o.text === "Wrong" ? g.artistNames.join(', ') : ""}</span>
                             ) : null}
                             <span style={{ marginLeft: 6, color: o.color }}>({o.text})</span>
                           </div>
@@ -655,19 +596,27 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
             );
           })}
         </div>
-      </div>
+      </HostCard>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={handleReveal} disabled={actionBusy === 'reveal' || round.status === 'revealed'}>
+      <HostActionRow>
+        <button
+          className="game-shell-button"
+          onClick={handleReveal}
+          disabled={actionBusy === 'reveal' || round.status === 'revealed'}
+        >
           {actionBusy === 'reveal' ? 'Revealing…' : 'Reveal Now'}
         </button>
-        <button onClick={handleStart} disabled={actionBusy === 'start' || round.status !== 'revealed'}>
+        <button
+          className="game-shell-button"
+          onClick={handleStart}
+          disabled={actionBusy === 'start' || round.status !== 'revealed'}
+        >
           {actionBusy === 'start' ? 'Loading…' : 'Next Song'}
         </button>
-        <button onClick={onAdvance}>Next Stage</button>
-      </div>
+        <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
+      </HostActionRow>
 
-      {error && <div style={{ color: 'salmon' }}>{error}</div>}
-    </div>
+      {error && <div className="host-minigame-error">{error}</div>}
+    </HostMinigameStack>
   );
 };

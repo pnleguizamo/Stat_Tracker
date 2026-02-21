@@ -1,0 +1,117 @@
+.host-minigame-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: var(--gs-text-strong);
+}
+
+.host-minigame-card {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 27, 0.86));
+  box-shadow: 0 20px 36px rgba(2, 6, 23, 0.32), inset 0 1px 0 rgba(248, 250, 252, 0.04);
+}
+
+.host-minigame-card--padded {
+  padding: 1.25rem;
+}
+
+.host-minigame-card--subtle {
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.host-minigame-state {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.host-minigame-error {
+  color: var(--gs-error);
+}
+
+.host-minigame-action-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.host-minigame-chip-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.host-minigame-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  background: rgba(30, 64, 175, 0.25);
+  color: #bfdbfe;
+}
+
+.host-minigame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.host-minigame-grid--tight {
+  gap: 0.75rem;
+}
+
+.host-minigame-section-title {
+  margin: 0 0 0.75rem;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.host-minigame-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.host-minigame-progress-label {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #93c5fd;
+  margin-bottom: 8px;
+}
+
+.host-minigame-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(15, 23, 42, 0.85);
+  overflow: hidden;
+}
+
+.host-minigame-progress-fill {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.host-minigame-progress-value {
+  margin-top: 8px;
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .host-minigame-card--padded {
+    padding: 1rem;
+  }
+}

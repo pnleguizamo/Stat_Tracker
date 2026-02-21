@@ -8,6 +8,7 @@ import { socket } from "socket";
 import { GameState, GuessWrappedRoundState, MinigameId, WhoListenedMostRoundState } from "types/game";
 import { Leaderboard } from "./Leaderboard";
 import "../../styles/gameShell.css";
+import "./minigames/styles/hostMinigame.css";
 
 type HostMinigameProps = {
   roomCode: string;

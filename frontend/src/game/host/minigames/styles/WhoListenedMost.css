@@ -1,0 +1,50 @@
+.wlm-prompt-card {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.wlm-prompt-art {
+  width: 140px;
+  height: 140px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.wlm-prompt-content {
+  min-width: 0;
+}
+
+.wlm-status-chip--collecting {
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(15, 118, 110, 0.24);
+  color: #99f6e4;
+}
+
+.wlm-status-chip--revealed {
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(22, 101, 52, 0.3);
+  color: #bbf7d0;
+}
+
+.wlm-prompt-title {
+  margin: 0.5rem 0;
+  color: #fff;
+  font-size: 28px;
+}
+
+.wlm-prompt-artists {
+  font-size: 16px;
+  color: #fff;
+}
+
+.wlm-prompt-description {
+  margin-top: 1rem;
+  max-width: 420px;
+  color: #cdd5ee;
+}
+
+@media (max-width: 760px) {
+  .wlm-prompt-card {
+    flex-direction: column;
+  }
+}

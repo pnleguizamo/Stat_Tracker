@@ -1,0 +1,310 @@
+.heardle-host-stack {
+  color: #e2e8f0;
+}
+
+.heardle-empty-error {
+  margin-top: 8px;
+}
+
+.heardle-main-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.heardle-main-content {
+  color: #e2e8f0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.heardle-round-meta {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 1px;
+}
+
+.heardle-round-submeta {
+  margin-top: 5px;
+  font-size: 13px;
+  color: #94a3b8;
+  width: 100%;
+  max-width: 960px;
+}
+
+.heardle-prompt-shell {
+  margin-top: 10px;
+  padding: 0.75rem;
+}
+
+.heardle-prompt-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.heardle-prompt-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  justify-items: center;
+}
+
+.heardle-pattern-empty {
+  font-family: monospace;
+  font-size: 17px;
+}
+
+.heardle-pattern {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 4px;
+  row-gap: 8px;
+}
+
+.heardle-pattern-space {
+  width: 14px;
+  display: inline-block;
+}
+
+.heardle-pattern-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 10px;
+  padding: 0 3px;
+  color: #e2e8f0;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.heardle-pattern-separator {
+  font-size: 18px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.8px;
+}
+
+.heardle-hidden-title {
+  margin: 0;
+  color: #fff;
+}
+
+.heardle-release-year {
+  margin-top: 12px;
+  min-width: 56px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.8px;
+}
+
+.heardle-revealed-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.heardle-revealed-art {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.heardle-revealed-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  text-align: left;
+}
+
+.heardle-revealed-title {
+  margin: 0;
+  color: #fff;
+}
+
+.heardle-revealed-artist {
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.heardle-playback-section {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 960px;
+}
+
+.heardle-playback-title {
+  font-size: 14px;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.heardle-timeline-track {
+  position: relative;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #0b1220;
+  overflow: hidden;
+}
+
+.heardle-timeline-stage-progress,
+.heardle-timeline-playhead {
+  position: absolute;
+  inset: 0;
+}
+
+.heardle-timeline-stage-progress {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.heardle-timeline-playhead {
+  transition: width 90ms linear;
+}
+
+.heardle-timeline-label-row {
+  position: relative;
+  height: 24px;
+  margin-top: 8px;
+}
+
+.heardle-playback-caption {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.heardle-playback-status {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.heardle-player-card {
+  padding: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: #0b1220;
+}
+
+.heardle-player-name {
+  font-weight: 700;
+  color: #fff;
+}
+
+.heardle-player-outcome {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.heardle-player-outcome--correct {
+  color: #22c55e;
+}
+
+.heardle-player-outcome--album {
+  color: #fbbf24;
+}
+
+.heardle-player-outcome--artist {
+  color: #f59e0b;
+}
+
+.heardle-player-outcome--wrong {
+  color: #f87171;
+}
+
+.heardle-player-outcome--gave-up {
+  color: #60a5fa;
+}
+
+.heardle-player-outcome--waiting {
+  color: #94a3b8;
+}
+
+.heardle-player-snippet-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #38bdf8;
+}
+
+.heardle-history-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.heardle-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.heardle-history-card {
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: #0b1220;
+}
+
+.heardle-history-player {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.heardle-history-empty {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.heardle-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.heardle-history-item {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.heardle-history-round-label,
+.heardle-history-artist {
+  color: #94a3b8;
+}
+
+.heardle-history-track {
+  color: #e2e8f0;
+}
+
+@media (max-width: 760px) {
+  .heardle-revealed-row {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .heardle-revealed-meta {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .heardle-revealed-art {
+    width: 168px;
+    height: 168px;
+  }
+}
