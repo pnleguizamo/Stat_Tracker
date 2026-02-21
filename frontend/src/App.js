@@ -13,6 +13,7 @@ import StagePlanner from './game/host/StagePlanner.tsx';
 import PlayerScreen from './game/player/PlayerScreen.tsx';
 import HostGameScreen from './game/host/HostGame.tsx';
 import Wrapped from './pages/Wrapped.jsx';
+import PlayerVotesSandbox from './pages/PlayerVotesSandbox.tsx';
 
 function ProtectedLayout() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="/game/:roomCode" element={<PlayerScreen />} />
         <Route path="/game/host/:roomCode/setup" element={<StagePlanner />} />
         <Route path="/game/host/:roomCode/play" element={<HostGameScreen />} />
+        <Route path="/sandbox/player-votes" element={<PlayerVotesSandbox />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<CurrentlyPlaying />} />
           <Route path="/recently_played" element={<RecentlyPlayed />} />

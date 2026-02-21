@@ -107,7 +107,7 @@ export const GuessWrappedHost: FC<Props> = ({
         if (!revealRoundId || roundIdRef.current !== revealRoundId) return;
         if (busyRef.current === "prompt") return;
         handleStartRound();
-      }, 3500);
+      }, 3000);
     });
 
     return () => {

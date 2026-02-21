@@ -14,14 +14,14 @@
   min-width: 0;
 }
 
-.wlm-status-chip--collecting {
-  border-color: rgba(45, 212, 191, 0.45);
+.host-minigame-chip.wlm-status-chip--collecting {
+  border: 1px solid rgba(45, 212, 191, 0.55);
   background: rgba(15, 118, 110, 0.24);
   color: #99f6e4;
 }
 
-.wlm-status-chip--revealed {
-  border-color: rgba(74, 222, 128, 0.45);
+.host-minigame-chip.wlm-status-chip--revealed {
+  border: 1px solid rgba(74, 222, 128, 0.55);
   background: rgba(22, 101, 52, 0.3);
   color: #bbf7d0;
 }

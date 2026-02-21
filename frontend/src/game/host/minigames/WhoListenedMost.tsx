@@ -104,7 +104,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
         if (!revealRoundId || roundIdRef.current !== revealRoundId) return;
         if (busyRef.current === "prompt") return;
         handleNewPrompt();
-      }, 3500);
+      }, 2500);
     });
 
     return () => {
