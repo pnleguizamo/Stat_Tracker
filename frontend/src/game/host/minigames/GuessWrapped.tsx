@@ -20,6 +20,9 @@ type Props = {
   remainingMs: number | null;
 };
 
+const joinClasses = (...values: Array<string | false | null | undefined>) =>
+  values.filter(Boolean).join(" ");
+
 export const GuessWrappedHost: FC<Props> = ({
   roomCode,
   gameState,
@@ -279,8 +282,30 @@ export const GuessWrappedHost: FC<Props> = ({
 
   const prompt = round?.prompt ?? safePrompt;
   const isRevealed = round?.status === "revealed";
+  const getEntryRevealDelay = (index: number) => {
+    if (!isRevealed) return "0ms";
+    return `${Math.min(index * 120, 600)}ms`;
+  };
+  const resolveRevealClass = (
+    itemRevealed: boolean,
+    revealedClass: string,
+    finalRevealClass: string
+  ) => {
+    if (!itemRevealed) return undefined;
+    return isRevealed ? finalRevealClass : revealedClass;
+  };
   const isYearRevealed = isRevealed || revealedKeySet.has("year");
   const isMinutesRevealed = isRevealed || revealedKeySet.has("minutes");
+  const yearRevealClass = resolveRevealClass(
+    isYearRevealed,
+    "gw-host-hero-key--revealed",
+    "gw-host-hero-key--final-reveal"
+  );
+  const minutesRevealClass = resolveRevealClass(
+    isMinutesRevealed,
+    "gw-host-hero-key--revealed",
+    "gw-host-hero-key--final-reveal"
+  );
   const minutesLabel: ReactNode = isMinutesRevealed
     ? `${prompt.minutesListened.toLocaleString()} minutes listened`
     : renderRedacted(`${prompt.minutesListened.toLocaleString()} minutes listened`, false);
@@ -307,7 +332,7 @@ export const GuessWrappedHost: FC<Props> = ({
           <div>
             <div style={{ fontSize: 30, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
               <span
-                className={`gw-host-hero-key gw-host-hero-key--year${isYearRevealed ? " gw-host-hero-key--revealed" : ""}`}
+                className={joinClasses("gw-host-hero-key", "gw-host-hero-key--year", yearRevealClass)}
                 style={{ "--gw-key-delay": "0ms" } as CSSProperties}
               >
                 {isYearRevealed ? prompt.year : renderRedacted(String(prompt.year), false)}
@@ -316,8 +341,8 @@ export const GuessWrappedHost: FC<Props> = ({
             </div>
             <h3 style={{ margin: "0.5rem 0 0.8rem", color: "#e2e8f0", fontSize: 22 }}>
               <span
-                className={`gw-host-hero-key gw-host-hero-key--minutes${isMinutesRevealed ? " gw-host-hero-key--revealed" : ""}`}
-                style={{ "--gw-key-delay": "120ms" } as CSSProperties}
+                className={joinClasses("gw-host-hero-key", "gw-host-hero-key--minutes", minutesRevealClass)}
+                style={{ "--gw-key-delay": isRevealed ? "120ms" : "0ms" } as CSSProperties}
               >
                 {minutesLabel}
               </span>
@@ -351,15 +376,20 @@ export const GuessWrappedHost: FC<Props> = ({
             {prompt.topArtists.map((artist, index) => {
               const entryKey = `artist-${index}`;
               const isEntryRevealed = revealedKeySet.has(entryKey);
+              const entryRevealClass = resolveRevealClass(
+                isEntryRevealed,
+                "gw-host-entry--revealed",
+                "gw-host-entry--final-reveal"
+              );
               const isPreviewArtist =
                 previewTarget?.type === "artist" && previewTarget.index === index && isEntryRevealed;
 
               return (
                 <li
                   key={artist.name + index}
-                  className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                  className={joinClasses("gw-host-entry", entryRevealClass)}
                   style={{
-                    "--gw-reveal-delay": `${index * 70}ms`,
+                    "--gw-reveal-delay": getEntryRevealDelay(index),
                     borderRadius: 10,
                     padding: "0.65rem 0.7rem",
                     background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
@@ -400,15 +430,20 @@ export const GuessWrappedHost: FC<Props> = ({
             {prompt.topSongs.map((song, index) => {
               const entryKey = `song-${index}`;
               const isEntryRevealed = revealedKeySet.has(entryKey);
+              const entryRevealClass = resolveRevealClass(
+                isEntryRevealed,
+                "gw-host-entry--revealed",
+                "gw-host-entry--final-reveal"
+              );
               const isPreviewSong =
                 previewTarget?.type === "song" && previewTarget.index === index && isEntryRevealed;
 
               return (
                 <li
                   key={song.track + song.artist + index}
-                  className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                  className={joinClasses("gw-host-entry", entryRevealClass)}
                   style={{
-                    "--gw-reveal-delay": `${index * 70}ms`,
+                    "--gw-reveal-delay": getEntryRevealDelay(index),
                     borderRadius: 10,
                     padding: "0.1em 0.7rem",
                     background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
@@ -453,13 +488,18 @@ export const GuessWrappedHost: FC<Props> = ({
               {prompt.topGenres.map((genre, index) => {
                 const entryKey = `genre-${index}`;
                 const isEntryRevealed = revealedKeySet.has(entryKey);
+                const entryRevealClass = resolveRevealClass(
+                  isEntryRevealed,
+                  "gw-host-entry--revealed",
+                  "gw-host-entry--final-reveal"
+                );
 
                 return (
                   <li
                     key={genre.genre}
-                    className={`gw-host-entry${isEntryRevealed ? " gw-host-entry--revealed" : ""}`}
+                    className={joinClasses("gw-host-entry", entryRevealClass)}
                     style={{
-                      "--gw-reveal-delay": `${index * 70}ms`,
+                      "--gw-reveal-delay": getEntryRevealDelay(index),
                       borderRadius: 10,
                       padding: "0.65rem 0.7rem",
                       background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",

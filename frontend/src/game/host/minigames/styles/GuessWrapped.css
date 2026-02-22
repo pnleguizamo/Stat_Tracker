@@ -94,6 +94,18 @@
   animation: gw-host-hero-sweep 560ms ease-out calc(var(--gw-key-delay, 0ms) + 40ms) 1;
 }
 
+.gw-host-hero-key--final-reveal {
+  animation: gw-host-hero-final-pop 440ms cubic-bezier(0.22, 0.9, 0.28, 1.12) var(--gw-key-delay, 0ms) both;
+}
+
+.gw-host-hero-key--final-reveal::before {
+  animation: gw-host-hero-final-flash 520ms ease-out var(--gw-key-delay, 0ms) 1;
+}
+
+.gw-host-hero-key--final-reveal::after {
+  animation: gw-host-hero-final-sweep 440ms ease-out calc(var(--gw-key-delay, 0ms) + 20ms) 1;
+}
+
 .gw-host-entry--revealed {
   border-color: rgba(125, 211, 252, 0.45);
   animation:
@@ -109,6 +121,14 @@
   animation: gw-host-rank-pop 420ms cubic-bezier(0.2, 1, 0.35, 1.2) calc(var(--gw-reveal-delay, 0ms) + 90ms) both;
 }
 
+.gw-host-entry--final-reveal {
+  animation: gw-host-final-pop 460ms cubic-bezier(0.22, 0.9, 0.28, 1.12) var(--gw-reveal-delay, 0ms) both;
+}
+
+.gw-host-entry--final-reveal::after {
+  animation: gw-host-final-sweep 460ms ease-out var(--gw-reveal-delay, 0ms) 1;
+}
+
 @keyframes gw-host-pop {
   0% {
     transform: scale(0.9);
@@ -121,6 +141,21 @@
   100% {
     transform: scale(1);
     filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes gw-host-final-pop {
+  0% {
+    transform: scale(0.92);
+    border-color: rgba(125, 211, 252, 0.2);
+  }
+  60% {
+    transform: scale(1.015);
+    border-color: rgba(125, 211, 252, 0.48);
+  }
+  100% {
+    transform: scale(1);
+    border-color: rgba(125, 211, 252, 0.38);
   }
 }
 
@@ -179,6 +214,46 @@
   }
 }
 
+@keyframes gw-host-hero-final-pop {
+  0% {
+    transform: scale(0.9);
+  }
+  58% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes gw-host-hero-final-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  34% {
+    opacity: 0.62;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+@keyframes gw-host-hero-final-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-72%) rotate(7deg);
+  }
+  25% {
+    opacity: 0.62;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70%) rotate(7deg);
+  }
+}
+
 @keyframes gw-host-glow {
   0% {
     box-shadow: 0 0 0 rgba(56, 189, 248, 0);
@@ -205,6 +280,20 @@
   }
 }
 
+@keyframes gw-host-final-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-72%) rotate(9deg);
+  }
+  24% {
+    opacity: 0.58;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(72%) rotate(9deg);
+  }
+}
+
 @keyframes gw-host-rank-pop {
   0% {
     transform: scale(0.7) rotate(-10deg);
@@ -219,5 +308,20 @@
     transform: scale(1) rotate(0deg);
     color: #93c5fd;
     text-shadow: none;
+  }
+}
+
+@keyframes gw-host-rank-pop-soft {
+  0% {
+    transform: scale(0.86);
+    color: #93c5fd;
+  }
+  65% {
+    transform: scale(1.08);
+    color: #dbeafe;
+  }
+  100% {
+    transform: scale(1);
+    color: #93c5fd;
   }
 }
