@@ -5,7 +5,7 @@ import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
-import { GameState, GuessWrappedRoundState, MinigameId, WhoListenedMostRoundState } from "types/game";
+import { GameState, MinigameId } from "types/game";
 import { Leaderboard } from "./Leaderboard";
 import "../../styles/gameShell.css";
 import "./minigames/styles/hostMinigame.css";
@@ -156,7 +156,7 @@ const HostGame = () => {
   
   if (!gameState) {
     return (
-      <div className="host-layout host-layout--center">
+      <div className="host-layout host-layout--viewport host-layout--center">
         <div className="game-shell-loading">Loading game…</div>
       </div>
     );
@@ -168,9 +168,9 @@ const HostGame = () => {
   };
 
   return (
-    <div className="host-layout">
+    <div className="host-layout host-layout--viewport">
       {/* Shared chrome */}
-      <header className="host-header">
+      {gameState?.currentRoundState?.status !== "revealed" && <header className="host-header">
         <div>Room {gameState.roomCode}</div>
         <div>
           {typeof gameState.currentStageIndex === "number"
@@ -185,25 +185,27 @@ const HostGame = () => {
 
           </h2>
         </div>
-      </header>
+      </header>}
 
       {/* Minigame-specific view */}
       <main className="host-main">
-        {HostMinigame ? (
-          <HostMinigame
-            gameState={gameState}
-            roomCode={roomCode}
-            onAdvance={handleAdvance}
-            onRevealComplete={handleRevealComplete}
-            remainingMs={remainingMs}
-          />
-        ) : (
-          <div style={{ padding: "2rem", textAlign: "center" }}>
-            {currentStage
-              ? `${currentStage.minigameId} is not ready yet.`
-              : "Waiting for the host to start the first stage."}
-          </div>
-        )}
+        <div className="host-main-content">
+          {HostMinigame ? (
+            <HostMinigame
+              gameState={gameState}
+              roomCode={roomCode}
+              onAdvance={handleAdvance}
+              onRevealComplete={handleRevealComplete}
+              remainingMs={remainingMs}
+            />
+          ) : (
+            <div style={{ padding: "2rem", textAlign: "center" }}>
+              {currentStage
+                ? `${currentStage.minigameId} is not ready yet.`
+                : "Waiting for the host to start the first stage."}
+            </div>
+          )}
+        </div>
       </main>
 
       <Leaderboard

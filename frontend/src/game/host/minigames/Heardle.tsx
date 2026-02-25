@@ -1,5 +1,6 @@
-import { FC, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, FC, useEffect, useMemo, useRef, useState } from 'react';
 import api from 'lib/api';
+import { useAutoFitScale } from 'game/hooks/useAutoFitScale';
 import { socket } from 'socket';
 import { GameState, HeardleRoundState } from 'types/game';
 import { useTrackPreview } from '../../hooks/useTrackPreview';
@@ -401,6 +402,27 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     return { text: 'Waiting…', className: 'heardle-player-outcome--waiting' };
   };
 
+  const {
+    viewportRef: fitViewportRef,
+    canvasRef: fitCanvasRef,
+    scale: fitScale,
+    syncScale,
+  } = useAutoFitScale({
+    allowUpscale: true,
+  });
+  const fitCanvasStyle = useMemo(
+    () =>
+      ({
+        '--heardle-fit-scale': String(fitScale),
+      } as CSSProperties),
+    [fitScale]
+  );
+
+  useEffect(() => {
+    if (round?.minigameId !== 'HEARDLE') return;
+    syncScale();
+  }, [round?.id, round?.minigameId, syncScale]);
+
   if (!round) {
     return (
       <HostStateMessage>
@@ -414,7 +436,10 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   }
 
   return (
-    <HostMinigameStack className="heardle-host-stack">
+    <div ref={fitViewportRef} className="heardle-fit-viewport">
+      <div className="heardle-fit-center">
+        <div ref={fitCanvasRef} className="heardle-fit-canvas" style={fitCanvasStyle}>
+          <HostMinigameStack className="heardle-host-stack">
       <HostCard padded className="heardle-main-card">
         <div className="heardle-main-content">
           <div className="heardle-round-meta">
@@ -617,6 +642,9 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
       </HostActionRow>
 
       {error && <div className="host-minigame-error">{error}</div>}
-    </HostMinigameStack>
+          </HostMinigameStack>
+        </div>
+      </div>
+    </div>
   );
 };

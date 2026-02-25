@@ -192,9 +192,7 @@
 }
 
 .player-votes-total.is-hidden {
-  color: #7d93b7;
-  letter-spacing: 0.18em;
-  font-weight: 700;
+  visibility: hidden;
 }
 
 @keyframes player-votes-bar-impact-a {

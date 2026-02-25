@@ -1,11 +1,14 @@
 .wlm-prompt-card {
-  display: flex;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(0.75rem, 1.8vh, 1.2rem);
 }
 
 .wlm-prompt-art {
-  width: 140px;
-  height: 140px;
+  width: clamp(84px, 11vw, 140px);
+  height: clamp(84px, 11vw, 140px);
   border-radius: 12px;
   object-fit: cover;
 }
@@ -33,18 +36,48 @@
 }
 
 .wlm-prompt-artists {
-  font-size: 16px;
+  font-size: clamp(0.82rem, 1.3vw, 1rem);
   color: #fff;
 }
 
 .wlm-prompt-description {
-  margin-top: 1rem;
-  max-width: 420px;
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+  max-width: 560px;
+  font-size: clamp(0.78rem, 1.15vw, 0.9rem);
   color: #cdd5ee;
 }
 
+.wlm-votes-wrap {
+  min-height: 0;
+  display: flex;
+}
+
+.wlm-votes-wrap > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.wlm-action-row {
+  gap: 10px;
+}
+
 @media (max-width: 760px) {
+  .wlm-host-layout {
+    grid-template-rows: auto auto auto auto;
+    height: auto;
+    min-height: unset;
+  }
+
   .wlm-prompt-card {
     flex-direction: column;
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .wlm-prompt-title,
+  .wlm-prompt-artists,
+  .wlm-prompt-description {
+    white-space: normal;
   }
 }

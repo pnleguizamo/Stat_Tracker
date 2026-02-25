@@ -476,11 +476,11 @@ export const PlayerVotes: FC<Props> = ({
                   </div>
                 </div>
               </div>
-              {revealComplete && (
-                <div className="player-votes-total">
-                  {finalVotes} vote{finalVotes === 1 ? "" : "s"}
-                </div>
-              )}
+              <div
+                className={joinClasses("player-votes-total", !revealComplete && "is-hidden")}
+              >
+                {finalVotes} vote{finalVotes === 1 ? "" : "s"}
+              </div>
             </div>
           );
         })}

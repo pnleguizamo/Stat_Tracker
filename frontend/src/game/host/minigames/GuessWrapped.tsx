@@ -5,6 +5,7 @@ import { GameState, GuessWrappedRoundState, GuessWrappedSummary } from "types/ga
 import { PlayerVotes } from "./components/PlayerVotes";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useTrackPreview } from "game/hooks/useTrackPreview";
+import { useAutoFitScale } from "game/hooks/useAutoFitScale";
 import {
   HostActionRow,
   HostCard,
@@ -310,6 +311,21 @@ export const GuessWrappedHost: FC<Props> = ({
     ? `${prompt.minutesListened.toLocaleString()} minutes listened`
     : renderRedacted(`${prompt.minutesListened.toLocaleString()} minutes listened`, false);
   const revealPercent = Math.round(revealProgress * 100);
+  const {
+    viewportRef: fitViewportRef,
+    canvasRef: fitCanvasRef,
+    scale: fitScale,
+  } =
+    useAutoFitScale({
+      allowUpscale: true,
+    });
+  const fitCanvasStyle = useMemo(
+    () =>
+      ({
+        "--gw-fit-scale": String(fitScale),
+      } as CSSProperties),
+    [fitScale]
+  );
 
   if (!round || round.minigameId !== "GUESS_SPOTIFY_WRAPPED") {
     return (
@@ -324,7 +340,10 @@ export const GuessWrappedHost: FC<Props> = ({
   }
 
   return (
-    <HostMinigameStack className="gw-host-stack">
+    <div ref={fitViewportRef} className="gw-host-fit-viewport">
+      <div className="gw-host-fit-center">
+        <div ref={fitCanvasRef} className="gw-host-fit-canvas" style={fitCanvasStyle}>
+          <HostMinigameStack className="gw-host-stack">
       <HostCard padded>
         <div
           className="gw-host-hero-row"
@@ -563,7 +582,10 @@ export const GuessWrappedHost: FC<Props> = ({
         <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
       </HostActionRow>
 
-      {error && <div className="host-minigame-error">{error}</div>}
-    </HostMinigameStack>
+            {error && <div className="host-minigame-error">{error}</div>}
+          </HostMinigameStack>
+        </div>
+      </div>
+    </div>
   );
 };

@@ -195,7 +195,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
         </div>
       </HostCard>
 
-      <div>
+      <div className="wlm-votes-wrap">
         <PlayerVotes
           status={roundStatus}
           players={players}
@@ -211,11 +211,11 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
         />
       </div>
 
-      <HostActionRow>
+      {roundStatus !== "revealed" && <HostActionRow className="wlm-action-row">
         <button
           className="game-shell-button"
           onClick={handleReveal}
-          disabled={actionBusy === "reveal" || submissions === 0 || roundStatus === "revealed"}
+          disabled={actionBusy === "reveal" || submissions === 0 }
         >
           {actionBusy === "reveal" ? "Revealing…" : "Reveal Votes"}
         </button>
@@ -227,7 +227,7 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
           {actionBusy === "prompt" ? "Loading…" : "New Prompt"}
         </button>
         <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
-      </HostActionRow>
+      </HostActionRow>}
 
       {error && <div className="host-minigame-error">{error}</div>}
     </HostMinigameStack>
