@@ -91,6 +91,35 @@ function getReleaseYear(song?: { releaseDate?: string | null; release_date?: str
   return match?.[1] || null;
 }
 
+function getPlayerInitials(name?: string | null) {
+  return (name || '')
+    .split(' ')
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+const WAITING_CHIP_TEXTS = [
+  'Heardling',
+  'feeling the beat',
+  'listening for clues',
+  'in the mix',
+  'decoding',
+  'snippet scouting',
+  'song snooping'
+];
+
+function pickWaitingChipText(seed: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return WAITING_CHIP_TEXTS[(hash >>> 0) % WAITING_CHIP_TEXTS.length] + "...";
+}
+
 type Props = {
   roomCode: string;
   gameState: GameState;
@@ -121,6 +150,11 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const playbackSessionRef = useRef(0);
 
   const snippetPlan = round?.snippetPlan || [];
+  const historyRowCount = Math.max(1, snippetPlan.length || 1);
+  const visibleHistoryRowCount =
+    round?.status === 'revealed'
+      ? historyRowCount
+      : Math.max(1, Math.min(historyRowCount, (round?.currentSnippetIndex ?? 0) + 1));
   const currentSnippetMs = snippetPlan[round?.currentSnippetIndex || 0] || 0;
   const currentSnippetGapMs = round?.snippetReplayGapPlanMs?.[round.currentSnippetIndex || 0] ?? 2000;
   const maxSnippetMs = snippetPlan.length ? Math.max(...snippetPlan) : 0;
@@ -393,13 +427,13 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     return { text: '—', color: '#94a3b8' };
   };
 
-  const outcomeChip = (outcome?: string | null) => {
+  const outcomeChip = (outcome?: string | null, waitingText = 'Heardling') => {
     if (outcome === 'correct') return { text: '✓ Correct', className: 'heardle-player-outcome--correct' };
     if (outcome === 'album_match') return { text: '✕ Album only', className: 'heardle-player-outcome--album' };
     if (outcome === 'artist_match') return { text: '✕ Artist only', className: 'heardle-player-outcome--artist' };
     if (outcome === 'wrong') return { text: '✕ Wrong', className: 'heardle-player-outcome--wrong' };
     if (outcome === 'gave_up') return { text: '>> Gave up', className: 'heardle-player-outcome--gave-up' };
-    return { text: 'Waiting…', className: 'heardle-player-outcome--waiting' };
+    return { text: waitingText, className: 'heardle-player-outcome--waiting' };
   };
 
   const {
@@ -565,21 +599,35 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         className="host-minigame-grid host-minigame-grid--tight"
       >
         {playerGuessStates.map(({ player, outcome, guessedThisSnippet, thisSnippetOutcome }) => {
-          const chip = outcomeChip(outcome);
+          const liveRoundOutcome =
+            round.status === 'revealed'
+              ? outcome
+              : guessedThisSnippet
+              ? thisSnippetOutcome || outcome
+              : null;
+          const waitingChipText = pickWaitingChipText(
+            `${round.id}:${round.currentSnippetIndex}:${player.playerId || player.name || 'player'}`
+          );
+          const chip = outcomeChip(liveRoundOutcome, waitingChipText);
+          const playerLabel = player.displayName || player.name || '';
           return (
             <div
               key={player.playerId || player.name}
               className="heardle-player-card"
             >
-              <div className="heardle-player-name">{player.displayName || player.name}</div>
+              <div className="heardle-player-header">
+                {player.avatar ? (
+                  <img src={player.avatar} alt={playerLabel} className="heardle-player-avatar" />
+                ) : (
+                  <div className="heardle-player-avatar heardle-player-avatar--fallback">
+                    {getPlayerInitials(playerLabel)}
+                  </div>
+                )}
+                <div className="heardle-player-name">{playerLabel}</div>
+              </div>
               <div className="heardle-player-outcome">
                 <span className={chip.className}>{chip.text}</span>
               </div>
-              {round.status !== 'revealed' && guessedThisSnippet && (
-                <div className="heardle-player-snippet-note">
-                  {thisSnippetOutcome === 'gave_up' ? 'Gave up this snippet' : 'Guessed this snippet'}
-                </div>
-              )}
             </div>
           );
         })}
@@ -596,27 +644,48 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                 className="heardle-history-card"
               >
                 <div className="heardle-history-player">{player.displayName || player.name}</div>
-                {guesses.length === 0 && <div className="heardle-history-empty">No guesses yet</div>}
-                {guesses.length > 0 && (
+                <div
+                  className="heardle-history-body"
+                  style={{ '--heardle-history-rows': String(historyRowCount) } as CSSProperties}
+                >
                   <div className="heardle-history-list">
-                    {guesses
-                      .slice()
-                      .sort((a, b) => (a.at || 0) - (b.at || 0))
-                      .map((g, idx) => {
-                        const o = outcomeLabel(g.outcome);
+                    {(() => {
+                      const guessesBySnippet = new Map<number, (typeof guesses)[number]>();
+                      guesses
+                        .slice()
+                        .sort((a, b) => (a.at || 0) - (b.at || 0))
+                        .forEach((g) => {
+                          if (typeof g.snippetIndex === 'number') {
+                            guessesBySnippet.set(g.snippetIndex, g);
+                          }
+                        });
+
+                      return Array.from({ length: visibleHistoryRowCount }).map((_, idx) => {
+                        const guess = guessesBySnippet.get(idx);
+                        if (!guess) {
+                          return (
+                            <div key={`round-${idx}`} className="heardle-history-item heardle-history-item--placeholder">
+                              <span className="heardle-history-round-label">Round {idx + 1}: </span>
+                              <span className="heardle-history-placeholder-value">—</span>
+                            </div>
+                          );
+                        }
+
+                        const o = outcomeLabel(guess.outcome);
                         return (
-                          <div key={`${g.snippetIndex}-${idx}`} className="heardle-history-item">
-                            <span className="heardle-history-round-label">Round {g.snippetIndex + 1}: </span>
-                            <span className="heardle-history-track">{o.text === "Wrong" ? g.trackName : ""}</span>
-                            {g.artistNames?.length ? (
-                              <span className="heardle-history-artist"> {o.text === "Wrong" ? g.artistNames.join(', ') : ""}</span>
+                          <div key={`round-${idx}`} className="heardle-history-item">
+                            <span className="heardle-history-round-label">Round {idx + 1}: </span>
+                            <span className="heardle-history-track">{o.text === "Wrong" ? guess.trackName : ""}</span>
+                            {guess.artistNames?.length ? (
+                              <span className="heardle-history-artist"> {o.text === "Wrong" ? guess.artistNames.join(', ') : ""}</span>
                             ) : null}
                             <span style={{ marginLeft: 6, color: o.color }}>({o.text})</span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

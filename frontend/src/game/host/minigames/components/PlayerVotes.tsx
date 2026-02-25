@@ -375,18 +375,29 @@ export const PlayerVotes: FC<Props> = ({
               )}
             >
               <div className="player-votes-column-head">
+                <div className="player-votes-crown-slot">
+                  <div
+                    className={joinClasses(
+                      "player-votes-crown",
+                      isWinnerLockedTop && "is-visible",
+                      isWinnerLockedTop && "is-burst"
+                    )}
+                  >
+                    👑
+                  </div>
+                </div>
+                {renderAvatar(player, 50)}
                 <div className="player-votes-column-name">
                   {player.displayName || player.name}
                   {isWinnerLockedTop && <span>🏆</span>}
                 </div>
-                {isWinnerLockedTop && (
-                  <div className="player-votes-crown is-burst">
-                    👑
-                  </div>
-                )}
-                {renderAvatar(player, 50)}
-                {showListenCounts && revealComplete && (
-                  <div className="player-votes-listens">
+                {showListenCounts && (
+                  <div
+                    className={joinClasses(
+                      "player-votes-listens",
+                      !revealComplete && "is-hidden"
+                    )}
+                  >
                     {actualListens} listens
                   </div>
                 )}
@@ -476,10 +487,12 @@ export const PlayerVotes: FC<Props> = ({
                   </div>
                 </div>
               </div>
-              <div
-                className={joinClasses("player-votes-total", !revealComplete && "is-hidden")}
-              >
-                {finalVotes} vote{finalVotes === 1 ? "" : "s"}
+              <div className="player-votes-total-slot">
+                <div
+                  className={joinClasses("player-votes-total", !revealComplete && "is-hidden")}
+                >
+                  {finalVotes} vote{finalVotes === 1 ? "" : "s"}
+                </div>
               </div>
             </div>
           );

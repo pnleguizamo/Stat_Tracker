@@ -98,9 +98,22 @@
   margin-bottom: 0;
 }
 
+.player-votes-crown-slot {
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .player-votes-crown {
-  margin-top: -18px;
   font-size: 30px;
+  line-height: 1;
+  visibility: hidden;
+}
+
+.player-votes-crown.is-visible {
+  visibility: visible;
 }
 
 .player-votes-crown.is-burst {
@@ -184,11 +197,29 @@
   font-size: 15px;
   color: #e2e8f0;
   margin-top: 4px;
+  line-height: 20px;
+  min-height: 20px;
+}
+
+.player-votes-listens.is-hidden {
+  visibility: hidden;
+}
+
+.player-votes-total-slot {
+  height: 20px;
+  max-height: 20px;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .player-votes-total {
   font-size: 15px;
   color: #9fb2d6;
+  line-height: 20px;
+  min-height: 20px;
 }
 
 .player-votes-total.is-hidden {
