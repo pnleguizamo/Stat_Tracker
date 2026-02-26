@@ -1,6 +1,7 @@
 import { useTrackPreview } from "game/hooks/useTrackPreview";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useVoteTally } from "game/hooks/useVoteTally";
+import { useAutoFitScale } from "game/hooks/useAutoFitScale";
 import { FC, useEffect, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, WhoListenedMostRoundState } from "types/game";
@@ -156,6 +157,9 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
     handleNewPrompt();
   }, [round, roomCode, actionBusy, error]);
 
+  const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef } =
+    useAutoFitScale({ allowUpscale: false });
+
   if (!round) {
     return (
       <HostStateMessage>
@@ -166,70 +170,76 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
   }
 
   return (
-    <HostMinigameStack>
-      <HostCard
-        padded
-        className="wlm-prompt-card"
-      >
-        {round.prompt.imageUrl ? (
-          <img
-            src={round.prompt.imageUrl}
-            alt={round.prompt.track_name}
-            className="wlm-prompt-art"
-          />
-        ) : null}
-        <div className="wlm-prompt-content">
-          <div className="host-minigame-chip-row">
-            <HostChip>
-              {promptTypeLabel}
-            </HostChip>
-            <HostChip className={roundStatus === "revealed" ? "wlm-status-chip--revealed" : "wlm-status-chip--collecting"}>
-              {roundStatusLabel}
-            </HostChip>
-          </div>
-          <h2 className="wlm-prompt-title">{round.prompt.type === "TRACK" ? round.prompt.track_name : round.prompt.artist_name}</h2>
-          {round.prompt.artist_names && <div className="wlm-prompt-artists">{round.prompt.artist_names.join(', ')}</div>}
-          {round.prompt.description && (
-            <p className="wlm-prompt-description">{round.prompt.description}</p>
-          )}
+    <div ref={fitViewportRef} className="wlm-fit-viewport">
+      <div className="wlm-fit-center">
+        <div ref={fitCanvasRef} className="wlm-fit-canvas">
+          <HostMinigameStack>
+            <HostCard
+              padded
+              className="wlm-prompt-card"
+            >
+              {round.prompt.imageUrl ? (
+                <img
+                  src={round.prompt.imageUrl}
+                  alt={round.prompt.track_name}
+                  className="wlm-prompt-art"
+                />
+              ) : null}
+              <div className="wlm-prompt-content">
+                <div className="host-minigame-chip-row">
+                  <HostChip>
+                    {promptTypeLabel}
+                  </HostChip>
+                  <HostChip className={roundStatus === "revealed" ? "wlm-status-chip--revealed" : "wlm-status-chip--collecting"}>
+                    {roundStatusLabel}
+                  </HostChip>
+                </div>
+                <h2 className="wlm-prompt-title">{round.prompt.type === "TRACK" ? round.prompt.track_name : round.prompt.artist_name}</h2>
+                {round.prompt.artist_names && <div className="wlm-prompt-artists">{round.prompt.artist_names.join(', ')}</div>}
+                {round.prompt.description && (
+                  <p className="wlm-prompt-description">{round.prompt.description}</p>
+                )}
+              </div>
+            </HostCard>
+
+            <div className="wlm-votes-wrap">
+              <PlayerVotes
+                status={roundStatus}
+                players={players}
+                finalTally={finalTally}
+                revealedTally={revealedTally}
+                revealedVoteMap={revealedVoteMap}
+                revealComplete={revealComplete}
+                topSocketIds={round?.results?.topListenerSocketIds ?? undefined}
+                listenCounts={listenCounts}
+                showListenCounts
+                submittedSocketIds={Object.keys(round.answers || {})}
+                showSubmissionChecks
+              />
+            </div>
+
+            {roundStatus !== "revealed" && <HostActionRow className="wlm-action-row">
+              <button
+                className="game-shell-button"
+                onClick={handleReveal}
+                disabled={actionBusy === "reveal" || submissions === 0 }
+              >
+                {actionBusy === "reveal" ? "Revealing…" : "Reveal Votes"}
+              </button>
+              <button
+                className="game-shell-button"
+                onClick={handleNewPrompt}
+                disabled={actionBusy === "prompt"}
+              >
+                {actionBusy === "prompt" ? "Loading…" : "New Prompt"}
+              </button>
+              <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
+            </HostActionRow>}
+
+            {error && <div className="host-minigame-error">{error}</div>}
+          </HostMinigameStack>
         </div>
-      </HostCard>
-
-      <div className="wlm-votes-wrap">
-        <PlayerVotes
-          status={roundStatus}
-          players={players}
-          finalTally={finalTally}
-          revealedTally={revealedTally}
-          revealedVoteMap={revealedVoteMap}
-          revealComplete={revealComplete}
-          topSocketIds={round?.results?.topListenerSocketIds ?? undefined}
-          listenCounts={listenCounts}
-          showListenCounts
-          submittedSocketIds={Object.keys(round.answers || {})}
-          showSubmissionChecks
-        />
       </div>
-
-      {roundStatus !== "revealed" && <HostActionRow className="wlm-action-row">
-        <button
-          className="game-shell-button"
-          onClick={handleReveal}
-          disabled={actionBusy === "reveal" || submissions === 0 }
-        >
-          {actionBusy === "reveal" ? "Revealing…" : "Reveal Votes"}
-        </button>
-        <button
-          className="game-shell-button"
-          onClick={handleNewPrompt}
-          disabled={actionBusy === "prompt"}
-        >
-          {actionBusy === "prompt" ? "Loading…" : "New Prompt"}
-        </button>
-        <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
-      </HostActionRow>}
-
-      {error && <div className="host-minigame-error">{error}</div>}
-    </HostMinigameStack>
+    </div>
   );
 };

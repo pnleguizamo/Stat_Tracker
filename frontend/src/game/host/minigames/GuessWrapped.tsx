@@ -1,5 +1,5 @@
 import { useVoteTally } from "game/hooks/useVoteTally";
-import { CSSProperties, FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FC, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { socket } from "socket";
 import { GameState, GuessWrappedRoundState, GuessWrappedSummary } from "types/game";
 import { PlayerVotes } from "./components/PlayerVotes";
@@ -311,21 +311,26 @@ export const GuessWrappedHost: FC<Props> = ({
     ? `${prompt.minutesListened.toLocaleString()} minutes listened`
     : renderRedacted(`${prompt.minutesListened.toLocaleString()} minutes listened`, false);
   const revealPercent = Math.round(revealProgress * 100);
-  const {
-    viewportRef: fitViewportRef,
-    canvasRef: fitCanvasRef,
-    scale: fitScale,
-  } =
-    useAutoFitScale({
-      allowUpscale: true,
-    });
-  const fitCanvasStyle = useMemo(
-    () =>
-      ({
-        "--gw-fit-scale": String(fitScale),
-      } as CSSProperties),
-    [fitScale]
-  );
+  const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef, syncScale } =
+    useAutoFitScale({ allowUpscale: true });
+  const currentMinigameId = round?.minigameId;
+
+  useLayoutEffect(() => {
+    if (currentMinigameId !== "GUESS_SPOTIFY_WRAPPED") return;
+    syncScale({ mode: "snap" });
+    const rafId = window.requestAnimationFrame(() => syncScale({ mode: "snap" }));
+    const timeoutId = window.setTimeout(() => syncScale({ mode: "snap" }), 160);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    currentMinigameId,
+    round?.id,
+    round?.status,
+    revealComplete,
+    syncScale,
+  ]);
 
   if (!round || round.minigameId !== "GUESS_SPOTIFY_WRAPPED") {
     return (
@@ -342,7 +347,7 @@ export const GuessWrappedHost: FC<Props> = ({
   return (
     <div ref={fitViewportRef} className="gw-host-fit-viewport">
       <div className="gw-host-fit-center">
-        <div ref={fitCanvasRef} className="gw-host-fit-canvas" style={fitCanvasStyle}>
+        <div ref={fitCanvasRef} className="gw-host-fit-canvas">
           <HostMinigameStack className="gw-host-stack">
       <HostCard padded>
         <div

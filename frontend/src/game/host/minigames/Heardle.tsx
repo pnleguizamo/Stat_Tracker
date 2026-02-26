@@ -436,26 +436,31 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     return { text: waitingText, className: 'heardle-player-outcome--waiting' };
   };
 
-  const {
-    viewportRef: fitViewportRef,
-    canvasRef: fitCanvasRef,
-    scale: fitScale,
-    syncScale,
-  } = useAutoFitScale({
-    allowUpscale: true,
-  });
-  const fitCanvasStyle = useMemo(
+  const fitContentVersion = useMemo(
     () =>
-      ({
-        '--heardle-fit-scale': String(fitScale),
-      } as CSSProperties),
-    [fitScale]
+      [
+        round?.id ?? 'none',
+        round?.status ?? 'none',
+        round?.currentSnippetIndex ?? -1,
+        showPatternHints ? 1 : 0,
+        round?.hints?.titlePattern ?? '',
+        round?.hints?.artistPattern ?? '',
+        round?.hints?.showYear ? 1 : 0,
+        round?.hints?.year ?? '',
+      ].join('|'),
+    [
+      round?.id,
+      round?.status,
+      round?.currentSnippetIndex,
+      showPatternHints,
+      round?.hints?.titlePattern,
+      round?.hints?.artistPattern,
+      round?.hints?.showYear,
+      round?.hints?.year,
+    ]
   );
-
-  useEffect(() => {
-    if (round?.minigameId !== 'HEARDLE') return;
-    syncScale();
-  }, [round?.id, round?.minigameId, syncScale]);
+  const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef } =
+    useAutoFitScale({ allowUpscale: true, contentVersion: fitContentVersion });
 
   if (!round) {
     return (
@@ -472,7 +477,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   return (
     <div ref={fitViewportRef} className="heardle-fit-viewport">
       <div className="heardle-fit-center">
-        <div ref={fitCanvasRef} className="heardle-fit-canvas" style={fitCanvasStyle}>
+        <div ref={fitCanvasRef} className="heardle-fit-canvas">
           <HostMinigameStack className="heardle-host-stack">
       <HostCard padded className="heardle-main-card">
         <div className="heardle-main-content">
