@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { WhoListenedMost } from "./minigames/WhoListenedMost";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
+import { StageRecap } from "./StageRecap";
+import { FinalRecap } from "./FinalRecap";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
 import { GameState, MinigameId } from "types/game";
@@ -210,8 +212,33 @@ const HostGame = () => {
 
   const handleAdvance = () => {
     if (!roomCode) return;
-    socket.emit("advanceStageOrRound", { roomCode });
+    socket.emit("startStageRecap", { roomCode });
   };
+
+  const handleCompleteStageRecap = () => {
+    if (!roomCode) return;
+    socket.emit("completeStageRecap", { roomCode });
+  };
+
+  if (gameState.phase === "finalRecap" && gameState.finalRecap) {
+    return (
+      <FinalRecap
+        recap={gameState.finalRecap}
+        players={gameState.players}
+        scoreboard={gameState.scoreboard}
+      />
+    );
+  }
+
+  if (gameState.phase === "stageRecap" && gameState.stageRecap) {
+    return (
+        <StageRecap
+          recap={gameState.stageRecap}
+          players={gameState.players}
+          onComplete={handleCompleteStageRecap}
+        />
+      );
+  }
 
   return (
     <div className="host-layout host-layout--viewport">

@@ -49,9 +49,13 @@ const PlayerScreen = () => {
   const phaseLabel = gameState?.phase
     ? gameState.phase === 'inGame'
       ? 'In Game'
-      : gameState.phase === 'completed'
-        ? 'Completed'
-        : gameState.phase
+      : gameState.phase === 'stageRecap'
+        ? 'Stage Complete'
+        : gameState.phase === 'finalRecap'
+          ? 'All Awards'
+          : gameState.phase === 'completed'
+            ? 'Completed'
+            : gameState.phase
     : 'Waiting';
 
   const currentStageIndex = typeof gameState?.currentStageIndex === 'number' ? gameState?.currentStageIndex : null;
@@ -72,7 +76,11 @@ const PlayerScreen = () => {
       </header>
 
       <main className="player-main">
-        {gameState && MinigameComponent ? (
+        {gameState?.phase === 'stageRecap' || gameState?.phase === 'finalRecap' ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gs-muted)' }}>
+            {gameState.phase === 'finalRecap' ? 'All awards incoming…' : 'Awards ceremony in progress…'}
+          </div>
+        ) : gameState && MinigameComponent ? (
           <MinigameComponent roomCode={roomCode} gameState={gameState} />
         ) : (
           <div>Waiting for the host to start the next minigame…</div>

@@ -1,4 +1,5 @@
 const { buildWrappedSummaryForUser } = require('../../services/wrappedInsights');
+const { appendRoundHistory } = require('../scoring');
 
 function safeRoom(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -104,6 +105,18 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
       }));
       applyAwards(room, awards);
     }
+    appendRoundHistory(room, idx, {
+      id: round.id,
+      ownerPlayerId: round.ownerPlayerId,
+      ownerProfile: round.ownerProfile,
+      prompt: {
+        minutesListened: round.prompt?.minutesListened,
+        year: round.prompt?.year,
+        topGenres: round.prompt?.topGenres,
+        topArtists: round.prompt?.topArtists,
+      },
+      results: round.results,
+    });
     broadcastGameState?.(roomCode);
     cb?.({ ok: true, results: round.results });
     return { ok: true, results: round.results };

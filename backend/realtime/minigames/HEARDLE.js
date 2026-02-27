@@ -1,5 +1,6 @@
 const { getSharedTopSongs } = require('../../services/mongoServices');
 const { getAccessToken } = require('../../services/authService');
+const { appendRoundHistory } = require('../scoring');
 
 const SNIPPET_WINDOWS_MS = [500, 1000, 3000, 7000, 12000, 17000, 30000];
 const SNIPPET_REPLAY_GAP_MS = [6000, 5000, 5000, 4000, 4000, 2000, 11000];
@@ -417,6 +418,12 @@ function registerHeardle(io, socket, deps = {}) {
     clearRoundTimer?.(room, idx);
 
     stageState.songsCompleted = (stageState.songsCompleted || 0) + 1;
+
+    appendRoundHistory(room, idx, {
+      id: round.id,
+      song: { track_name: round.song?.track_name, artist_names: round.song?.artist_names },
+      results: round.results,
+    });
 
     broadcastGameState?.(roomCode);
     cb?.({ ok: true, results: round.results });

@@ -267,6 +267,13 @@ export const useHostSfx = ({
     [playSample]
   );
 
+  const playVoteRevealGuitar = useCallback(() => {
+    playSample({
+      path: SFX_PATHS.voteReveal,
+      volume: 0.34,
+    });
+  }, [playSample]);
+
   const playRoundTransition = useCallback(() => {
     playSample({
       path: SFX_PATHS.roundTransition,
@@ -399,6 +406,7 @@ export const useHostSfx = ({
 
   return {
     playVoteReveal,
+    playVoteRevealGuitar,
     playWrappedEntryReveal,
     playRevealComplete,
     playRoundTransition,

@@ -16,9 +16,60 @@ function formatAward(award: ScoreAward) {
   return `${reason}: ${points > 0 ? "+" : ""}${points}`;
 }
 
-function resolvePlayer(players: Player[], playerId: string) {
+function resolvePlayer(players: Player[], playerId: string): Player {
   return (
-    players.find((p) => p.playerId === playerId) || { playerId, displayName: "Unknown" }
+    players.find((p) => p.playerId === playerId) || { playerId, name: "Unknown", displayName: "Unknown" }
+  );
+}
+
+function getInitials(name?: string | null) {
+  return (name || "")
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function renderAvatar(player: Player) {
+  const label = player.displayName || player.name || "Player";
+  if (player.avatar) {
+    return (
+      <img
+        src={player.avatar}
+        alt={label}
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: "50%",
+          objectFit: "cover",
+          border: "1px solid rgba(255,255,255,0.14)",
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(145deg, rgba(59, 130, 246, 0.42), rgba(15, 23, 42, 0.92))",
+        border: "1px solid rgba(96, 165, 250, 0.35)",
+        color: "#dbeafe",
+        fontWeight: 700,
+        fontSize: 12,
+        flexShrink: 0,
+      }}
+    >
+      {getInitials(label)}
+    </div>
   );
 }
 
@@ -222,9 +273,9 @@ export const Leaderboard: React.FC<Props> = ({
           {sortedEntries.length === 0 && <div>No scores yet.</div>}
           {sortedEntries.map(({ playerId, entry }, idx) => {
             const player = resolvePlayer(players, playerId);
-            const recentAwards = (entry.awards || []).filter((a) =>
-              roundId ? a.meta?.roundId === roundId : true
-            );
+            const recentAwards = roundId
+              ? (entry.awards || []).filter((a) => a.meta?.roundId === roundId)
+              : [];
             const displayPoints = animatedPoints[playerId] ?? entry.points ?? 0;
             const prevRank = prevRankMapRef.current.get(playerId);
             const rankDelta = typeof prevRank === "number" ? prevRank - idx : 0;
@@ -246,11 +297,11 @@ export const Leaderboard: React.FC<Props> = ({
               >
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <div style={{ width: 24, textAlign: "right", opacity: 0.8 }}>{idx + 1}</div>
+                  {renderAvatar(player)}
                   <div>
                     <div style={{ fontWeight: 700 }}>{player.displayName}{" "}
                     {rankDelta > 0 && <span style={{ color: "#38a169", fontSize: 12 }}>▲</span>}
                     {rankDelta < 0 && <span style={{ color: "#e53e3e", fontSize: 12 }}>▼</span>}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>{player.playerId}</div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>

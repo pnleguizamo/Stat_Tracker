@@ -220,6 +220,31 @@ export type HeardleRoundState = {
 
 export type MinigameRoundState = WhoListenedMostRoundState | GuessWrappedRoundState | HeardleRoundState;
 
+export type RecapFeaturedPlayer = {
+  playerId: string;
+  displayName: string;
+  avatar: string | null;
+  statLabel: string;
+};
+
+export type RecapAward = {
+  id: string;
+  title: string;
+  description: string;
+  featuredPlayers: RecapFeaturedPlayer[];
+};
+
+export type StageRecap = {
+  stageIndex: number;
+  minigameId: MinigameId;
+  isFinal: boolean;
+  awards: RecapAward[];
+};
+
+export type FinalRecap = {
+  stages: StageRecap[];
+};
+
 export type ScoreAward = {
   points: number;
   reason?: string;
@@ -240,4 +265,6 @@ export type GameState = RoomState & {
   currentStageConfig: StageConfig | null;
   currentRoundState: MinigameRoundState | null;
   scoreboard?: Record<string, ScoreboardEntry>;
+  stageRecap?: StageRecap | null;
+  finalRecap?: FinalRecap | null;
 };

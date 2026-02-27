@@ -162,6 +162,10 @@ function createRoom(hostSocketId, hostPlayerId, profile = {}, displayName, userI
     phase: 'lobby',
     scoreboard: {},
     roundState: {},
+    stageRoundHistory: {},
+    stageRecap: null,
+    finalRecap: null,
+    pendingStageAdvance: null,
     stagePlan: [
       { index: 0, minigameId: 'WHO_LISTENED_MOST' },
       { index: 1, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
@@ -447,6 +451,8 @@ function getGameState(roomCode) {
           return clone;
         })()
       : null,
+    stageRecap: room.stageRecap || null,
+    finalRecap: room.finalRecap || null,
     scoreboard: (() => {
       const board = room.scoreboard || {};
       const clone = {};

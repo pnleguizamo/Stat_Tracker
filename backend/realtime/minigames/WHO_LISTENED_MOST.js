@@ -1,5 +1,6 @@
 const { getSharedTopSongs, getSharedTopArtists } = require("../../services/mongoServices");
 const { getAccessToken } = require('../../services/authService.js');
+const { appendRoundHistory } = require('../scoring');
 
 function safeRoomLookup(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -229,6 +230,17 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       }));
       applyAwards(room, awards);
     }
+    appendRoundHistory(room, idx, {
+      id: round.id,
+      prompt: {
+        type: round.prompt?.type,
+        description: round.prompt?.description,
+        artist_name: round.prompt?.artist_name,
+        track_name: round.prompt?.track_name,
+        listenCounts: round.prompt?.listenCounts || {},
+      },
+      results: round.results,
+    });
     broadcastGameState?.(roomCode);
     cb?.({ ok: true, results: round.results });
     return { ok: true, results: round.results };

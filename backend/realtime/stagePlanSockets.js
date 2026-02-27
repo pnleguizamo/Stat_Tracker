@@ -1,4 +1,5 @@
 const minigameRegistry = require('./minigames');
+const { computeStageRecap } = require('./stageRecap');
 
 // TODOo determine if even necessary
 const ensureStageState = async (room) => {
@@ -112,7 +113,7 @@ function registerStagePlanListeners(io, socket, deps) {
     cb?.({ ok: true });
   });
 
-  socket.on('advanceStageOrRound', async ({ roomCode } = {}, cb) => {
+  socket.on('startStageRecap', async ({ roomCode } = {}, cb) => {
     if (!roomCode) {
       cb?.({ ok: false, error: 'ROOM_REQUIRED' });
       return;
@@ -133,13 +134,57 @@ function registerStagePlanListeners(io, socket, deps) {
 
     const nextIndex = room.currentStageIndex + 1;
     if (!room.stagePlan || nextIndex >= room.stagePlan.length) {
-      room.phase = 'completed';
+      const recap = computeStageRecap(room, room.currentStageIndex);
+      room.stageRecap = recap;
+      room.pendingStageAdvance = null;
+      room.phase = 'stageRecap';
       broadcastGameState(roomCode);
-      cb?.({ ok: true, completed: true });
+      cb?.({ ok: true, stageRecap: true });
+      return;
+    }
+
+    const recap = computeStageRecap(room, room.currentStageIndex);
+    room.stageRecap = recap;
+    room.pendingStageAdvance = nextIndex;
+    room.phase = 'stageRecap';
+    broadcastGameState(roomCode);
+    cb?.({ ok: true, stageRecap: true });
+  });
+
+  socket.on('completeStageRecap', async ({ roomCode } = {}, cb) => {
+    if (!roomCode) {
+      cb?.({ ok: false, error: 'ROOM_REQUIRED' });
+      return;
+    }
+    const room = getRoom(roomCode);
+    if (!room) {
+      cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
+      return;
+    }
+    if (room.hostSocketId !== socket.id) {
+      cb?.({ ok: false, error: 'NOT_HOST' });
+      return;
+    }
+    if (room.phase !== 'stageRecap') {
+      cb?.({ ok: false, error: 'NOT_IN_RECAP' });
+      return;
+    }
+
+    const nextIndex = room.pendingStageAdvance;
+    room.stageRecap = null;
+    room.pendingStageAdvance = null;
+
+    if (nextIndex === null || nextIndex === undefined) {
+      const stages = (room.stagePlan || []).map((_, idx) => computeStageRecap(room, idx, Infinity)).filter(Boolean);
+      room.finalRecap = { stages };
+      room.phase = 'finalRecap';
+      broadcastGameState(roomCode);
+      cb?.({ ok: true, finalRecap: true });
       return;
     }
 
     room.currentStageIndex = nextIndex;
+    room.phase = 'inGame';
     room.roundState = room.roundState || {};
     delete room.roundState[nextIndex];
     await ensureStageState(room);

@@ -51,8 +51,16 @@ function applyAwards(room, awards = []) {
   return board;
 }
 
+function appendRoundHistory(room, stageIndex, snapshot) {
+  if (!room || typeof stageIndex !== 'number') return;
+  room.stageRoundHistory = room.stageRoundHistory || {};
+  room.stageRoundHistory[stageIndex] = room.stageRoundHistory[stageIndex] || [];
+  room.stageRoundHistory[stageIndex].push(snapshot);
+}
+
 module.exports = {
   applyAwards,
   computeTimeScore,
   ensureScoreboard,
+  appendRoundHistory,
 };
