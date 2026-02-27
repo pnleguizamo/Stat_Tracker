@@ -144,13 +144,13 @@ function PlayerLobby({
   onLeave,
 }: PlayerLobbyProps) {
   return (
-    <div className="player-layout">
+    <div className="player-layout player-layout--viewport">
       <header className="player-header">
         <div>
           <h2 className="player-title">
             Room <span className="lobby-inline-code">{room.roomCode}</span>
           </h2>
-          <div className="game-shell-muted player-meta">
+          <div className="player-stage game-shell-muted">
             Waiting for host to start…
           </div>
         </div>

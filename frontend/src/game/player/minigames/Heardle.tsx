@@ -2,6 +2,7 @@ import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import api from 'lib/api';
 import { socket } from 'socket';
 import { GameState, HeardleGuessOutcome, HeardleRoundState } from 'types/game';
+import '../../../styles/gameShell.css';
 
 type Props = {
   roomCode: string;
@@ -226,56 +227,72 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ padding: '1rem', borderRadius: 12, background: '#0f172a', color: '#e2e8f0' }}>
-        <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8' }}>
+      <div style={{ padding: '0.65rem 0.85rem', borderRadius: 12, background: '#0f172a', color: '#e2e8f0' }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: '#94a3b8' }}>
           Song {round.stageProgress?.songNumber || 1}
           {round.stageProgress?.songsPerGame ? ` / ${round.stageProgress.songsPerGame}` : ''}
         </div>
-        <div style={{ fontSize: 16, marginTop: 6, color: outcomeColor }}>
+        <div style={{ fontSize: 15, marginTop: 3, color: outcomeColor }}>
           {icon} {outcomeText}
         </div>
-        <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>
-          Current snippet: {(round.snippetPlan?.[round.currentSnippetIndex] || 0) / 1000}s
+        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+          Snippet: {(round.snippetPlan?.[round.currentSnippetIndex] || 0) / 1000}s
           {remainingMs !== null ? ` — ${Math.ceil(remainingMs / 1000)}s left` : ''}
         </div>
       </div>
 
       {round.status !== 'revealed' && !hasAnsweredCorrectly && !hasGuessedCurrent && (
-        <div style={{ padding: '1rem', borderRadius: 12, background: '#0b1220' }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <div style={{ padding: '0.75rem', borderRadius: 12, background: '#0b1220' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for a song"
-              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #1f2937', background: '#0f172a', color: '#fff' }}
+              placeholder="Search for a song…"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: '1px solid #1f2937', background: '#0f172a', color: '#fff' }}
               disabled={hasAnsweredCorrectly || hasGuessedCurrent || isBusy}
             />
-            <button
-              onClick={handleSubmit}
-              disabled={!selected || isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
-              style={{ minWidth: 120 }}
-            >
-              {actionBusy === 'submit'
-                ? 'Submitting…'
-                : hasGuessedCurrent
-                ? 'Locked'
-                : 'Submit guess'}
-            </button>
-            <button
-              onClick={handleGiveUp}
-              disabled={isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
-              style={{ minWidth: 100 }}
-            >
-              {actionBusy === 'giveup'
-                ? 'Giving up…'
-                : hasGuessedCurrent
-                ? 'Locked'
-                : 'Give up'}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleSubmit}
+                disabled={!selected || isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(56, 189, 248, 0.45)',
+                  background: 'rgba(14, 116, 144, 0.35)',
+                  color: '#e2e8f0',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: (!selected || isBusy || hasGuessedCurrent || hasAnsweredCorrectly) ? 0.45 : 1,
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                {actionBusy === 'submit' ? 'Submitting…' : 'Submit guess'}
+              </button>
+              <button
+                onClick={handleGiveUp}
+                disabled={isBusy || hasGuessedCurrent || hasAnsweredCorrectly}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(248, 113, 113, 0.35)',
+                  background: 'rgba(127, 29, 29, 0.2)',
+                  color: '#fca5a5',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: (isBusy || hasGuessedCurrent || hasAnsweredCorrectly) ? 0.45 : 1,
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                {actionBusy === 'giveup' ? 'Giving up…' : 'Give up'}
+              </button>
+            </div>
           </div>
           {searchError && <div style={{ color: 'salmon', marginBottom: 8 }}>{searchError}</div>}
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="heardle-results">
             {results.map((track) => {
               const isSelected = selected?.id === track.id;
               const isGuessed = guessedTrackIds.has(track.id);
@@ -287,7 +304,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '10px 12px',
+                    padding: '8px 10px',
                     borderRadius: 8,
                     border: isSelected ? '2px solid #38bdf8' : '1px solid #1f2937',
                     background: isSelected ? '#0b1220' : '#0f172a',
@@ -298,12 +315,12 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
                   disabled={isBusy || hasGuessedCurrent || isGuessed}
                 >
                   <div>
-                    <div style={{ fontWeight: 700 }}>{track.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{track.name}</div>
                     {track.artistNames?.length ? (
                       <div style={{ fontSize: 12, color: '#94a3b8' }}>{track.artistNames.join(', ')}</div>
                     ) : null}
                     {track.albumName ? (
-                      <div style={{ fontSize: 12, color: '#64748b' }}>{track.albumName}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{track.albumName}</div>
                     ) : null}
                   </div>
                   {isGuessed ? (
@@ -317,7 +334,21 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
           </div>
           {hasMore && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={() => performSearch(query, offset, false)} disabled={searching || isBusy || hasGuessedCurrent}>
+              <button
+                onClick={() => performSearch(query, offset, false)}
+                disabled={searching || isBusy || hasGuessedCurrent}
+                style={{
+                  width: '100%',
+                  padding: '6px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  background: 'rgba(15, 23, 42, 0.5)',
+                  color: '#94a3b8',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  opacity: (searching || isBusy || hasGuessedCurrent) ? 0.45 : 1,
+                }}
+              >
                 {searching ? 'Loading…' : 'Show more'}
               </button>
             </div>
@@ -341,9 +372,24 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
         </div>
       )}
 
-      {isPrivilegedUser && <button onClick={handleStart} disabled={round.status !== 'revealed'}>
-          {'Next Song'}
-      </button>}
+      {isPrivilegedUser && (
+        <button
+          onClick={handleStart}
+          disabled={round.status !== 'revealed'}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 999,
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            background: 'rgba(14, 116, 144, 0.25)',
+            color: '#7dd3fc',
+            fontWeight: 600,
+            cursor: 'pointer',
+            opacity: round.status !== 'revealed' ? 0.45 : 1,
+          }}
+        >
+          Next Song
+        </button>
+      )}
 
       {submitError && <div style={{ color: 'salmon' }}>{submitError}</div>}
 
@@ -375,10 +421,36 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
               This action is final for the current snippet.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={handleCancelGiveUp} disabled={actionBusy === 'giveup'}>
+              <button
+                onClick={handleCancelGiveUp}
+                disabled={actionBusy === 'giveup'}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(148, 163, 184, 0.3)',
+                  background: 'rgba(15, 23, 42, 0.5)',
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: actionBusy === 'giveup' ? 0.45 : 1,
+                }}
+              >
                 Cancel
               </button>
-              <button onClick={handleConfirmGiveUp} disabled={actionBusy === 'giveup'}>
+              <button
+                onClick={handleConfirmGiveUp}
+                disabled={actionBusy === 'giveup'}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(248, 113, 113, 0.5)',
+                  background: 'rgba(127, 29, 29, 0.35)',
+                  color: '#fca5a5',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: actionBusy === 'giveup' ? 0.45 : 1,
+                }}
+              >
                 {actionBusy === 'giveup' ? 'Giving up…' : 'Confirm give up'}
               </button>
             </div>

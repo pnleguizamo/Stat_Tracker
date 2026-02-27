@@ -1,10 +1,51 @@
-import { FC, useMemo, useState } from "react";
+import { FC, useState } from "react";
 import { socket } from "socket";
-import { GameState, GuessWrappedRoundState } from "types/game";
+import { GameState, GuessWrappedRoundState, Player } from "types/game";
 
 type Props = {
   roomCode: string;
   gameState: GameState;
+};
+
+const getInitials = (name?: string | null) =>
+  (name || "")
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+const renderAvatar = (player: Player, size = 38) => {
+  const label = player.displayName || player.name || "";
+  if (player.avatar) {
+    return (
+      <img
+        src={player.avatar}
+        alt={label}
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: "#2b6cb0",
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 700,
+        fontSize: Math.max(10, size * 0.35),
+        flexShrink: 0,
+      }}
+    >
+      {getInitials(label)}
+    </div>
+  );
 };
 
 export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
@@ -17,9 +58,10 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const [voteError, setVoteError] = useState<string | null>(null);
 
   const myPlayerId = ((socket as any).playerId || socket.id) as string;
-  const myVote = myPlayerId && round?.answers?.[myPlayerId]?.answer?.targetPlayerId
-    ? round.answers[myPlayerId].answer!.targetPlayerId
-    : null;
+  const myVote =
+    myPlayerId && round?.answers?.[myPlayerId]?.answer?.targetPlayerId
+      ? round.answers[myPlayerId].answer!.targetPlayerId
+      : null;
 
   const ownerPlayerId = round?.results?.ownerPlayerId;
 
@@ -40,27 +82,40 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   if (!round) {
     return <div>Waiting for a Spotify Wrapped summary…</div>;
   }
-  
+
   const isRevealed = round.status === "revealed";
 
   return (
-    <>
-      <section style={{ marginBottom: 24, color : "#ffffffff" }}>
-        <div style={{ marginBottom: 8 }}>
+    <div
+      style={{
+        "--card": "rgba(15, 21, 39, 0.92)",
+        "--card-border": "rgba(148, 163, 184, 0.18)",
+        "--accent": "#26c6da",
+        "--accent-soft": "rgba(38, 198, 218, 0.18)",
+        "--text": "#e2e8f0",
+        "--muted": "#94a3b8",
+        fontFamily: '"Space Grotesk", "IBM Plex Sans", sans-serif',
+        color: "var(--text)",
+      } as React.CSSProperties}
+    >
+      <section
+        style={{
+          padding: "0.85rem",
+          borderRadius: 16,
+          background: "var(--card)",
+          border: "1px solid var(--card-border)",
+        }}
+      >
+        <div style={{ marginBottom: 12, fontSize: 15 }}>
           {myVote
             ? `You guessed ${players.find((p) => p.playerId === myVote)?.displayName || "someone"}`
             : "Whose Spotify Wrapped is this?"}
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div style={{ display: "grid", gap: 10 }}>
           {players.map((player) => {
             const playerId = player.playerId;
             if (!playerId) return null;
+            const isSelf = playerId === myPlayerId;
             const isSelected = playerId === myVote;
             const isOwner = isRevealed && playerId === ownerPlayerId;
             return (
@@ -69,26 +124,63 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
                 onClick={() => handleVote(playerId)}
                 disabled={voteBusy || isRevealed}
                 style={{
-                  padding: "0.85rem",
-                  borderRadius: 10,
-                  border: isSelected ? "2px solid #38bdf8" : "1px solid #1f2933",
-                  background: isOwner ? "#1a2b45" : isSelected ? "#0f172a" : "#0b0f17",
-                  color: "#fff",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: 12,
+                  border: isOwner
+                    ? "2px solid #34d399"
+                    : isSelected
+                    ? "2px solid var(--accent)"
+                    : "1px solid var(--card-border)",
+                  background: isOwner
+                    ? "rgba(52, 211, 153, 0.15)"
+                    : isSelected
+                    ? "rgba(38, 198, 218, 0.2)"
+                    : "rgba(10, 14, 26, 0.9)",
+                  color: "var(--text)",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  transition: "transform 0.2s ease, border 0.2s ease",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{player.displayName || player.name}</div>
-                {isOwner && <div style={{ fontSize: 12, color: "#34d399" }}>Actual owner</div>}
+                {renderAvatar(player, 38)}
+                <div>
+                  <div style={{ fontWeight: 600, lineHeight: 1.2 }}>
+                    {player.displayName || player.name}
+                  </div>
+                  {isSelf && <div style={{ fontSize: 12, color: "var(--muted)" }}>You</div>}
+                  {isOwner && <div style={{ fontSize: 12, color: "#34d399" }}>Actual owner</div>}
+                </div>
               </button>
             );
           })}
         </div>
-        {voteError && <div style={{ marginTop: 8, color: "salmon" }}>{voteError}</div>}
-        {!isRevealed && (
-          <div style={{ marginTop: 8, fontSize: 13, color: "#94a3b8" }}>
+        {voteError && <div style={{ marginTop: 10, color: "salmon" }}>{voteError}</div>}
+        {!isRevealed && !!myVote && (
+          <div style={{ marginTop: 10, fontSize: 13, color: "var(--muted)" }}>
             Waiting for the host to reveal the owner{voteBusy ? "…" : "."}
           </div>
         )}
+        {isRevealed && (
+          <div
+            style={{
+              textAlign: "center",
+              alignSelf: "flex-start",
+              padding: "4px 10px",
+              marginTop: 10,
+              borderRadius: 999,
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+            }}
+          >
+            Owner revealed
+          </div>
+        )}
       </section>
-    </>
+    </div>
   );
 };

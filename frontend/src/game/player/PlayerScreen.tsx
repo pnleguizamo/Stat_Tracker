@@ -60,18 +60,15 @@ const PlayerScreen = () => {
     currentStage && gameState ? PLAYER_MINIGAME_COMPONENTS[currentStage.minigameId] || null : null;
 
   return (
-    <div className="player-layout">
+    <div className="player-layout player-layout--viewport">
       <header className="player-header">
         <div>
           <h2 className="player-title">Room {roomCode}</h2>
-          <div className="player-meta">Phase: {phaseLabel}</div>
-          {typeof currentStageIndex === 'number' && currentStage && (
-            <div className="player-stage">
-              Stage {currentStageIndex + 1}: {currentStage.minigameId}
-            </div>
-          )}
+          <div className="player-stage">
+            {phaseLabel}{typeof currentStageIndex === 'number' && currentStage ? ` · Stage ${currentStageIndex + 1}` : ''}
+          </div>
         </div>
-        <button className="game-shell-button" onClick={handleLeave}>Leave Room</button>
+        <button className="game-shell-button" onClick={handleLeave}>Leave</button>
       </header>
 
       <main className="player-main">

@@ -95,7 +95,6 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
   return (
     <div
       style={{
-        "--bg": "#0b0f1f",
         "--card": "rgba(15, 21, 39, 0.92)",
         "--card-border": "rgba(148, 163, 184, 0.18)",
         "--accent": "#26c6da",
@@ -104,17 +103,12 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
         "--muted": "#94a3b8",
         fontFamily: '"Space Grotesk", "IBM Plex Sans", sans-serif',
         color: "var(--text)",
-        minHeight: "100vh",
-        padding: "1.25rem 1rem 2rem",
-        background:
-          "radial-gradient(120% 120% at 0% 0%, rgba(38,198,218,0.25), transparent 55%), linear-gradient(180deg, #0b0f1f 0%, #0a1026 100%)",
       } as React.CSSProperties}
     >
 
       <section
         style={{
-          marginTop: 16,
-          padding: "1rem",
+          padding: "0.85rem",
           borderRadius: 16,
           background: "var(--card)",
           border: "1px solid var(--card-border)",
@@ -143,12 +137,11 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
                 onClick={() => handleVote(playerId)}
                 disabled={voteBusy || isResultsShown}
                 style={{
-                  padding: "0.95rem",
-                  borderRadius: 14,
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: 12,
                   border: isSelected ? "2px solid var(--accent)" : "1px solid var(--card-border)",
                   background: isSelected ? "rgba(38, 198, 218, 0.2)" : "rgba(10, 14, 26, 0.9)",
                   color: "var(--text)",
-                  minHeight: 76,
                   textAlign: "left",
                   display: "flex",
                   alignItems: "center",
