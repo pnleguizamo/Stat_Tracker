@@ -10,7 +10,7 @@ function playerProfile(room, playerId) {
   };
 }
 
-function wlmAwards(history, room) {
+function wlmAwards(history, room, { includeAllValid = false } = {}) {
   const candidates = [];
 
   // Aggregate listen counts and vote tallies per player across all rounds
@@ -62,7 +62,7 @@ function wlmAwards(history, room) {
     const sorted = playerIds
       .filter((p) => (totalListens[p] || 0) > 0)
       .sort((a, b) => (totalListens[b] || 0) - (totalListens[a] || 0));
-    if (sorted.length >= 2) {
+    if (sorted.length >= (includeAllValid ? 1 : 2)) {
       const max = totalListens[sorted[0]] || 0;
       const avg = playerIds.reduce((s, p) => s + (totalListens[p] || 0), 0) / playerIds.length;
       const interestScore = avg > 0 ? max / avg : 0;
@@ -91,7 +91,7 @@ function wlmAwards(history, room) {
       const avgVotes =
         playerIds.reduce((s, p) => s + (totalVotesReceived[p] || 0), 0) / playerIds.length;
       const interestScore = avgVotes > 0 ? (avgVotes - theirVotes) / avgVotes : 0;
-      if (interestScore > 0.2) {
+      if (includeAllValid || interestScore > 0.2) {
         candidates.push({
           id: 'stealthy_streamer',
           title: 'Stealthy Streamer',
@@ -129,7 +129,7 @@ function wlmAwards(history, room) {
     const sorted = playerIds
       .filter((p) => (totalVotesReceived[p] || 0) > 0)
       .sort((a, b) => (totalVotesReceived[b] || 0) - (totalVotesReceived[a] || 0));
-    if (sorted.length >= 2) {
+    if (sorted.length >= (includeAllValid ? 1 : 2)) {
       const max = totalVotesReceived[sorted[0]];
       const secondMax = totalVotesReceived[sorted[1]] || 0;
       const interestScore = secondMax > 0 ? max / secondMax : max;
@@ -139,7 +139,7 @@ function wlmAwards(history, room) {
       const overlap = hitHoarder?.featuredPlayers.every((fp) =>
         winners.some((w) => w === fp.playerId)
       );
-      if (!overlap) {
+      if (includeAllValid || !overlap) {
         candidates.push({
           id: 'crowd_favorite',
           title: 'Crowd Favorite',
@@ -157,7 +157,7 @@ function wlmAwards(history, room) {
   return candidates;
 }
 
-function heardleAwards(scoreboard, stageIndex, room) {
+function heardleAwards(scoreboard, stageIndex, room, { includeAllValid = false } = {}) {
   const candidates = [];
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < 1) return [];
@@ -185,7 +185,7 @@ function heardleAwards(scoreboard, stageIndex, room) {
   const correctPlayers = playerIds.filter((p) => snippetIndices[p]?.length > 0);
 
   // Fastest Ear — lowest avg snippet index
-  if (correctPlayers.length >= 2) {
+  if (correctPlayers.length >= (includeAllValid ? 1 : 2)) {
     const sorted = correctPlayers.sort((a, b) => avgSnippet(a) - avgSnippet(b));
     const minAvg = avgSnippet(sorted[0]);
     const maxAvg = avgSnippet(sorted[sorted.length - 1]);
@@ -250,7 +250,7 @@ function heardleAwards(scoreboard, stageIndex, room) {
   return candidates;
 }
 
-function wrappedAwards(history, room, scoreboard, stageIndex) {
+function wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid = false } = {}) {
   const candidates = [];
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < 2 || history.length === 0) return [];
@@ -277,7 +277,8 @@ function wrappedAwards(history, room, scoreboard, stageIndex) {
   {
     const sorted = Object.entries(ownerCorrectFraction).sort(([, a], [, b]) => a - b);
     if (sorted.length > 0) {
-      const [enigmaId, minFrac] = sorted[0];
+      const minFrac = sorted[0][1];
+      const winners = sorted.filter(([, v]) => v === minFrac).map(([playerId]) => playerId);
       const pct = Math.round(minFrac * 100);
       candidates.push({
         id: 'niche_ninja',
@@ -286,7 +287,10 @@ function wrappedAwards(history, room, scoreboard, stageIndex) {
           pct === 0
             ? `Nobody in the group guessed their nichest Wrapped correctly. Just too niche.`
             : `Only ${pct}% of the group guessed their nichest Wrapped correctly. Just too niche.`,
-        featuredPlayers: [{ ...playerProfile(room, enigmaId), statLabel: `${pct}% guessed right` }],
+        featuredPlayers: winners.map((playerId) => ({
+          ...playerProfile(room, playerId),
+          statLabel: `${pct}% guessed right`,
+        })),
         interestScore: 1 - minFrac,
       });
     }
@@ -295,16 +299,20 @@ function wrappedAwards(history, room, scoreboard, stageIndex) {
   // Open Book — most guessed correctly
   {
     const sorted = Object.entries(ownerCorrectFraction).sort(([, a], [, b]) => b - a);
-    if (sorted.length >= 2) {
-      const [openId, maxFrac] = sorted[0];
-      const secondFrac = sorted[1][1];
-      if (maxFrac > secondFrac || maxFrac === 1) {
+    if (sorted.length > 0) {
+      const maxFrac = sorted[0][1];
+      const secondFrac = sorted[1]?.[1];
+      const winners = sorted.filter(([, v]) => v === maxFrac).map(([playerId]) => playerId);
+      if (includeAllValid || (sorted.length >= 2 && (maxFrac > secondFrac || maxFrac === 1))) {
         const pct = Math.round(maxFrac * 100);
         candidates.push({
           id: 'open_book',
           title: 'Open Book',
-          description: `${pct}% of the group nailed their Wrapped. We know who you are.`,
-          featuredPlayers: [{ ...playerProfile(room, openId), statLabel: `${pct}% guessed right` }],
+          description: `${pct}% of the group guessed their Wrapped correctly. Not exactly mysterious.`,
+          featuredPlayers: winners.map((playerId) => ({
+            ...playerProfile(room, playerId),
+            statLabel: `${pct}% guessed right`,
+          })),
           interestScore: maxFrac,
         });
       }
@@ -340,14 +348,14 @@ function wrappedAwards(history, room, scoreboard, stageIndex) {
   // Minutes Monster — highest minutesListened
   {
     const sorted = Object.entries(minutesByOwner).sort(([, a], [, b]) => b.minutes - a.minutes);
-    if (sorted.length >= 2) {
+    if (sorted.length >= (includeAllValid ? 1 : 2)) {
       const [monsterId, monsterData] = sorted[0];
       const maxMin = monsterData.minutes || 0;
       const yearLabel = monsterData.year || 'an unknown year';
       const avgMin =
         Object.values(minutesByOwner).reduce((s, v) => s + (v.minutes || 0), 0) / Object.values(minutesByOwner).length;
       const interestScore = avgMin > 0 ? maxMin / avgMin : 0;
-      if (interestScore > 1.3) {
+      if ((includeAllValid && maxMin > 0) || interestScore > 1.3) {
         candidates.push({
           id: 'minutes_monster',
           title: 'Minutes Monster',
@@ -375,19 +383,20 @@ function computeStageRecap(room, stageIndex, maxAwards = 3) {
   const isFinal = stageIndex === (room.stagePlan.length - 1);
   const history = room.stageRoundHistory?.[stageIndex] || [];
   const scoreboard = room.scoreboard || {};
+  const includeAllValid = maxAwards === Infinity;
 
   let candidates = [];
 
   if (minigameId === 'WHO_LISTENED_MOST') {
-    candidates = wlmAwards(history, room);
+    candidates = wlmAwards(history, room, { includeAllValid });
   } else if (minigameId === 'HEARDLE') {
-    candidates = heardleAwards(scoreboard, stageIndex, room);
+    candidates = heardleAwards(scoreboard, stageIndex, room, { includeAllValid });
   } else if (minigameId === 'GUESS_SPOTIFY_WRAPPED') {
-    candidates = wrappedAwards(history, room, scoreboard, stageIndex);
+    candidates = wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid });
   }
 
   const awards = candidates
-    .filter((c) => c.interestScore > 0 && c.featuredPlayers?.length > 0)
+    .filter((c) => c.featuredPlayers?.length > 0 && (includeAllValid || c.interestScore > 0))
     .sort((a, b) => b.interestScore - a.interestScore)
     .slice(0, maxAwards)
     .map(({ id, title, description, featuredPlayers }) => ({ id, title, description, featuredPlayers }));
