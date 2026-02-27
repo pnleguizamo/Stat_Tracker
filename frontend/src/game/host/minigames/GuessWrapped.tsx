@@ -6,6 +6,7 @@ import { PlayerVotes } from "./components/PlayerVotes";
 import { useVoteReveal } from "game/hooks/useVoteReveal";
 import { useTrackPreview } from "game/hooks/useTrackPreview";
 import { useAutoFitScale } from "game/hooks/useAutoFitScale";
+import { useHostSfx } from "game/hooks/useHostSfx";
 import {
   HostActionRow,
   HostCard,
@@ -38,6 +39,10 @@ export const GuessWrappedHost: FC<Props> = ({
   const nextPromptTimeoutRef = useRef<number | null>(null);
   const busyRef = useRef<"prompt" | "reveal" | null>(null);
   const roundIdRef = useRef<string | null>(null);
+  const previousWrappedRevealCountRef = useRef<number | null>(null);
+  const previousWrappedRoundIdRef = useRef<string | null>(null);
+  const previousWrappedStatusRef = useRef<string | null>(null);
+  const { playWrappedEntryReveal, playRevealComplete } = useHostSfx();
 
   const votes = round?.results?.votes || {}; 
   const ownerPlayerId = round?.results?.ownerPlayerId;
@@ -212,6 +217,40 @@ export const GuessWrappedHost: FC<Props> = ({
     return Math.min(entryKeys.length, Math.max(1, intervalIndex + 1));
   }, [entryKeys.length, revealProgress, round?.status]);
 
+  useEffect(() => {
+    if (!round?.id) {
+      previousWrappedRevealCountRef.current = null;
+      previousWrappedRoundIdRef.current = null;
+      previousWrappedStatusRef.current = null;
+      return;
+    }
+
+    const isNewRound = previousWrappedRoundIdRef.current !== round.id;
+    if (isNewRound) {
+      previousWrappedRoundIdRef.current = round.id;
+      previousWrappedRevealCountRef.current = revealCount;
+      previousWrappedStatusRef.current = round.status;
+      return;
+    }
+
+    const previousRevealCount = previousWrappedRevealCountRef.current ?? revealCount;
+    if (revealCount > previousRevealCount) {
+      playWrappedEntryReveal({
+        progress: revealCount,
+        total: entryKeys.length,
+      });
+    }
+
+    previousWrappedRevealCountRef.current = revealCount;
+    previousWrappedStatusRef.current = round.status;
+  }, [
+    round?.id,
+    round?.status,
+    revealCount,
+    entryKeys.length,
+    playWrappedEntryReveal,
+  ]);
+
   const revealedKeySet = useMemo(() => {
     if (round?.status === "revealed") return new Set(entryKeys);
     return new Set(revealOrder.slice(0, revealCount));
@@ -260,7 +299,7 @@ export const GuessWrappedHost: FC<Props> = ({
         ? previewTarget.artist.name
         : previewTrackName || promptArtistName,
     enabled: allowPreview,
-    volume: 0.3,
+    volume: round?.status === "revealed" ? 0.1 : 0.3,
     kind: previewTarget?.type === "artist" ? "artist" : "track",
   });
 

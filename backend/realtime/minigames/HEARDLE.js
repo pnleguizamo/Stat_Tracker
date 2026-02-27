@@ -2,7 +2,7 @@ const { getSharedTopSongs } = require('../../services/mongoServices');
 const { getAccessToken } = require('../../services/authService');
 
 const SNIPPET_WINDOWS_MS = [500, 1000, 3000, 7000, 12000, 17000, 30000];
-const SNIPPET_REPLAY_GAP_MS = [6000, 5000, 4000, 2000, 2000, 2000, 11000];
+const SNIPPET_REPLAY_GAP_MS = [6000, 5000, 5000, 4000, 4000, 2000, 11000];
 const GUESS_WINDOW_MS = 40_000;
 const DEFAULT_POINTS_PER_SNIPPET = [1200, 1000, 900, 750, 600, 500, 300];
 const DEFAULT_SONGS_PER_GAME = 10;

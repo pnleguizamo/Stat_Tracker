@@ -7,6 +7,7 @@ import { useParams } from "react-router-dom";
 import { socket } from "socket";
 import { GameState, MinigameId } from "types/game";
 import { Leaderboard } from "./Leaderboard";
+import { useHostSfx } from "game/hooks/useHostSfx";
 import "../../styles/gameShell.css";
 import "./minigames/styles/hostMinigame.css";
 
@@ -38,6 +39,9 @@ const HostGame = () => {
   const leaderboardShowRef = useRef<number | null>(null);
   const leaderboardHideRef = useRef<number | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const previousStageIndexRef = useRef<number | null>(null);
+  const previousRoundIdRef = useRef<string | null>(null);
+  const { playStageTransition, playRoundTransition } = useHostSfx();
 
   useEffect(() => {
     if (!roomCode) return;
@@ -80,6 +84,48 @@ const HostGame = () => {
   useEffect(() => {
     activeRoundRef.current = gameState?.currentRoundState ?? null;
   }, [gameState?.currentRoundState]);
+
+  useEffect(() => {
+    const stageIndex = gameState?.currentStageIndex;
+    const minigameId = gameState?.currentStageConfig?.minigameId;
+    const roundId = gameState?.currentRoundState?.id ?? null;
+    let stageChanged = false;
+
+    if (typeof stageIndex === "number") {
+      const previousStageIndex = previousStageIndexRef.current;
+      if (previousStageIndex === null) {
+        previousStageIndexRef.current = stageIndex;
+      } else if (stageIndex !== previousStageIndex) {
+        previousStageIndexRef.current = stageIndex;
+        stageChanged = true;
+        playStageTransition();
+      }
+    }
+
+    if (!roundId) {
+      previousRoundIdRef.current = null;
+      return;
+    }
+
+    const previousRoundId = previousRoundIdRef.current;
+    if (previousRoundId === null) {
+      previousRoundIdRef.current = roundId;
+      return;
+    }
+
+    if (roundId !== previousRoundId) {
+      previousRoundIdRef.current = roundId;
+      if (!stageChanged && minigameId !== "HEARDLE") {
+        playRoundTransition();
+      }
+    }
+  }, [
+    gameState?.currentStageIndex,
+    gameState?.currentStageConfig?.minigameId,
+    gameState?.currentRoundState?.id,
+    playStageTransition,
+    playRoundTransition,
+  ]);
 
   useEffect(() => {
     const round = gameState?.currentRoundState;

@@ -1,8 +1,9 @@
 import { CSSProperties, FC, useEffect, useMemo, useRef, useState } from 'react';
 import api from 'lib/api';
 import { useAutoFitScale } from 'game/hooks/useAutoFitScale';
+import { useHostSfx } from 'game/hooks/useHostSfx';
 import { socket } from 'socket';
-import { GameState, HeardleRoundState } from 'types/game';
+import { GameState, HeardleGuessOutcome, HeardleRoundState } from 'types/game';
 import { useTrackPreview } from '../../hooks/useTrackPreview';
 import {
   HostActionRow,
@@ -131,7 +132,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     gameState.currentRoundState && gameState.currentRoundState.minigameId === 'HEARDLE'
       ? (gameState.currentRoundState as HeardleRoundState)
       : null;
-  const players = gameState.players || [];
+  const players = useMemo(() => gameState.players || [], [gameState.players]);
 
   const [actionBusy, setActionBusy] = useState<'start' | 'reveal' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,12 +143,15 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const [playbackStatus, setPlaybackStatus] = useState<string>('player not ready');
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [timelineNowMs, setTimelineNowMs] = useState(Date.now());
+  const { playHeardleGuessOutcome } = useHostSfx();
 
   const playerRef = useRef<any>(null);
   const loopInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pauseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTrackRef = useRef<string | null>(null);
   const playbackSessionRef = useRef(0);
+  const heardleSfxRoundRef = useRef<string | null>(null);
+  const heardleSfxGuessKeyByPlayerRef = useRef<Map<string, string>>(new Map());
 
   const snippetPlan = round?.snippetPlan || [];
   const historyRowCount = Math.max(1, snippetPlan.length || 1);
@@ -298,6 +302,76 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!round) {
+      heardleSfxRoundRef.current = null;
+      heardleSfxGuessKeyByPlayerRef.current = new Map();
+      return;
+    }
+
+    const isNewRound = heardleSfxRoundRef.current !== round.id;
+    const previousGuessKeyByPlayer = heardleSfxGuessKeyByPlayerRef.current;
+    const nextGuessKeyByPlayer = new Map<string, string>();
+    const newOutcomes: Array<{ outcome: HeardleGuessOutcome; at: number; snippetIndex: number }> = [];
+
+    players.forEach((player) => {
+      const playerId = player.playerId;
+      if (!playerId) return;
+      const guesses = round.answers?.[playerId]?.guesses || [];
+      const latestGuess = guesses[guesses.length - 1];
+      if (!latestGuess?.outcome) return;
+
+      const latestGuessKey = `${latestGuess.snippetIndex}:${latestGuess.outcome}:${latestGuess.at || 0}`;
+      nextGuessKeyByPlayer.set(playerId, latestGuessKey);
+
+      if (isNewRound) return;
+
+      if (previousGuessKeyByPlayer.get(playerId) !== latestGuessKey) {
+        newOutcomes.push({
+          outcome: latestGuess.outcome as HeardleGuessOutcome,
+          at: latestGuess.at || 0,
+          snippetIndex: latestGuess.snippetIndex,
+        });
+      }
+    });
+
+    heardleSfxRoundRef.current = round.id;
+    heardleSfxGuessKeyByPlayerRef.current = nextGuessKeyByPlayer;
+
+    if (isNewRound || newOutcomes.length === 0) return;
+
+    newOutcomes
+      .sort((a, b) => a.at - b.at)
+      .forEach((entry, idx) => {
+        const expectedResponses = players.reduce(
+          (count, player) => (player.playerId ? count + 1 : count),
+          0
+        );
+        const responsesForSnippet = players.reduce((count, player) => {
+          if (!player.playerId) return count;
+          const guesses = round.answers?.[player.playerId]?.guesses || [];
+          const hasGuessedThisSnippet = guesses.some(
+            (guess) => guess.snippetIndex === entry.snippetIndex
+          );
+          const hasAnsweredCorrectly = guesses.some(
+            (guess) => guess.outcome === 'correct'
+          );
+          return (hasGuessedThisSnippet || hasAnsweredCorrectly)
+            ? count + 1
+            : count;
+        }, 0);
+        const isFinalGuessOfSnippet =
+          expectedResponses > 0 && responsesForSnippet >= expectedResponses;
+        const isBuzzerDuringPlayback =
+          entry.outcome === 'wrong' && (!timelineMetrics.isInReplayGap || isFinalGuessOfSnippet);
+        playHeardleGuessOutcome({
+          outcome: entry.outcome,
+          whenOffsetMs: idx * 80,
+          intensity: isBuzzerDuringPlayback ? 0.08 : 0.6,
+        });
+      });
+  }, [round, players, playHeardleGuessOutcome, timelineMetrics.isInReplayGap]);
+
   const startSnippetLoop = async (durationMs: number, uri: string, replayGapMs: number) => {
     if (!playerRef.current || !deviceId || !token || !uri) return;
     try {
@@ -409,9 +483,11 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
       const currentSnippetEntry = [...guesses].reverse().find((g) => g.snippetIndex === round.currentSnippetIndex) || null;
       const summary = p.playerId ? round.results?.guessSummary?.[p.playerId] : null;
       const outcome = summary?.outcome || latest?.outcome || null;
+      const hasAnsweredCorrectly = guesses.some((g) => g.outcome === 'correct');
       return {
         player: p,
         outcome,
+        hasAnsweredCorrectly,
         guessedThisSnippet: guesses.some((g) => g.snippetIndex === round.currentSnippetIndex),
         thisSnippetOutcome: currentSnippetEntry?.outcome || null,
       };
@@ -603,9 +679,11 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
       <div
         className="host-minigame-grid host-minigame-grid--tight"
       >
-        {playerGuessStates.map(({ player, outcome, guessedThisSnippet, thisSnippetOutcome }) => {
+        {playerGuessStates.map(({ player, outcome, hasAnsweredCorrectly, guessedThisSnippet, thisSnippetOutcome }) => {
           const liveRoundOutcome =
-            round.status === 'revealed'
+            hasAnsweredCorrectly
+              ? 'correct'
+              : round.status === 'revealed'
               ? outcome
               : guessedThisSnippet
               ? thisSnippetOutcome || outcome

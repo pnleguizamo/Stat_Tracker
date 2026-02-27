@@ -24,12 +24,18 @@ export const useTrackPreview = ({
   volume = 0.5,
   kind = 'track',
 }: TrackPreviewOptions): TrackPreviewState => {
+  const VOLUME_RAMP_MS = 220;
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const volumeRampRafRef = useRef<number | null>(null);
   const lastPreviewKeyRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const stop = useCallback(() => {
+    if (volumeRampRafRef.current !== null) {
+      window.cancelAnimationFrame(volumeRampRafRef.current);
+      volumeRampRafRef.current = null;
+    }
     if (!audioRef.current) return;
     audioRef.current.pause();
     audioRef.current = null;
@@ -74,7 +80,7 @@ export const useTrackPreview = ({
         const previewUrl = res?.previewUrl || res?.[0]?.previewUrls || null;
         if (!previewUrl) return;
         const audio = new Audio(previewUrl);
-        audio.volume = volume;
+        audio.volume = Math.max(0, Math.min(1, volume));
         audioRef.current = audio;
         audio.addEventListener('play', () => setIsPlaying(true));
         audio.addEventListener('pause', () => setIsPlaying(false));
@@ -97,6 +103,37 @@ export const useTrackPreview = ({
   }, [artistName, enabled, kind, previewKey, stop, trackName, volume]);
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+    const targetVolume = Math.max(0, Math.min(1, volume));
+    if (Math.abs(startVolume - targetVolume) < 0.001) {
+      audio.volume = targetVolume;
+      return;
+    }
+
+    if (volumeRampRafRef.current !== null) {
+      window.cancelAnimationFrame(volumeRampRafRef.current);
+      volumeRampRafRef.current = null;
+    }
+
+    const startAt = performance.now();
+    const step = (now: number) => {
+      const elapsed = now - startAt;
+      const progress = Math.max(0, Math.min(1, elapsed / VOLUME_RAMP_MS));
+      audio.volume = startVolume + (targetVolume - startVolume) * progress;
+      if (progress < 1) {
+        volumeRampRafRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+      volumeRampRafRef.current = null;
+      audio.volume = targetVolume;
+    };
+
+    volumeRampRafRef.current = window.requestAnimationFrame(step);
+  }, [volume]);
 
   return { stop, error, isPlaying };
 };

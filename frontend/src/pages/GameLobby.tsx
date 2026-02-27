@@ -4,6 +4,7 @@ import api from 'lib/api';
 import { socket } from '../socket';
 import { useNavigate } from 'react-router-dom';
 import '../styles/gameShell.css';
+import '../styles/lobby.css';
 
 type Player = {
   playerId: string;
@@ -28,13 +29,287 @@ type CbResponse = {
   error?: string;
 };
 
+type HostLobbyProps = {
+  room: RoomState;
+  onLeave: () => void;
+  onStartGame: () => void;
+};
+
+function HostLobby({ room, onLeave, onStartGame }: HostLobbyProps) {
+  const joinPath = '/lobby';
+  const joinUrl = `${window.location.origin}${joinPath}`;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(
+    joinUrl
+  )}`;
+  const actualPlayers = room.players.filter((p) => !p.isHost);
+
+  return (
+    <div className="game-shell-layout lobby-host-layout">
+      {/* ── Top bar ── */}
+      <div className="lobby-host-topbar">
+        <div className="lobby-host-topbar-left">
+          <span className="lobby-brand">Spotify Stats Game</span>
+          <button className="game-shell-button lobby-small-btn" onClick={onLeave}>
+            Leave
+          </button>
+        </div>
+
+        <div className="lobby-code-block">
+          <div className="lobby-code-eyebrow">Room Code</div>
+          <div className="lobby-code">{room.roomCode}</div>
+        </div>
+
+        <div className="lobby-host-topbar-right">
+          <div className="lobby-player-count">
+            {actualPlayers.length}{' '}
+            {actualPlayers.length === 1 ? 'player' : 'players'} joined
+          </div>
+          <button
+            className="game-shell-button lobby-start-btn"
+            onClick={onStartGame}
+            disabled={actualPlayers.length === 0}
+          >
+            Start Game →
+          </button>
+        </div>
+      </div>
+
+      {/* ── Player grid ── */}
+      <div className="lobby-host-body">
+        <div className="lobby-host-join-row">
+          <div className="lobby-join-url">Scan to join faster</div>
+          <div className="lobby-qr-wrap lobby-qr-wrap--large">
+            <img
+              src={qrSrc}
+              alt={`QR code to join room ${room.roomCode}`}
+              className="lobby-qr"
+            />
+            <div className="lobby-qr-label">{joinUrl}</div>
+          </div>
+        </div>
+        {actualPlayers.length === 0 ? (
+          <div className="lobby-empty">
+            <div className="lobby-empty-text">Waiting for players to join…</div>
+            <div className="lobby-empty-hint">Share the code above!</div>
+          </div>
+        ) : (
+          <div className="lobby-player-grid">
+            {actualPlayers.map((p) => (
+              <div key={p.playerId} className="lobby-player-card">
+                {p.avatar ? (
+                  <img
+                    src={p.avatar}
+                    alt={p.displayName || p.name}
+                    className="lobby-player-avatar"
+                  />
+                ) : (
+                  <div className="lobby-player-avatar lobby-player-avatar--initials">
+                    {(p.displayName || p.name || '')
+                      .split(' ')
+                      .map((s) => s[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
+                  </div>
+                )}
+                <div className="lobby-player-name">{p.displayName || p.name}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type PlayerLobbyProps = {
+  room: RoomState;
+  displayName: string;
+  setDisplayName: (v: string) => void;
+  selectedAvatar: string | null;
+  handleSelectAvatar: (url: string) => void;
+  handleUpdateProfile: () => void;
+  computedAvatarOptions: string[];
+  onLeave: () => void;
+};
+
+function PlayerLobby({
+  room,
+  displayName,
+  setDisplayName,
+  selectedAvatar,
+  handleSelectAvatar,
+  handleUpdateProfile,
+  computedAvatarOptions,
+  onLeave,
+}: PlayerLobbyProps) {
+  return (
+    <div className="player-layout">
+      <header className="player-header">
+        <div>
+          <h2 className="player-title">
+            Room <span className="lobby-inline-code">{room.roomCode}</span>
+          </h2>
+          <div className="game-shell-muted player-meta">
+            Waiting for host to start…
+          </div>
+        </div>
+        <button className="game-shell-button" onClick={onLeave}>
+          Leave
+        </button>
+      </header>
+
+      <main className="player-main lobby-player-main">
+        {/* Avatar + name preview */}
+        <div className="lobby-player-preview">
+          {selectedAvatar ? (
+            <img
+              src={selectedAvatar}
+              alt="Your avatar"
+              className="lobby-preview-avatar"
+            />
+          ) : (
+            <div className="lobby-preview-avatar lobby-preview-avatar--initials">
+              {(displayName || '?')
+                .split(' ')
+                .map((s) => s[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()}
+            </div>
+          )}
+          <div className="lobby-preview-info">
+            <div className="lobby-preview-name">
+              {displayName || (
+                <span className="game-shell-muted">Set your name below</span>
+              )}
+            </div>
+            <div className="game-shell-muted" style={{ fontSize: '0.8rem' }}>
+              Ready to play
+            </div>
+          </div>
+        </div>
+
+        {/* Name input */}
+        <div className="lobby-field">
+          <label className="lobby-field-label">Your name</label>
+          <input
+            className="game-shell-input"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            onBlur={() => handleUpdateProfile()}
+            placeholder="Enter your name"
+          />
+        </div>
+
+        {/* Avatar picker */}
+        <div className="lobby-field">
+          <div className="lobby-field-label">Choose avatar</div>
+          <div className="lobby-avatar-grid">
+            {computedAvatarOptions.map((a) => (
+              <button
+                key={a}
+                onClick={() => handleSelectAvatar(a)}
+                className={`lobby-avatar-btn${
+                  a === selectedAvatar ? ' lobby-avatar-btn--selected' : ''
+                }`}
+              >
+                <img src={a} alt="avatar" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+type PreLobbyProps = {
+  isGuest: boolean;
+  displayName: string;
+  setDisplayName: (v: string) => void;
+  roomCodeInput: string;
+  setRoomCodeInput: (v: string) => void;
+  onCreateRoom: () => void;
+  onJoinRoom: () => void;
+  onUpdateProfile: () => void;
+  error: string | null;
+};
+
+function PreLobby({
+  isGuest,
+  displayName,
+  setDisplayName,
+  roomCodeInput,
+  setRoomCodeInput,
+  onCreateRoom,
+  onJoinRoom,
+  onUpdateProfile,
+  error,
+}: PreLobbyProps) {
+  return (
+    <div className="game-shell-layout">
+      <div className="game-shell-content game-shell-content--narrow">
+        <div className="game-shell-surface lobby-prejoin">
+          <h2 className="lobby-prejoin-title">Spotify Stats Game</h2>
+
+          <div className="lobby-field">
+            <label className="lobby-field-label">
+              {isGuest ? 'Display name' : 'Display name (optional)'}
+            </label>
+            <input
+              className="game-shell-input"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onBlur={onUpdateProfile}
+              placeholder={isGuest ? 'Your name' : 'Override display name'}
+            />
+          </div>
+
+          <div className="lobby-prejoin-actions">
+            <button
+              className="game-shell-button lobby-create-btn"
+              onClick={onCreateRoom}
+            >
+              Host a Game
+            </button>
+
+            <div className="lobby-prejoin-divider">or join a room</div>
+
+            <div className="lobby-prejoin-join">
+              <input
+                className="game-shell-input"
+                placeholder="Room code"
+                value={roomCodeInput}
+                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && onJoinRoom()}
+                maxLength={6}
+                style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}
+              />
+              <button className="game-shell-button" onClick={onJoinRoom}>
+                Join
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <p className="game-shell-error" style={{ marginTop: '0.5rem' }}>
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const GameLobby: React.FC = () => {
   const status = useQuery({
     queryKey: ['auth', 'status'],
     queryFn: () => api.get('/api/auth/status'),
     retry: true,
   });
-    
+
   const [displayName, setDisplayName] = useState<string>('');
   const [roomCodeInput, setRoomCodeInput] = useState<string>('');
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -45,9 +320,21 @@ const GameLobby: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (room) return;
+    const query = new URLSearchParams(window.location.search);
+    const roomFromQuery = (query.get('room') || query.get('code') || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 6);
+    if (!roomFromQuery) return;
+    setRoomCodeInput((previous) => previous || roomFromQuery);
+  }, [room]);
+
+  useEffect(() => {
     roomRef.current = room;
   }, [room]);
 
+  // Sync local display name + avatar from server state (player only)
   useEffect(() => {
     if (!room) return;
     const myPlayerId = ((socket as any).playerId || socket.id) as string;
@@ -58,29 +345,22 @@ const GameLobby: React.FC = () => {
     }
   }, [room]);
 
-
   useEffect(() => {
     function handleRoomUpdated(payload: RoomState) {
       setRoom(payload);
     }
 
-    socket.on('roomUpdated', handleRoomUpdated);
-
     function handleGameStateUpdated(payload: any) {
       const currentRoom = roomRef.current;
-      // if the game has started, navigate non-host players to the player screen
       if (!payload || payload.phase !== 'inGame') return;
-      if (!currentRoom) {
-        return; 
-      }
+      if (!currentRoom) return;
       if (payload.roomCode && payload.roomCode !== currentRoom.roomCode) return;
       if (currentRoom.hostSocketId === socket.id) return; // host stays with host flow
-      // navigate non-hosts to the player screen for this room
       navigate(`/game/${currentRoom.roomCode}`);
     }
 
+    socket.on('roomUpdated', handleRoomUpdated);
     socket.on('gameStateUpdated', handleGameStateUpdated);
-    // handleUpdateProfile();
 
     return () => {
       socket.off('roomUpdated', handleRoomUpdated);
@@ -88,18 +368,15 @@ const GameLobby: React.FC = () => {
     };
   }, []);
 
-
-  const AVATAR_BASE = "/gamerpics";
+  const AVATAR_BASE = '/gamerpics';
   const userAvatarUrl = status.data?.spotifyUser?.images?.[0]?.url || null;
   const NUM_AVATARS = !isGuest && userAvatarUrl ? 20 : 21;
-
-  const avatarOptions = Array.from({ length: NUM_AVATARS }, (_, i) => (
-    `${AVATAR_BASE}/avatar-${i + 1}.png`
-  ));
-
-  const computedAvatarOptions = userAvatarUrl && !isGuest
-    ? [userAvatarUrl, ...avatarOptions]
-    : avatarOptions;
+  const avatarOptions = Array.from(
+    { length: NUM_AVATARS },
+    (_, i) => `${AVATAR_BASE}/avatar-${i + 1}.png`,
+  );
+  const computedAvatarOptions =
+    userAvatarUrl && !isGuest ? [userAvatarUrl, ...avatarOptions] : avatarOptions;
 
   function handleSelectAvatar(url: string) {
     setSelectedAvatar(url);
@@ -107,10 +384,8 @@ const GameLobby: React.FC = () => {
       'updateProfile',
       { avatar: url, displayName: displayName.trim() || undefined },
       (resp: any) => {
-        if (!resp || !resp.ok) {
-          setError(resp?.error || 'Failed to update avatar');
-        }
-      }
+        if (!resp || !resp.ok) setError(resp?.error || 'Failed to update avatar');
+      },
     );
   }
 
@@ -120,37 +395,32 @@ const GameLobby: React.FC = () => {
     if (displayName.trim()) payload.displayName = displayName.trim();
     if (selectedAvatar) payload.avatar = selectedAvatar;
     socket.emit('updateProfile', payload, (resp: any) => {
-      if (!resp || !resp.ok) {
-        setError(resp?.error || 'Failed to update profile');
-      }
+      if (!resp || !resp.ok) setError(resp?.error || 'Failed to update profile');
     });
   }
 
-  const handleCreateRoom = () => {
+  function handleCreateRoom() {
     setError(null);
     if (isGuest && !displayName.trim()) {
       setError('Enter a display name first');
       return;
     }
-
-    const createPayload: any = {};
-    if (displayName.trim()) createPayload.displayName = displayName.trim();
-
-    socket.emit('createRoom', createPayload, (response: CbResponse) => {
-        if (!response.ok) {
-          setError(response.error || 'Failed to create room');
-          return;
-        }
-        setRoom({
-          roomCode: response.roomCode!,
-          hostSocketId: response.hostSocketId,
-          players: response.players || [],
-        });
+    const payload: any = {};
+    if (displayName.trim()) payload.displayName = displayName.trim();
+    socket.emit('createRoom', payload, (response: CbResponse) => {
+      if (!response.ok) {
+        setError(response.error || 'Failed to create room');
+        return;
       }
-    );
-  };
+      setRoom({
+        roomCode: response.roomCode!,
+        hostSocketId: response.hostSocketId,
+        players: response.players || [],
+      });
+    });
+  }
 
-  const handleJoinRoom = () => {
+  function handleJoinRoom() {
     setError(null);
     if (isGuest && !displayName.trim()) {
       setError('Enter a display name first');
@@ -160,183 +430,69 @@ const GameLobby: React.FC = () => {
       setError('Enter a room code');
       return;
     }
-
     const payload: any = { roomCode: roomCodeInput.trim().toUpperCase() };
     if (displayName.trim()) payload.displayName = displayName.trim();
-
     socket.emit('joinRoom', payload, (response: CbResponse) => {
-        if (!response.ok) {
-          if (response.error === 'ROOM_NOT_FOUND') {
-            setError('Room not found');
-          } else {
-            setError(response.error || 'Failed to join room');
-          }
-          return;
-        }
-        setRoom({
-          roomCode: response.roomCode!,
-          hostSocketId: response.hostSocketId,
-          players: response.players || [],
-        });
+      if (!response.ok) {
+        setError(
+          response.error === 'ROOM_NOT_FOUND'
+            ? 'Room not found'
+            : response.error || 'Failed to join room',
+        );
+        return;
       }
-    );
-  };
+      setRoom({
+        roomCode: response.roomCode!,
+        hostSocketId: response.hostSocketId,
+        players: response.players || [],
+      });
+    });
+  }
 
-  const handleLeaveRoom = () => {
-    if (room) {
-      socket.emit('leaveRoom', { roomCode: room.roomCode });
-    }
+  function handleLeaveRoom() {
+    if (room) socket.emit('leaveRoom', { roomCode: room.roomCode });
     setRoom(null);
-  };
+  }
+
+  const isHost = room?.hostSocketId === socket.id;
+
+  if (room && isHost) {
+    return (
+      <HostLobby
+        room={room}
+        onLeave={handleLeaveRoom}
+        onStartGame={() => navigate(`/game/host/${room.roomCode}/setup`)}
+      />
+    );
+  }
+
+  if (room && !isHost) {
+    return (
+      <PlayerLobby
+        room={room}
+        displayName={displayName}
+        setDisplayName={setDisplayName}
+        selectedAvatar={selectedAvatar}
+        handleSelectAvatar={handleSelectAvatar}
+        handleUpdateProfile={handleUpdateProfile}
+        computedAvatarOptions={computedAvatarOptions}
+        onLeave={handleLeaveRoom}
+      />
+    );
+  }
 
   return (
-    <div className="game-shell-layout">
-      <div className="game-shell-content game-shell-content--narrow">
-        <div className="game-shell-surface">
-          <h2 className="player-title">Spotify Stats Game</h2>
-
-          {!room && (
-            <>
-              <div style={{ marginBottom: '1rem' }}>
-                <label>
-                  {isGuest ? 'Display name:' : 'Change display name (Optional):'}
-                  <input
-                    className="game-shell-input"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    onBlur={() => handleUpdateProfile()}
-                    style={{ marginTop: '0.5rem' }}
-                  />
-                </label>
-              </div>
-
-              <div style={{ marginBottom: '0.75rem' }}>
-                <button className="game-shell-button" onClick={handleCreateRoom}>Create Room</button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input
-                  className="game-shell-input"
-                  placeholder="Room code"
-                  value={roomCodeInput}
-                  onChange={(e) => setRoomCodeInput(e.target.value)}
-                  style={{ flex: 1, minWidth: 0 }}
-                />
-                <button className="game-shell-button" onClick={handleJoinRoom}>Join Room</button>
-              </div>
-            </>
-          )}
-
-          {room && (
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Room: {room.roomCode}</h3>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div className="game-shell-muted" style={{ fontSize: 12 }}>
-                    {room.hostSocketId === socket.id ? 'You are the host' : 'Player'}
-                  </div>
-                  <button className="game-shell-button" onClick={handleLeaveRoom}>Leave</button>
-                </div>
-              </div>
-              <h4>Players</h4>
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {room.players.map((p, idx) => (
-                  <li key={p.playerId || idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                    {p.avatar ? (
-                      <img
-                        src={p.avatar}
-                        alt={p.displayName || p.name}
-                        style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', marginRight: 12 }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
-                          background: '#2b6cb0',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {(p.displayName || p.name || '').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <div style={{ fontWeight: 600 }}>
-                        {p.displayName || p.name}
-                        {p.isHost ? <span style={{ fontSize: 12, color: '#38bdf8', marginLeft: 6 }}>(host)</span> : null}
-                      </div>
-                      <div className="game-shell-muted" style={{ fontSize: 12 }}>{p.userId ? `ID: ${p.userId}` : 'Guest'}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div style={{ marginBottom: '1rem', alignItems: 'center', gap: 12 }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ marginBottom: 6, fontSize: 14 }}>Your name</div>
-                  <input
-                    className="game-shell-input"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    onBlur={() => handleUpdateProfile()}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ marginBottom: 6, fontSize: 14 }}>Change avatar</div>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, 56px)',
-                      gap: 8,
-                      alignItems: 'center',
-                    }}
-                  >
-                    {computedAvatarOptions.map((a) => (
-                      <button
-                        key={a}
-                        onClick={() => handleSelectAvatar(a)}
-                        style={{
-                          border: a === selectedAvatar ? '2px solid #38bdf8' : '2px solid transparent',
-                          padding: 0,
-                          borderRadius: 6,
-                          background: 'transparent',
-                          width: 56,
-                          height: 56,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <img src={a} alt="avatar" style={{ width: 48, height: 48, borderRadius: 6 }} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button
-                className="game-shell-button"
-                onClick={() => navigate(`/game/host/${room.roomCode}/setup`)}
-                disabled={room.hostSocketId !== socket.id}
-              >
-                {room.hostSocketId === socket.id ? 'Start Game' : 'Waiting for host'}
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <p className="game-shell-error" style={{ marginTop: '1rem' }}>
-              {error}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+    <PreLobby
+      isGuest={isGuest}
+      displayName={displayName}
+      setDisplayName={setDisplayName}
+      roomCodeInput={roomCodeInput}
+      setRoomCodeInput={setRoomCodeInput}
+      onCreateRoom={handleCreateRoom}
+      onJoinRoom={handleJoinRoom}
+      onUpdateProfile={handleUpdateProfile}
+      error={error}
+    />
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useHostSfx } from "game/hooks/useHostSfx";
 import { GameState, Player, ScoreAward, ScoreboardEntry } from "types/game";
 
 type Props = {
@@ -39,6 +40,10 @@ export const Leaderboard: React.FC<Props> = ({
   
   const [animatedPoints, setAnimatedPoints] = useState<Record<string, number>>({});
   const animationRef = useRef<number | null>(null);
+  const { playScoreTick } = useHostSfx();
+  const previousAnimatedByPlayerRef = useRef<Record<string, number>>({});
+  const pointTickBudgetRef = useRef(0);
+  const lastPointTickAtRef = useRef(0);
 
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevPositionsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -91,6 +96,45 @@ export const Leaderboard: React.FC<Props> = ({
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [entries, roundId, isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) {
+      previousAnimatedByPlayerRef.current = {};
+      pointTickBudgetRef.current = 0;
+      lastPointTickAtRef.current = 0;
+      return;
+    }
+
+    const previous = previousAnimatedByPlayerRef.current;
+    const nextByPlayer: Record<string, number> = {};
+    let totalIncrease = 0;
+
+    entries.forEach(({ playerId, entry }) => {
+      const currentPoints = animatedPoints[playerId] ?? entry.points ?? 0;
+      const previousPoints = previous[playerId] ?? currentPoints;
+      if (currentPoints > previousPoints) {
+        totalIncrease += currentPoints - previousPoints;
+      }
+      nextByPlayer[playerId] = currentPoints;
+    });
+
+    previousAnimatedByPlayerRef.current = nextByPlayer;
+    if (totalIncrease <= 0) return;
+
+    pointTickBudgetRef.current += totalIncrease;
+    const now = performance.now();
+    const pointsPerTick = 2;
+    const minTickGapMs = 45;
+
+    if (
+      pointTickBudgetRef.current >= pointsPerTick &&
+      now - lastPointTickAtRef.current >= minTickGapMs
+    ) {
+      playScoreTick({ intensity: Math.min(1, totalIncrease / 10) });
+      pointTickBudgetRef.current = Math.max(0, pointTickBudgetRef.current - pointsPerTick);
+      lastPointTickAtRef.current = now;
+    }
+  }, [animatedPoints, entries, isVisible, playScoreTick]);
 
   useLayoutEffect(() => {
     if (!isVisible) return;

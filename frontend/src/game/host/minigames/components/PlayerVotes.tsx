@@ -1,4 +1,5 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useHostSfx } from "game/hooks/useHostSfx";
 import { Player } from "types/game";
 import { HostCard } from "./HostMinigamePrimitives";
 import "../styles/PlayerVotes.css";
@@ -117,12 +118,19 @@ export const PlayerVotes: FC<Props> = ({
   const [newestVoterPulseTickByTargetPlayerId, setNewestVoterPulseTickByTargetPlayerId] = useState<Record<string, number>>({});
   const joinClasses = (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" ");
+  const { playVoteReveal, playRevealComplete } = useHostSfx();
   const revealedVoteCount = useMemo(() => {
     return Object.values(revealedVoteMap || {}).reduce(
       (sum, voterIds) => sum + voterIds.length,
       0
     );
   }, [revealedVoteMap]);
+  const totalVotes = useMemo(
+    () => Object.values(finalTally).reduce((sum, voteCount) => sum + voteCount, 0),
+    [finalTally]
+  );
+  const previousRevealedVoteCountRef = useRef(0);
+  const previousRevealCompleteRef = useRef(false);
   const revealPhase: RevealPhase = useMemo(() => {
     if (revealComplete) return "winner-lock";
     if (revealedVoteCount <= 0) return "suspense";
@@ -207,11 +215,39 @@ export const PlayerVotes: FC<Props> = ({
   useEffect(() => {
     if (isRevealed) return;
     previousRevealMapRef.current = {};
+    previousRevealedVoteCountRef.current = 0;
+    previousRevealCompleteRef.current = false;
     setBarWidthByPlayerId({});
     setBarImpactTickByPlayerId({});
     setNewestVoterByTargetPlayerId({});
     setNewestVoterPulseTickByTargetPlayerId({});
   }, [isRevealed]);
+
+  useEffect(() => {
+    if (!isRevealed) return;
+
+    const previousVoteCount = previousRevealedVoteCountRef.current;
+    if (revealedVoteCount > previousVoteCount) {
+      playVoteReveal({
+        progress: revealedVoteCount,
+        total: totalVotes,
+        burstCount: revealedVoteCount - previousVoteCount,
+      });
+    }
+
+    previousRevealedVoteCountRef.current = revealedVoteCount;
+  }, [isRevealed, revealedVoteCount, totalVotes, playVoteReveal]);
+
+  useEffect(() => {
+    if (!isRevealed) return;
+
+    const wasComplete = previousRevealCompleteRef.current;
+    if (!wasComplete && revealComplete) {
+      playRevealComplete();
+    }
+
+    previousRevealCompleteRef.current = revealComplete;
+  }, [isRevealed, revealComplete, playRevealComplete]);
 
   useEffect(() => {
     if (!isRevealed) return;
