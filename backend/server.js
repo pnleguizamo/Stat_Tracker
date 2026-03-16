@@ -14,6 +14,7 @@ const mongoRoutes = require('./routes/mongoRoutes.js');
 const streamHistoryRoutes = require('./routes/streamHistoryRoutes.js');
 const authRoutes = require('./routes/auth.js');
 const heardleRoutes = require('./routes/heardleRoutes.js');
+const devSandboxRoutes = require('./routes/devSandboxRoutes.js');
 
 
 const app = express();
@@ -47,6 +48,9 @@ app.use('/api/mongo', mongoRoutes);
 app.use(streamHistoryRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/heardle', heardleRoutes);
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev', devSandboxRoutes);
+}
 
 (async () => {
   await initDb();

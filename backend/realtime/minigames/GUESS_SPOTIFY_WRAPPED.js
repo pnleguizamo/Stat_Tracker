@@ -107,6 +107,8 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
     }
     appendRoundHistory(room, idx, {
       id: round.id,
+      startedAt: round.startedAt,
+      answers: round.answers || {},
       ownerPlayerId: round.ownerPlayerId,
       ownerProfile: round.ownerProfile,
       prompt: {

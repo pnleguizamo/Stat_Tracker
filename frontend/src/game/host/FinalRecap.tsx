@@ -18,9 +18,19 @@ type Props = {
   recap: FinalRecapType;
   players: Player[];
   scoreboard?: GameState["scoreboard"];
+  revealAllAtOnce?: boolean;
+  showLeaderboardAtEnd?: boolean;
+  maxPlayersPerAward?: number;
 };
 
-export function FinalRecap({ recap, players, scoreboard }: Props) {
+export function FinalRecap({
+  recap,
+  players,
+  scoreboard,
+  revealAllAtOnce = false,
+  showLeaderboardAtEnd,
+  maxPlayersPerAward,
+}: Props) {
   const { playScoreTick } = useHostSfx();
 
   const stages = recap.stages;
@@ -37,13 +47,33 @@ export function FinalRecap({ recap, players, scoreboard }: Props) {
     .join("|");
   const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef, syncScale } =
     useAutoFitScale({ allowUpscale: false, contentVersion: fitContentVersion });
+  const shouldShowLeaderboardAtEnd =
+    showLeaderboardAtEnd ?? Boolean(scoreboard && Object.keys(scoreboard).length > 0);
 
   const [visibleCount, setVisibleCount] = useState(0);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const timerRef = useRef<number | null>(null);
+  const prevVisibleRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    prevVisibleRef.current = 0;
+    setShowLeaderboard(false);
+    setVisibleCount(revealAllAtOnce ? totalCards : 0);
+  }, [fitContentVersion, revealAllAtOnce, totalCards]);
 
   useEffect(() => {
+    if (revealAllAtOnce) {
+      return;
+    }
+
     if (visibleCount >= totalCards) {
+      if (!shouldShowLeaderboardAtEnd || totalCards === 0) {
+        return;
+      }
       timerRef.current = window.setTimeout(() => {
         setShowLeaderboard(true);
       }, LINGER_MS);
@@ -59,17 +89,17 @@ export function FinalRecap({ recap, players, scoreboard }: Props) {
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-  }, [visibleCount, totalCards]);
+  }, [visibleCount, totalCards, revealAllAtOnce, shouldShowLeaderboardAtEnd]);
 
-  const prevVisibleRef = useRef(0);
   useEffect(() => {
+    if (revealAllAtOnce) return;
     if (visibleCount > 0 && visibleCount !== prevVisibleRef.current) {
       prevVisibleRef.current = visibleCount;
       const progress = totalCards > 0 ? visibleCount / totalCards : 0;
       const intensity = 0.28 + progress * 0.62;
       playScoreTick({ intensity });
     }
-  }, [visibleCount, totalCards, playScoreTick]);
+  }, [visibleCount, totalCards, revealAllAtOnce, playScoreTick]);
 
   useLayoutEffect(() => {
     syncScale({ mode: "snap" });
@@ -115,6 +145,7 @@ export function FinalRecap({ recap, players, scoreboard }: Props) {
                           award={award}
                           isVisible={isVisible}
                           animationDelay={0}
+                          maxPlayersPerAward={maxPlayersPerAward}
                         />
                       );
                     })}
@@ -138,19 +169,30 @@ export function FinalRecap({ recap, players, scoreboard }: Props) {
 function AwardCard({
   award,
   isVisible,
+  maxPlayersPerAward,
 }: {
   award: RecapAward;
   isVisible: boolean;
   animationDelay: number;
+  maxPlayersPerAward?: number;
 }) {
+  const visiblePlayers =
+    typeof maxPlayersPerAward === "number" && maxPlayersPerAward >= 0
+      ? award.featuredPlayers.slice(0, maxPlayersPerAward)
+      : award.featuredPlayers;
+  const hiddenCount = Math.max(0, award.featuredPlayers.length - visiblePlayers.length);
+
   return (
     <div className={`final-recap__award${isVisible ? " final-recap__award--visible" : ""}`}>
       <div className="final-recap__award-title">{award.title}</div>
       <div className="final-recap__award-players">
-        {award.featuredPlayers.map((fp) => (
+        {visiblePlayers.map((fp) => (
           <PlayerChip key={fp.playerId} player={fp} />
         ))}
       </div>
+      {hiddenCount > 0 ? (
+        <div className="final-recap__award-more">+{hiddenCount} more tied</div>
+      ) : null}
       <div className="final-recap__award-stat">{award.description}</div>
     </div>
   );

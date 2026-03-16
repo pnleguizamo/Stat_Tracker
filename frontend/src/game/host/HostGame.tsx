@@ -31,6 +31,9 @@ const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<H
 //   OUTLIER_MODE: OutlierModeHostView,
 };
 
+// Award cards stay readable at host-display scale with up to two featured players.
+const FINAL_RECAP_MAX_PLAYERS_PER_AWARD = 2;
+
 const HostGame = () => {
   const params = useParams();
   const roomCode = params.roomCode || "";
@@ -226,6 +229,7 @@ const HostGame = () => {
         recap={gameState.finalRecap}
         players={gameState.players}
         scoreboard={gameState.scoreboard}
+        maxPlayersPerAward={FINAL_RECAP_MAX_PLAYERS_PER_AWARD}
       />
     );
   }

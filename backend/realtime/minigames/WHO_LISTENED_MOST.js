@@ -232,6 +232,8 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
     }
     appendRoundHistory(room, idx, {
       id: round.id,
+      startedAt: round.startedAt,
+      answers: round.answers || {},
       prompt: {
         type: round.prompt?.type,
         description: round.prompt?.description,

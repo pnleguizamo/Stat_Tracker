@@ -10,6 +10,43 @@ function playerProfile(room, playerId) {
   };
 }
 
+function formatElapsed(ms) {
+  const seconds = Math.max(0, ms) / 1000;
+  if (seconds === 0) return '0s';
+  if (Number.isInteger(seconds)) return `${seconds}s`;
+  return `${seconds.toFixed(1)}s`;
+}
+
+function computeFastestCorrectAverages(history, { excludeOwner = false } = {}) {
+  const totalsByPlayer = {};
+  const countsByPlayer = {};
+
+  for (const round of history) {
+    const startedAt = round?.startedAt;
+    const answers = round?.answers || {};
+    const ownerId = round?.ownerPlayerId;
+    if (typeof startedAt !== 'number') continue;
+
+    const winners = (round?.results?.winners || []).filter(
+      (playerId) => !(excludeOwner && playerId === ownerId)
+    );
+
+    for (const playerId of winners) {
+      const answeredAt = answers?.[playerId]?.at;
+      if (typeof answeredAt !== 'number') continue;
+      const elapsedMs = Math.max(0, answeredAt - startedAt);
+      totalsByPlayer[playerId] = (totalsByPlayer[playerId] || 0) + elapsedMs;
+      countsByPlayer[playerId] = (countsByPlayer[playerId] || 0) + 1;
+    }
+  }
+
+  return Object.keys(countsByPlayer).map((playerId) => ({
+    playerId,
+    avgMs: totalsByPlayer[playerId] / countsByPlayer[playerId],
+    correctCount: countsByPlayer[playerId],
+  }));
+}
+
 function wlmAwards(history, room, { includeAllValid = false } = {}) {
   const candidates = [];
 
@@ -120,6 +157,28 @@ function wlmAwards(history, room, { includeAllValid = false } = {}) {
           statLabel: `${totalVotesCast[p]} correct`,
         })),
         interestScore: max,
+      });
+    }
+  }
+
+  // Rapid Read — fastest average correct answer
+  {
+    const averages = computeFastestCorrectAverages(history)
+      .sort((a, b) => a.avgMs - b.avgMs);
+    if (averages.length >= (includeAllValid ? 1 : 2)) {
+      const minAvg = averages[0].avgMs;
+      const secondAvg = averages[1]?.avgMs ?? minAvg;
+      const interestScore = Math.max(0.05, (secondAvg - minAvg) / 1000);
+      const winners = averages.filter((entry) => entry.avgMs === minAvg);
+      candidates.push({
+        id: 'rapid_read',
+        title: 'Rapid Read',
+        description: `Averaged ${formatElapsed(minAvg)} on correct guesses. Give your fingers a break.`,
+        featuredPlayers: winners.map((entry) => ({
+          ...playerProfile(room, entry.playerId),
+          statLabel: `avg ${formatElapsed(entry.avgMs)}`,
+        })),
+        interestScore,
       });
     }
   }
@@ -255,7 +314,7 @@ function wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid 
   const playerIds = Array.from(room.players.keys());
   if (playerIds.length < 2 || history.length === 0) return [];
 
-  const ownerCorrectFraction = {};
+  const ownerGuessStats = {};
   const minutesByOwner = {};
 
   for (const round of history) {
@@ -263,30 +322,74 @@ function wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid 
     if (!ownerId) continue;
     const winners = round.results?.winners || [];
     const totalVoters = playerIds.filter((p) => p !== ownerId).length;
-    const fraction = totalVoters > 0 ? winners.filter((w) => w !== ownerId).length / totalVoters : 0;
-    ownerCorrectFraction[ownerId] = (ownerCorrectFraction[ownerId] ?? fraction);
-    if (typeof round.prompt?.minutesListened === 'number') {
-      minutesByOwner[ownerId] = {
-        minutes: round.prompt.minutesListened,
-        year: round.prompt?.year || null,
+    const correctGuesses = winners.filter((w) => w !== ownerId).length;
+    if (!ownerGuessStats[ownerId]) {
+      ownerGuessStats[ownerId] = {
+        correct: 0,
+        total: 0,
+        appearances: 0,
+        perfectRounds: 0,
+        zeroRounds: 0,
       };
+    }
+    const roundFraction = totalVoters > 0 ? correctGuesses / totalVoters : 0;
+    ownerGuessStats[ownerId].correct += correctGuesses;
+    ownerGuessStats[ownerId].total += totalVoters;
+    ownerGuessStats[ownerId].appearances += 1;
+    if (roundFraction === 1) ownerGuessStats[ownerId].perfectRounds += 1;
+    if (roundFraction === 0) ownerGuessStats[ownerId].zeroRounds += 1;
+    if (typeof round.prompt?.minutesListened === 'number') {
+      const minutes = round.prompt.minutesListened;
+      const currentBest = minutesByOwner[ownerId];
+      if (!currentBest || minutes > currentBest.minutes) {
+        minutesByOwner[ownerId] = {
+          minutes,
+          year: round.prompt?.year || null,
+        };
+      }
     }
   }
 
+  const ownerStats = Object.fromEntries(
+    Object.entries(ownerGuessStats).map(([ownerId, stats]) => [
+      ownerId,
+      {
+        ...stats,
+        fraction: stats.total > 0 ? stats.correct / stats.total : 0,
+      },
+    ])
+  );
+
   // Crypto Wrapped (Niche Ninja) — fewest correct guesses
   {
-    const sorted = Object.entries(ownerCorrectFraction).sort(([, a], [, b]) => a - b);
+    // Priority order: lowest aggregate correct fraction, then most zero-correct rounds,
+    // then more owner appearances, then fewer total correct guesses.
+    const sorted = Object.entries(ownerStats).sort(([, a], [, b]) => {
+      if (a.fraction !== b.fraction) return a.fraction - b.fraction;
+      if (a.zeroRounds !== b.zeroRounds) return b.zeroRounds - a.zeroRounds;
+      if (a.appearances !== b.appearances) return b.appearances - a.appearances;
+      return a.correct - b.correct;
+    });
     if (sorted.length > 0) {
-      const minFrac = sorted[0][1];
-      const winners = sorted.filter(([, v]) => v === minFrac).map(([playerId]) => playerId);
+      const best = sorted[0][1];
+      const minFrac = best.fraction;
+      const zeroRounds = best.zeroRounds;
+      const winners = sorted
+        .filter(([, stats]) =>
+          stats.fraction === best.fraction &&
+          stats.zeroRounds === best.zeroRounds &&
+          stats.appearances === best.appearances &&
+          stats.correct === best.correct
+        )
+        .map(([playerId]) => playerId);
       const pct = Math.round(minFrac * 100);
       candidates.push({
         id: 'niche_ninja',
         title: 'Niche Ninja',
         description:
           pct === 0
-            ? `Nobody in the group guessed their nichest Wrapped correctly. Just too niche.`
-            : `Only ${pct}% of the group guessed their nichest Wrapped correctly. Just too niche.`,
+            ? `Nobody in the group guessed their Wrappeds correctly. ${zeroRounds} wrapped${zeroRounds !== 1 ? 's' : ''} got zero correct guesses. Just too niche.`
+            : `Only ${pct}% of the group guessed their Wrappeds correctly. ${zeroRounds} wrapped${zeroRounds !== 1 ? 's' : ''} got zero correct guesses. Just too niche.`,
         featuredPlayers: winners.map((playerId) => ({
           ...playerProfile(room, playerId),
           statLabel: `${pct}% guessed right`,
@@ -298,24 +401,60 @@ function wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid 
 
   // Open Book — most guessed correctly
   {
-    const sorted = Object.entries(ownerCorrectFraction).sort(([, a], [, b]) => b - a);
+    const sorted = Object.entries(ownerStats).sort(([, a], [, b]) => {
+      if (a.perfectRounds !== b.perfectRounds) return b.perfectRounds - a.perfectRounds;
+      if (a.fraction !== b.fraction) return b.fraction - a.fraction;
+      if (a.appearances !== b.appearances) return b.appearances - a.appearances;
+      return b.correct - a.correct;
+    });
     if (sorted.length > 0) {
-      const maxFrac = sorted[0][1];
-      const secondFrac = sorted[1]?.[1];
-      const winners = sorted.filter(([, v]) => v === maxFrac).map(([playerId]) => playerId);
-      if (includeAllValid || (sorted.length >= 2 && (maxFrac > secondFrac || maxFrac === 1))) {
-        const pct = Math.round(maxFrac * 100);
+      const best = sorted[0][1];
+      const maxPerfectRounds = best.perfectRounds;
+      const winners = sorted
+        .filter(([, stats]) =>
+          stats.perfectRounds === best.perfectRounds &&
+          stats.fraction === best.fraction &&
+          stats.appearances === best.appearances &&
+          stats.correct === best.correct
+        )
+        .map(([playerId]) => playerId);
+      if (maxPerfectRounds > 0) {
+        const pct = Math.round(best.fraction * 100);
         candidates.push({
           id: 'open_book',
           title: 'Open Book',
-          description: `${pct}% of the group guessed their Wrapped correctly. Not exactly mysterious.`,
+          description:
+            `${maxPerfectRounds} Wrapped${maxPerfectRounds !== 1 ? 's' : ''} got guessed perfectly by the whole group. ` +
+            `${pct}% of guesses landed across all their Wrappeds.`,
           featuredPlayers: winners.map((playerId) => ({
             ...playerProfile(room, playerId),
-            statLabel: `${pct}% guessed right`,
+            statLabel: `${maxPerfectRounds} perfect ${maxPerfectRounds === 1 ? 'round' : 'rounds'}`,
           })),
-          interestScore: maxFrac,
+          interestScore: maxPerfectRounds + best.fraction,
         });
       }
+    }
+  }
+
+  // Fast Finder — fastest average correct Wrapped guess
+  {
+    const averages = computeFastestCorrectAverages(history, { excludeOwner: true })
+      .sort((a, b) => a.avgMs - b.avgMs);
+    if (averages.length >= (includeAllValid ? 1 : 2)) {
+      const minAvg = averages[0].avgMs;
+      const secondAvg = averages[1]?.avgMs ?? minAvg;
+      const interestScore = Math.max(0.05, (secondAvg - minAvg) / 1000);
+      const winners = averages.filter((entry) => entry.avgMs === minAvg);
+      candidates.push({
+        id: 'fast_finder',
+        title: 'Fast Finder',
+        description: `Averaged ${formatElapsed(minAvg)} on correct Wrapped guesses. Bro think they a prophet.`,
+        featuredPlayers: winners.map((entry) => ({
+          ...playerProfile(room, entry.playerId),
+          statLabel: `avg ${formatElapsed(entry.avgMs)}`,
+        })),
+        interestScore,
+      });
     }
   }
 

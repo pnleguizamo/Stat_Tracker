@@ -228,6 +228,13 @@
   word-break: break-word;
 }
 
+.final-recap__award-more {
+  font-size: clamp(0.56rem, 0.9vw, 0.68rem);
+  font-weight: 700;
+  color: rgba(125, 211, 252, 0.9);
+  line-height: 1.2;
+}
+
 .final-recap__award-stat {
   font-size: clamp(0.62rem, 1vw, 0.74rem);
   color: var(--gs-muted);
