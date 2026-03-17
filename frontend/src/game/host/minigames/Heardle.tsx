@@ -71,7 +71,10 @@ function renderPatternSlots(pattern: string | null | undefined) {
         }
 
         return (
-          <span key={`char-${idx}`} className="heardle-pattern-char">
+          <span
+            key={`char-${idx}`}
+            className={`heardle-pattern-char${char === '_' ? ' heardle-pattern-char--hidden' : ' heardle-pattern-char--revealed'}`}
+          >
             {char}
           </span>
         );
@@ -607,7 +610,9 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
           {round.status !== 'revealed' && maxSnippetMs > 0 && (
             <div className="heardle-playback-section">
               <div className="heardle-playback-title">Playback progress</div>
-              <div className="heardle-timeline-track">
+              <div
+                className={`heardle-timeline-track${timelineMetrics.isInReplayGap ? ' heardle-timeline-track--gap' : ''}`}
+              >
                 <div
                   className="heardle-timeline-stage-progress"
                   style={{
@@ -615,10 +620,9 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                   }}
                 />
                 <div
-                  className="heardle-timeline-playhead"
+                  className={`heardle-timeline-playhead${timelineMetrics.isInReplayGap ? ' heardle-timeline-playhead--gap' : ''}`}
                   style={{
                     width: `${Math.max(0, Math.min(100, timelineMetrics.playheadPct))}%`,
-                    background: timelineMetrics.isInReplayGap ? 'rgba(56, 189, 248, 0.28)' : '#38bdf8',
                   }}
                 />
                 {snippetPlan.map((ms, idx) => {
@@ -626,6 +630,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                   return (
                     <div
                       key={`marker-${ms}-${idx}`}
+                      className={idx === round.currentSnippetIndex ? 'heardle-timeline-marker--active' : undefined}
                       style={{
                         position: 'absolute',
                         left: `${leftPct}%`,
@@ -648,13 +653,18 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
                   return (
                     <div
                       key={`marker-label-${ms}-${idx}`}
+                      className={`heardle-timeline-label${
+                        idx === round.currentSnippetIndex
+                          ? ' heardle-timeline-label--active'
+                          : idx < round.currentSnippetIndex
+                          ? ' heardle-timeline-label--passed'
+                          : ''
+                      }`}
                       style={{
                         position: 'absolute',
                         left: `${leftPct}%`,
                         transform: 'translateX(-50%)',
                         fontSize: 13,
-                        fontWeight: idx === round.currentSnippetIndex ? 700 : 500,
-                        color: idx === round.currentSnippetIndex ? '#e2e8f0' : '#94a3b8',
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -777,7 +787,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
 
       <HostActionRow>
         <button
-          className="game-shell-button"
+          className="game-shell-button game-shell-button--dramatic"
           onClick={handleReveal}
           disabled={actionBusy === 'reveal' || round.status === 'revealed'}
         >
@@ -790,7 +800,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         >
           {actionBusy === 'start' ? 'Loading…' : 'Next Song'}
         </button>
-        <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
+        <button className="game-shell-button game-shell-button--forward" onClick={onAdvance}>Next Stage</button>
       </HostActionRow>
 
       {error && <div className="host-minigame-error">{error}</div>}

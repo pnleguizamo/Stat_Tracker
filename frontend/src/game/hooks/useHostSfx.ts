@@ -63,12 +63,24 @@ const sharedBufferByPath = new Map<string, Promise<AudioBuffer | null>>();
 const SFX_PATHS = {
   roundTransition: "/sfx/mixkit-fast-small-sweep-transition-166.wav",
   stageTransition: "/sfx/mixkit-arcade-retro-game-over-213.wav",
+  stageTransitionVinylStop: "/sfx/11325622-vinyl-stop-sound-effect-241388.mp3",
+  stageRecapScratch: "/sfx/submission/scratch.m4a",
   voteReveal: "/sfx/mixkit-electric-guitar-distorted-slide-2340.wav",
   wrappedEntrySparkle: "/sfx/sparkle.m4a",
   heardleSuccessBell: "/sfx/freesound_community-success_bell-6776.mp3",
   heardleWrongBuzzer: "/sfx/wrong_buzzer.m4a",
   heardleMatchError: "/sfx/universfield-error-08-206492.mp3",
 } as const;
+
+const SUBMISSION_STAMP_PATHS = [
+  "/sfx/submission/freesound_community-electro-flanged-snare-84432.mp3",
+  "/sfx/submission/freesound_community-hard-snare-clap-89494.mp3",
+  "/sfx/submission/freesound_community-snare-made-from-clap-101249.mp3",
+  "/sfx/submission/khemrajdotin-drum-one-shot-kick-383868.mp3",
+  "/sfx/submission/mrstokes302-kick-drum-2-427877.mp3",
+  "/sfx/submission/mrstokes302-snare-drum-2-427922.mp3",
+  "/sfx/submission/poker_chip.m4a",
+] as const;
 
 const getSharedAudioContext = () => {
   if (typeof window === "undefined") return null;
@@ -223,7 +235,7 @@ export const useHostSfx = ({
     const audioContext = getSharedAudioContext();
     if (!audioContext) return;
 
-    Object.values(SFX_PATHS).forEach((path) => {
+    [...Object.values(SFX_PATHS), ...SUBMISSION_STAMP_PATHS].forEach((path) => {
       void loadBuffer(audioContext, path);
     });
   }, [enabled]);
@@ -274,6 +286,14 @@ export const useHostSfx = ({
     });
   }, [playSample]);
 
+  const playScratch = useCallback(() => {
+    playSample({
+      path: SFX_PATHS.stageRecapScratch,
+      volume: 0.34,
+      playbackRate: 1.02,
+    });
+  }, [playSample]);
+
   const playRoundTransition = useCallback(() => {
     playSample({
       path: SFX_PATHS.roundTransition,
@@ -313,6 +333,27 @@ export const useHostSfx = ({
       volume: 0.4,
     });
   }, [playSample]);
+
+  const playStageRecapTransition = useCallback(() => {
+    playSample({
+      path: SFX_PATHS.stageTransitionVinylStop,
+      volume: 0.4,
+    });
+  }, [playSample]);
+
+  const playSubmissionStamp = useCallback(
+    ({ intensity = 0.55 }: PlayScoreTickArgs = {}) => {
+      const level = clamp01(intensity);
+      const nextIndex = Math.floor(Math.random() * SUBMISSION_STAMP_PATHS.length);
+
+      playSample({
+        path: SUBMISSION_STAMP_PATHS[nextIndex],
+        volume: 0.5 + level * 0.08,
+        playbackRate: 0.96 + level * 0.06,
+      });
+    },
+    [playSample]
+  );
 
   const playHeardleGuessOutcome = useCallback(
     ({
@@ -409,7 +450,10 @@ export const useHostSfx = ({
     playVoteRevealGuitar,
     playWrappedEntryReveal,
     playRevealComplete,
+    playScratch,
+    playSubmissionStamp,
     playRoundTransition,
+    playStageRecapTransition,
     playStageTransition,
     playScoreTick,
     playHeardleGuessOutcome,

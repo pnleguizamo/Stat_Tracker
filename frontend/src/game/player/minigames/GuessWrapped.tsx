@@ -63,8 +63,6 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       ? round.answers[myPlayerId].answer!.targetPlayerId
       : null;
 
-  const ownerPlayerId = round?.results?.ownerPlayerId;
-
   function handleVote(targetPlayerId: string) {
     if (!roomCode || !targetPlayerId) return;
     setVoteBusy(true);
@@ -117,7 +115,6 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
             if (!playerId) return null;
             const isSelf = playerId === myPlayerId;
             const isSelected = playerId === myVote;
-            const isOwner = isRevealed && playerId === ownerPlayerId;
             return (
               <button
                 key={playerId}
@@ -126,14 +123,10 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
                 style={{
                   padding: "0.65rem 0.85rem",
                   borderRadius: 12,
-                  border: isOwner
-                    ? "2px solid #34d399"
-                    : isSelected
+                  border: isSelected
                     ? "2px solid var(--accent)"
                     : "1px solid var(--card-border)",
-                  background: isOwner
-                    ? "rgba(52, 211, 153, 0.15)"
-                    : isSelected
+                  background: isSelected
                     ? "rgba(38, 198, 218, 0.2)"
                     : "rgba(10, 14, 26, 0.9)",
                   color: "var(--text)",
@@ -150,7 +143,6 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
                     {player.displayName || player.name}
                   </div>
                   {isSelf && <div style={{ fontSize: 12, color: "var(--muted)" }}>You</div>}
-                  {isOwner && <div style={{ fontSize: 12, color: "#34d399" }}>Actual owner</div>}
                 </div>
               </button>
             );
@@ -177,7 +169,7 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
               letterSpacing: 0.5,
             }}
           >
-            Owner revealed
+            Results on host screen
           </div>
         )}
       </section>

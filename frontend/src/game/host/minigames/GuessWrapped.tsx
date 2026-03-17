@@ -307,21 +307,19 @@ export const GuessWrappedHost: FC<Props> = ({
     if (isRevealed || round?.status === "revealed") return text;
     return (
       <span
-        style={{
-          display: "inline-block",
-          background: "#000",
-          color: "transparent",
-          borderRadius: 2,
-          padding: "0 2px",
-        }}
+        className="gw-redacted"
+        style={{ "--gw-redacted-chars": Math.max(text.length, 6) } as CSSProperties}
+        aria-label="Hidden until reveal"
       >
-        {text || "redacted"}
+        {text || "hidden"}
       </span>
     );
   };
 
   const prompt = round?.prompt ?? safePrompt;
+  const ownerProfile = round?.ownerProfile || round?.results?.ownerProfile;
   const isRevealed = round?.status === "revealed";
+  const ownerRevealReady = isRevealed && revealComplete;
   const getEntryRevealDelay = (index: number) => {
     if (!isRevealed) return "0ms";
     return `${Math.min(index * 120, 600)}ms`;
@@ -393,23 +391,43 @@ export const GuessWrappedHost: FC<Props> = ({
           className="gw-host-hero-row"
         >
           <div>
-            <div style={{ fontSize: 30, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
-              <span
-                className={joinClasses("gw-host-hero-key", "gw-host-hero-key--year", yearRevealClass)}
-                style={{ "--gw-key-delay": "0ms" } as CSSProperties}
-              >
-                {isYearRevealed ? prompt.year : renderRedacted(String(prompt.year), false)}
-              </span>{" "}
-              Spotify Wrapped
+            <div className="gw-host-hero-identity">
+              <div className="gw-host-hero-avatar-slot">
+                <div className={joinClasses("gw-mystery-avatar", ownerRevealReady && "gw-mystery-avatar--revealed")}>
+                  {ownerRevealReady && ownerProfile?.avatar ? (
+                    <img
+                      src={ownerProfile.avatar}
+                      alt={ownerProfile.displayName || "Owner"}
+                      style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <span>?</span>
+                  )}
+                </div>
+              </div>
+              <div className="gw-host-hero-copy">
+                <div className={joinClasses("gw-host-hero-owner", ownerRevealReady && "gw-host-hero-owner--revealed")}>
+                  {ownerRevealReady && ownerProfile?.displayName ? ownerProfile.displayName + "'s" : "Whose"}
+                </div>
+                <div className="gw-host-hero-title">
+                  <span
+                    className={joinClasses("gw-host-hero-key", "gw-host-hero-key--year", yearRevealClass)}
+                    style={{ "--gw-key-delay": "0ms" } as CSSProperties}
+                  >
+                    {isYearRevealed ? prompt.year : renderRedacted(String(prompt.year), false)}
+                  </span>{" "}
+                  Spotify Wrapped
+                </div>
+                <div className="gw-host-hero-minutes">
+                  <span
+                    className={joinClasses("gw-host-hero-key", "gw-host-hero-key--minutes", minutesRevealClass)}
+                    style={{ "--gw-key-delay": isRevealed ? "120ms" : "0ms" } as CSSProperties}
+                  >
+                    {minutesLabel}
+                  </span>
+                </div>
+              </div>
             </div>
-            <h3 style={{ margin: "0.5rem 0 0.8rem", color: "#e2e8f0", fontSize: 22 }}>
-              <span
-                className={joinClasses("gw-host-hero-key", "gw-host-hero-key--minutes", minutesRevealClass)}
-                style={{ "--gw-key-delay": isRevealed ? "120ms" : "0ms" } as CSSProperties}
-              >
-                {minutesLabel}
-              </span>
-            </h3>
           </div>
           <div className="gw-host-progress">
             <div className="host-minigame-progress-label">
@@ -450,35 +468,36 @@ export const GuessWrappedHost: FC<Props> = ({
               return (
                 <li
                   key={artist.name + index}
-                  className={joinClasses("gw-host-entry", entryRevealClass)}
+                  className={joinClasses(
+                    "gw-host-entry",
+                    "gw-host-entry--media",
+                    !isEntryRevealed && "gw-host-entry--concealed",
+                    entryRevealClass
+                  )}
                   style={{
                     "--gw-reveal-delay": getEntryRevealDelay(index),
-                    borderRadius: 10,
-                    padding: "0.65rem 0.7rem",
-                    background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
                   } as CSSProperties}
                 >
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div className="gw-host-entry-body">
                     <span className="gw-host-entry-rank" style={{ width: 14 }}>
                       {index + 1}
                     </span>
-                    {isEntryRevealed && artist.imageUrl ? (
-                      <img
-                        src={artist.imageUrl}
-                        alt={artist.name}
-                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-                      />
-                    ) : null}
+                    <div className="gw-host-entry-art" aria-hidden={!isEntryRevealed}>
+                      {isEntryRevealed && artist.imageUrl ? (
+                        <img
+                          src={artist.imageUrl}
+                          alt={artist.name}
+                          className="gw-host-entry-art-image"
+                        />
+                      ) : null}
+                    </div>
                     <div>
                       <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                        {renderRedacted(artist.name, isEntryRevealed)}
+                        {artist.name}
                         {isPreviewArtist && isPlaying && <span title="Preview playing">🔊</span>}
                       </div>
                       <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                        {renderRedacted(
-                          `${artist.playCount.toLocaleString()} play${artist.playCount === 1 ? "" : "s"}`,
-                          isEntryRevealed
-                        )}
+                        {`${artist.playCount.toLocaleString()} play${artist.playCount === 1 ? "" : "s"}`}
                       </div>
                     </div>
                   </div>
@@ -504,38 +523,40 @@ export const GuessWrappedHost: FC<Props> = ({
               return (
                 <li
                   key={song.track + song.artist + index}
-                  className={joinClasses("gw-host-entry", entryRevealClass)}
+                  className={joinClasses(
+                    "gw-host-entry",
+                    "gw-host-entry--compact",
+                    "gw-host-entry--media",
+                    !isEntryRevealed && "gw-host-entry--concealed",
+                    entryRevealClass
+                  )}
                   style={{
                     "--gw-reveal-delay": getEntryRevealDelay(index),
-                    borderRadius: 10,
-                    padding: "0.1em 0.7rem",
-                    background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
                   } as CSSProperties}
                 >
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div className="gw-host-entry-body">
                     <span className="gw-host-entry-rank" style={{ width: 14 }}>
                       {index + 1}
                     </span>
-                    {isEntryRevealed && song.imageUrl ? (
-                      <img
-                        src={song.imageUrl}
-                        alt={song.track}
-                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-                      />
-                    ) : null}
+                    <div className="gw-host-entry-art" aria-hidden={!isEntryRevealed}>
+                      {isEntryRevealed && song.imageUrl ? (
+                        <img
+                          src={song.imageUrl}
+                          alt={song.track}
+                          className="gw-host-entry-art-image"
+                        />
+                      ) : null}
+                    </div>
                     <div>
                       <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                        {renderRedacted(song.track, isEntryRevealed)}
+                        {song.track}
                         {isPreviewSong && isPlaying && <span title="Preview playing">🔊</span>}
                       </div>
                       <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                        {renderRedacted(song.artist, isEntryRevealed)}
+                        {song.artist}
                       </div>
                       <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                        {renderRedacted(
-                          `${song.playCount.toLocaleString()} play${song.playCount === 1 ? "" : "s"}`,
-                          isEntryRevealed
-                        )}
+                        {`${song.playCount.toLocaleString()} play${song.playCount === 1 ? "" : "s"}`}
                       </div>
                     </div>
                   </div>
@@ -560,25 +581,24 @@ export const GuessWrappedHost: FC<Props> = ({
                 return (
                   <li
                     key={genre.genre}
-                    className={joinClasses("gw-host-entry", entryRevealClass)}
+                    className={joinClasses(
+                      "gw-host-entry",
+                      "gw-host-entry--text-only",
+                      !isEntryRevealed && "gw-host-entry--concealed",
+                      entryRevealClass
+                    )}
                     style={{
                       "--gw-reveal-delay": getEntryRevealDelay(index),
-                      borderRadius: 10,
-                      padding: "0.65rem 0.7rem",
-                      background: "linear-gradient(145deg, rgba(30, 64, 175, 0.2), rgba(15, 23, 42, 0.92))",
                     } as CSSProperties}
                   >
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <div className="gw-host-entry-body">
                       <span className="gw-host-entry-rank" style={{ width: 14 }}>
                         {index + 1}
                       </span>
                       <div>
-                        <div style={{ fontWeight: 600 }}>{renderRedacted(genre.genre, isEntryRevealed)}</div>
+                        <div style={{ fontWeight: 600 }}>{genre.genre}</div>
                         <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                          {renderRedacted(
-                            `${genre.plays.toLocaleString()} play${genre.plays === 1 ? "" : "s"}`,
-                            isEntryRevealed
-                          )}
+                          {`${genre.plays.toLocaleString()} play${genre.plays === 1 ? "" : "s"}`}
                         </div>
                       </div>
                     </div>

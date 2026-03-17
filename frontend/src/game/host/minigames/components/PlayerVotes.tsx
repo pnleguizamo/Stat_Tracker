@@ -1,4 +1,4 @@
-import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FC, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHostSfx } from "game/hooks/useHostSfx";
 import { Player } from "types/game";
 import { HostCard } from "./HostMinigamePrimitives";
@@ -112,13 +112,15 @@ export const PlayerVotes: FC<Props> = ({
   const isRevealed = status === "revealed";
   const barsContainerRef = useRef<HTMLDivElement | null>(null);
   const previousRevealMapRef = useRef<Record<string, string[]>>({});
+  const previousSubmittedRef = useRef<Set<string>>(new Set());
+  const [recentlySubmitted, setRecentlySubmitted] = useState<Set<string>>(new Set());
   const [barWidthByPlayerId, setBarWidthByPlayerId] = useState<Record<string, number>>({});
   const [barImpactTickByPlayerId, setBarImpactTickByPlayerId] = useState<Record<string, number>>({});
   const [newestVoterByTargetPlayerId, setNewestVoterByTargetPlayerId] = useState<Record<string, string>>({});
   const [newestVoterPulseTickByTargetPlayerId, setNewestVoterPulseTickByTargetPlayerId] = useState<Record<string, number>>({});
   const joinClasses = (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" ");
-  const { playVoteReveal, playRevealComplete } = useHostSfx();
+  const { playVoteReveal, playRevealComplete, playSubmissionStamp } = useHostSfx();
   const revealedVoteCount = useMemo(() => {
     return Object.values(revealedVoteMap || {}).reduce(
       (sum, voterIds) => sum + voterIds.length,
@@ -217,11 +219,42 @@ export const PlayerVotes: FC<Props> = ({
     previousRevealMapRef.current = {};
     previousRevealedVoteCountRef.current = 0;
     previousRevealCompleteRef.current = false;
+    previousSubmittedRef.current = new Set();
+    setRecentlySubmitted(new Set());
     setBarWidthByPlayerId({});
     setBarImpactTickByPlayerId({});
     setNewestVoterByTargetPlayerId({});
     setNewestVoterPulseTickByTargetPlayerId({});
   }, [isRevealed]);
+
+  // Detect new submissions for submission confirmation animation + SFX.
+  // TODOo refactor to clear class on animationend instead
+  useEffect(() => {
+    if (isRevealed || !submittedSocketIds) return;
+    const currentSet = new Set(submittedSocketIds);
+    const prevSet = previousSubmittedRef.current;
+    const newIds = submittedSocketIds.filter(id => !prevSet.has(id));
+    if (newIds.length > 0) {
+      playSubmissionStamp({
+        intensity: Math.min(1, 0.45 + newIds.length * 0.15),
+      });
+      setRecentlySubmitted(prev => {
+        const next = new Set(prev);
+        newIds.forEach(id => next.add(id));
+        return next;
+      });
+      const timer = setTimeout(() => {
+        setRecentlySubmitted(prev => {
+          const next = new Set(prev);
+          newIds.forEach(id => next.delete(id));
+          return next;
+        });
+      }, 560);
+      previousSubmittedRef.current = currentSet;
+      return () => clearTimeout(timer);
+    }
+    previousSubmittedRef.current = currentSet;
+  }, [isRevealed, submittedSocketIds, playSubmissionStamp]);
 
   useEffect(() => {
     if (!isRevealed) return;
@@ -317,18 +350,23 @@ export const PlayerVotes: FC<Props> = ({
     return (
       <HostCard className="player-votes-card">
         <div className="player-votes-collecting-grid">
-          {players.map((player) => {
+          {players.map((player, index) => {
             const playerId = player.playerId;
             if (!playerId) return null;
 
             const isTop = topSocketIds?.includes(playerId);
             const hasSubmitted = submittedSocketIds?.includes(playerId);
+            const justSubmitted = recentlySubmitted.has(playerId);
 
             return (
               <div
                 key={playerId}
-                // isTop is never true
-                className={joinClasses("player-votes-collecting-item", isTop && "is-top")}
+                className={joinClasses(
+                  "player-votes-collecting-item",
+                  isTop && "is-top",
+                  justSubmitted && "player-votes-collecting-item--submitted"
+                )}
+                style={{ '--pv-item-index': String(index) } as CSSProperties}
               >
                 {renderAvatar(player, 44)}
                 <div className="player-votes-player-name">

@@ -40,15 +40,16 @@ type Props = {
 
 export function StageRecap({ recap, players, onComplete }: Props) {
   const {
-    playStageTransition,
+    playStageRecapTransition,
     playRoundTransition,
     playRevealComplete,
     playWrappedEntryReveal,
     playVoteRevealGuitar,
+    playScratch,
   } = useHostSfx();
   const revealSfxOptions = useMemo(
-    () => [playRevealComplete, playWrappedEntryReveal, playVoteRevealGuitar],
-    [playRevealComplete, playWrappedEntryReveal, playVoteRevealGuitar]
+    () => [playRevealComplete, playWrappedEntryReveal, playVoteRevealGuitar, playScratch],
+    [playRevealComplete, playWrappedEntryReveal, playVoteRevealGuitar, playScratch]
   );
   const revealOrderKey = `${recap.stageIndex}:${recap.minigameId}:${recap.awards.length}`;
   const [revealSfxOrder, setRevealSfxOrder] = useState(revealSfxOptions);
@@ -76,7 +77,7 @@ export function StageRecap({ recap, players, onComplete }: Props) {
     if (stepIndex === prevStepIndexRef.current) return;
     prevStepIndexRef.current = stepIndex;
 
-    if (currentStep.kind === "title") playStageTransition();
+    if (currentStep.kind === "title") playStageRecapTransition();
     else if (currentStep.kind === "suspense") playRoundTransition();
     else if (currentStep.kind === "reveal" && typeof revealAwardIndex === "number") {
       revealSfxOrder[revealAwardIndex]?.();
@@ -86,7 +87,7 @@ export function StageRecap({ recap, players, onComplete }: Props) {
     currentStep.kind,
     revealAwardIndex,
     revealSfxOrder,
-    playStageTransition,
+    playStageRecapTransition,
     playRoundTransition,
     playRevealComplete,
     playWrappedEntryReveal,
