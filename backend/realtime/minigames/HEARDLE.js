@@ -1,6 +1,6 @@
 const { getSharedTopSongs } = require('../../services/mongoServices');
 const { getAccessToken } = require('../../services/authService');
-const { appendRoundHistory } = require('../scoring');
+const { appendRoundHistory, updateStreaks } = require('../scoring');
 
 const SNIPPET_WINDOWS_MS = [500, 1000, 3000, 7000, 12000, 17000, 30000];
 const SNIPPET_REPLAY_GAP_MS = [6000, 5000, 5000, 4000, 4000, 2000, 11000];
@@ -404,6 +404,10 @@ function registerHeardle(io, socket, deps = {}) {
 
     if (awards.length) {
       applyAwards(room, awards);
+    }
+    if (applyAwards) {
+      const bonuses = updateStreaks(room, idx, round.id, winners, 'HEARDLE');
+      if (bonuses.length) applyAwards(room, bonuses);
     }
 
     round.results = {

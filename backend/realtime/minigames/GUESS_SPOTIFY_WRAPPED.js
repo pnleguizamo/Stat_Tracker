@@ -1,5 +1,5 @@
 const { buildWrappedSummaryForUser } = require('../../services/wrappedInsights');
-const { appendRoundHistory } = require('../scoring');
+const { appendRoundHistory, updateStreaks } = require('../scoring');
 
 function safeRoom(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -104,6 +104,10 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
         },
       }));
       applyAwards(room, awards);
+    }
+    if (applyAwards) {
+      const bonuses = updateStreaks(room, idx, round.id, round.results?.winners ?? [], 'GUESS_SPOTIFY_WRAPPED');
+      if (bonuses.length) applyAwards(room, bonuses);
     }
     appendRoundHistory(room, idx, {
       id: round.id,

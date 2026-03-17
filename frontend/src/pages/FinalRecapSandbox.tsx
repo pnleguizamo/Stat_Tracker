@@ -7,6 +7,7 @@ import {
   Player,
   ScoreboardEntry,
   StageConfig,
+  StreakEntry,
 } from "types/game";
 
 type PresetKey = "balanced" | "crowded" | "edge-cases" | "brainstorm";
@@ -28,6 +29,7 @@ type SandboxPayload = {
   stagePlan: StageConfig[];
   stageRoundHistory: Record<number, unknown[]>;
   scoreboard: Record<string, ScoreboardEntry>;
+  streaks: Record<number, Record<string, StreakEntry & { lastRoundId?: string | null }>>;
 };
 
 const MINIGAME_ROTATION: MinigameId[] = [
@@ -251,6 +253,51 @@ function createScoreboard(players: Player[]) {
       },
     ])
   ) as Record<string, ScoreboardEntry>;
+}
+
+function createStageStreaks(
+  players: Player[],
+  history: unknown[],
+  stageIndex: number,
+  seed: number
+) {
+  const stage = Object.fromEntries(
+    players.map((player) => [
+      player.playerId,
+      { current: 0, best: 0, lastRoundId: null as string | null },
+    ])
+  ) as Record<string, StreakEntry & { lastRoundId?: string | null }>;
+
+  (history as Array<{ id?: string; results?: { winners?: string[] } }>).forEach((round) => {
+    const winnerSet = new Set(round?.results?.winners || []);
+
+    players.forEach((player) => {
+      const entry = stage[player.playerId];
+      entry.lastRoundId = round?.id || null;
+      if (winnerSet.has(player.playerId)) {
+        entry.current += 1;
+        entry.best = Math.max(entry.best, entry.current);
+      } else {
+        entry.current = 0;
+      }
+    });
+  });
+
+  const best = Math.max(0, ...Object.values(stage).map((entry) => entry.best || 0));
+  if (best >= 3 || history.length < 3 || players.length === 0) {
+    return stage;
+  }
+
+  const spotlightPlayer = players[(seed + stageIndex * 3) % players.length];
+  const boostedBest = Math.min(Math.max(3, history.length), 5);
+  stage[spotlightPlayer.playerId] = {
+    current: boostedBest,
+    best: boostedBest,
+    lastRoundId:
+      ((history[history.length - 1] as { id?: string } | undefined)?.id) || null,
+  };
+
+  return stage;
 }
 
 function buildWlmHistory(
@@ -618,6 +665,8 @@ export default function FinalRecapSandbox() {
       minigameId: MINIGAME_ROTATION[stageIndex % MINIGAME_ROTATION.length],
     }));
     const stageRoundHistory: Record<number, unknown[]> = {};
+    const streaks: Record<number, Record<string, StreakEntry & { lastRoundId?: string | null }>> =
+      {};
 
     stagePlan.forEach((stage) => {
       if (stage.minigameId === "WHO_LISTENED_MOST") {
@@ -628,6 +677,12 @@ export default function FinalRecapSandbox() {
           safeVoteRoundsPerStage,
           safeMaxTieSize,
           safeCorrectVoteRate,
+          seed
+        );
+        streaks[stage.index] = createStageStreaks(
+          players,
+          stageRoundHistory[stage.index],
+          stage.index,
           seed
         );
         return;
@@ -642,6 +697,12 @@ export default function FinalRecapSandbox() {
           safeCorrectVoteRate,
           seed
         );
+        streaks[stage.index] = createStageStreaks(
+          players,
+          stageRoundHistory[stage.index],
+          stage.index,
+          seed
+        );
         return;
       }
 
@@ -654,10 +715,17 @@ export default function FinalRecapSandbox() {
           safeCorrectVoteRate,
           seed
         );
+        streaks[stage.index] = createStageStreaks(
+          players,
+          stageRoundHistory[stage.index],
+          stage.index,
+          seed
+        );
         return;
       }
 
       stageRoundHistory[stage.index] = [];
+      streaks[stage.index] = createStageStreaks(players, [], stage.index, seed);
     });
 
     return {
@@ -665,6 +733,7 @@ export default function FinalRecapSandbox() {
       stagePlan,
       stageRoundHistory,
       scoreboard,
+      streaks,
     };
   }, [
     players,
@@ -764,7 +833,8 @@ export default function FinalRecapSandbox() {
         players={players}
         scoreboard={sandboxPayload.scoreboard}
         // revealAllAtOnce
-        showLeaderboardAtEnd={false}
+        showLeaderboardAtEnd
+        leaderboardDelayMs={1500}
         maxPlayersPerAward={2}
       />
 

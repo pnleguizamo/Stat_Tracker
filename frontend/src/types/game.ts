@@ -252,6 +252,11 @@ export type ScoreAward = {
   at?: number;
 };
 
+export type StreakEntry = {
+  current: number;
+  best: number;
+};
+
 export type ScoreboardEntry = {
   points: number;
   stats?: Record<string, unknown>;
@@ -267,4 +272,5 @@ export type GameState = RoomState & {
   scoreboard?: Record<string, ScoreboardEntry>;
   stageRecap?: StageRecap | null;
   finalRecap?: FinalRecap | null;
+  streaks?: Record<string, StreakEntry>;
 };

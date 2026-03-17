@@ -20,6 +20,7 @@ type Props = {
   scoreboard?: GameState["scoreboard"];
   revealAllAtOnce?: boolean;
   showLeaderboardAtEnd?: boolean;
+  leaderboardDelayMs?: number;
   maxPlayersPerAward?: number;
 };
 
@@ -29,6 +30,7 @@ export function FinalRecap({
   scoreboard,
   revealAllAtOnce = false,
   showLeaderboardAtEnd,
+  leaderboardDelayMs = LINGER_MS,
   maxPlayersPerAward,
 }: Props) {
   const { playScoreTick } = useHostSfx();
@@ -76,7 +78,7 @@ export function FinalRecap({
       }
       timerRef.current = window.setTimeout(() => {
         setShowLeaderboard(true);
-      }, LINGER_MS);
+      }, leaderboardDelayMs);
       return () => {
         if (timerRef.current) window.clearTimeout(timerRef.current);
       };
@@ -89,7 +91,7 @@ export function FinalRecap({
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-  }, [visibleCount, totalCards, revealAllAtOnce, shouldShowLeaderboardAtEnd]);
+  }, [visibleCount, totalCards, revealAllAtOnce, shouldShowLeaderboardAtEnd, leaderboardDelayMs]);
 
   useEffect(() => {
     if (revealAllAtOnce) return;
@@ -159,6 +161,8 @@ export function FinalRecap({
             players={players}
             isVisible={showLeaderboard}
             onClose={() => setShowLeaderboard(false)}
+            overflowMode="paged"
+            pageDurationMs={4500}
           />
         </div>
       </div>

@@ -253,7 +253,7 @@ function heardleAwards(scoreboard, stageIndex, room, { includeAllValid = false }
     candidates.push({
       id: 'john_heardle',
       title: 'John Heardle',
-      description: `Identified songs on snippet ${minAvg < 1 ? '1' : (minAvg + 1).toFixed(1)} on average. Get a job.`,
+      description: `Identified songs on snippet ${(minAvg + 1).toFixed(1)} on average. Get a job.`,
       featuredPlayers: winners.map((p) => ({
         ...playerProfile(room, p),
         statLabel: `avg snippet ${(minAvg + 1).toFixed(1)}`,
@@ -514,6 +514,34 @@ function wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid 
   return candidates;
 }
 
+function streakAward(room, stageIndex) {
+  const stage = room.streaks?.[stageIndex];
+  if (!stage) return null;
+
+  let best = 0;
+  for (const entry of Object.values(stage)) {
+    if (entry.best > best) best = entry.best;
+  }
+  if (best < 3) return null;
+
+  const winners = Object.entries(stage)
+    .filter(([, e]) => e.best === best)
+    .map(([playerId]) => playerId);
+
+  return {
+    id: 'on_fire',
+    title: 'On Fire',
+    description: best === 1
+      ? `Answered correctly ${best} round in a row.`
+      : `Answered correctly ${best} rounds in a row.`,
+    featuredPlayers: winners.map((p) => ({
+      ...playerProfile(room, p),
+      statLabel: `${best}-streak`,
+    })),
+    interestScore: Math.min(1, (best - 2) / 8),
+  };
+}
+
 function computeStageRecap(room, stageIndex, maxAwards = 3) {
   const stageConfig = room.stagePlan?.[stageIndex];
   if (!stageConfig) return null;
@@ -533,6 +561,9 @@ function computeStageRecap(room, stageIndex, maxAwards = 3) {
   } else if (minigameId === 'GUESS_SPOTIFY_WRAPPED') {
     candidates = wrappedAwards(history, room, scoreboard, stageIndex, { includeAllValid });
   }
+
+  const streakCandidate = streakAward(room, stageIndex);
+  if (streakCandidate) candidates.push(streakCandidate);
 
   const awards = candidates
     .filter((c) => c.featuredPlayers?.length > 0 && (includeAllValid || c.interestScore > 0))

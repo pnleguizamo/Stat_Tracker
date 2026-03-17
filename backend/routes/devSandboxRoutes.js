@@ -42,9 +42,29 @@ function normalizeStageRoundHistory(stageRoundHistory = {}) {
   return stageRoundHistory;
 }
 
+function normalizeStreaks(streaks = {}) {
+  if (!streaks || typeof streaks !== 'object') return {};
+
+  return Object.fromEntries(
+    Object.entries(streaks).map(([stageIndex, stageEntries]) => [
+      stageIndex,
+      Object.fromEntries(
+        Object.entries(stageEntries || {}).map(([playerId, entry]) => [
+          playerId,
+          {
+            current: Number(entry?.current) || 0,
+            best: Number(entry?.best) || 0,
+            lastRoundId: entry?.lastRoundId || null,
+          },
+        ])
+      ),
+    ])
+  );
+}
+
 router.post('/final-recap-sandbox', (req, res) => {
   try {
-    const { players, stagePlan, stageRoundHistory, scoreboard } = req.body || {};
+    const { players, stagePlan, stageRoundHistory, scoreboard, streaks } = req.body || {};
 
     if (!Array.isArray(players) || players.length === 0) {
       return res.status(400).json({ error: 'players are required' });
@@ -59,6 +79,7 @@ router.post('/final-recap-sandbox', (req, res) => {
       stagePlan,
       stageRoundHistory: normalizeStageRoundHistory(stageRoundHistory),
       scoreboard: toScoreboard(scoreboard),
+      streaks: normalizeStreaks(streaks),
     };
 
     const stages = stagePlan

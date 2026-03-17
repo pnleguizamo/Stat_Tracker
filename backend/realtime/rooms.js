@@ -1,4 +1,5 @@
 const rooms = new Map();
+const { getStreakMap } = require('./scoring');
 
 const DEFAULT_DISCONNECT_GRACE_MS = 300_000;
 
@@ -453,6 +454,7 @@ function getGameState(roomCode) {
       : null,
     stageRecap: room.stageRecap || null,
     finalRecap: room.finalRecap || null,
+    streaks: getStreakMap(room, currentStageIndex),
     scoreboard: (() => {
       const board = room.scoreboard || {};
       const clone = {};

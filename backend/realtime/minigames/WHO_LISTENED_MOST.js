@@ -1,6 +1,6 @@
 const { getSharedTopSongs, getSharedTopArtists } = require("../../services/mongoServices");
 const { getAccessToken } = require('../../services/authService.js');
-const { appendRoundHistory } = require('../scoring');
+const { appendRoundHistory, updateStreaks } = require('../scoring');
 
 function safeRoomLookup(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -229,6 +229,10 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
         },
       }));
       applyAwards(room, awards);
+    }
+    if (applyAwards) {
+      const bonuses = updateStreaks(room, idx, round.id, round.results?.winners ?? [], 'WHO_LISTENED_MOST');
+      if (bonuses.length) applyAwards(room, bonuses);
     }
     appendRoundHistory(room, idx, {
       id: round.id,

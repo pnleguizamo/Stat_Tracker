@@ -175,7 +175,7 @@ function registerStagePlanListeners(io, socket, deps) {
     room.pendingStageAdvance = null;
 
     if (nextIndex === null || nextIndex === undefined) {
-      const stages = (room.stagePlan || []).map((_, idx) => computeStageRecap(room, idx, Infinity)).filter(Boolean);
+      const stages = (room.stagePlan || []).map((_, idx) => computeStageRecap(room, idx, 5)).filter(Boolean);
       room.finalRecap = { stages };
       room.phase = 'finalRecap';
       broadcastGameState(roomCode);

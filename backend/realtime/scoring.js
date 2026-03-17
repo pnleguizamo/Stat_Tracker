@@ -51,6 +51,57 @@ function applyAwards(room, awards = []) {
   return board;
 }
 
+const STREAK_MILESTONES = { 3: 150, 5: 300, 7: 500, 10: 1000 };
+
+function updateStreaks(room, stageIndex, roundId, winnerPlayerIds, minigameId) {
+  room.streaks = room.streaks || {};
+  room.streaks[stageIndex] = room.streaks[stageIndex] || {};
+  const stage = room.streaks[stageIndex];
+  const winnerSet = new Set(winnerPlayerIds);
+  const bonusAwards = [];
+
+  for (const [playerId] of room.players) {
+    const entry = stage[playerId] || { current: 0, best: 0, lastRoundId: null };
+    if (entry.lastRoundId === roundId) {
+      stage[playerId] = entry;
+      continue;
+    }
+    entry.lastRoundId = roundId;
+
+    if (winnerSet.has(playerId)) {
+      entry.current += 1;
+      if (entry.current > entry.best) entry.best = entry.current;
+
+      const bonus = STREAK_MILESTONES[entry.current];
+      if (bonus) {
+        bonusAwards.push({
+          socketId: playerId,
+          points: bonus,
+          reason: 'streak',
+          meta: { streak: entry.current, stageIndex, roundId, minigameId },
+        });
+      }
+    } else {
+      entry.current = 0;
+    }
+
+    stage[playerId] = entry;
+  }
+
+  return bonusAwards;
+}
+
+function getStreakMap(room, stageIndex) {
+  if (stageIndex === null || stageIndex === undefined) return {};
+  const stage = room.streaks?.[stageIndex];
+  if (!stage) return {};
+  const out = {};
+  for (const [playerId, entry] of Object.entries(stage)) {
+    out[playerId] = { current: entry.current, best: entry.best };
+  }
+  return out;
+}
+
 function appendRoundHistory(room, stageIndex, snapshot) {
   if (!room || typeof stageIndex !== 'number') return;
   room.stageRoundHistory = room.stageRoundHistory || {};
@@ -63,4 +114,6 @@ module.exports = {
   computeTimeScore,
   ensureScoreboard,
   appendRoundHistory,
+  updateStreaks,
+  getStreakMap,
 };
