@@ -176,21 +176,15 @@ export const WhoListenedMost: FC<Props> = ({ roomCode, gameState, onAdvance, onR
 
   const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef } =
     useAutoFitScale({ allowUpscale: false });
+    
+const liveRemainingMs =
+  remainingMs ?? (round?.expiresAt ? Math.max(0, round.expiresAt - Date.now()) : null);
 
-  // TODOo refactor
-  const roundDurationMs =
-    round?.startedAt && round?.expiresAt
-      ? Math.max(1000, round.expiresAt - round.startedAt)
-      : 30000;
-  const liveRemainingMs =
-    roundStatus === "revealed"
-      ? 0
-      : remainingMs !== null
-        ? Math.max(0, remainingMs)
-        : round?.expiresAt
-          ? Math.max(0, round.expiresAt - Date.now())
-          : roundDurationMs;
-  const timerCritical = roundStatus === "collecting" && liveRemainingMs > 0 && liveRemainingMs < 5000;
+const timerCritical =
+  roundStatus === "collecting" &&
+  liveRemainingMs !== null &&
+  liveRemainingMs > 0 &&
+  liveRemainingMs < 5000;
 
   if (!round) {
     return (

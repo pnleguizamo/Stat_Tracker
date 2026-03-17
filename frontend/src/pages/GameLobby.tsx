@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { PlayerAvatar } from 'components/PlayerAvatar';
 import api from 'lib/api';
 import { socket } from '../socket';
 import { useNavigate } from 'react-router-dom';
@@ -96,22 +97,13 @@ function HostLobby({ room, onLeave, onStartGame }: HostLobbyProps) {
           <div className="lobby-player-grid">
             {actualPlayers.map((p) => (
               <div key={p.playerId} className="lobby-player-card">
-                {p.avatar ? (
-                  <img
-                    src={p.avatar}
-                    alt={p.displayName || p.name}
-                    className="lobby-player-avatar"
-                  />
-                ) : (
-                  <div className="lobby-player-avatar lobby-player-avatar--initials">
-                    {(p.displayName || p.name || '')
-                      .split(' ')
-                      .map((s) => s[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
-                )}
+                <PlayerAvatar
+                  player={p}
+                  size={null}
+                  className="lobby-player-avatar"
+                  fallbackClassName="lobby-player-avatar--initials"
+                  variant="simple"
+                />
                 <div className="lobby-player-name">{p.displayName || p.name}</div>
               </div>
             ))}
@@ -162,22 +154,13 @@ function PlayerLobby({
       <main className="player-main lobby-player-main">
         {/* Avatar + name preview */}
         <div className="lobby-player-preview">
-          {selectedAvatar ? (
-            <img
-              src={selectedAvatar}
-              alt="Your avatar"
-              className="lobby-preview-avatar"
-            />
-          ) : (
-            <div className="lobby-preview-avatar lobby-preview-avatar--initials">
-              {(displayName || '?')
-                .split(' ')
-                .map((s) => s[0])
-                .slice(0, 2)
-                .join('')
-                .toUpperCase()}
-            </div>
-          )}
+          <PlayerAvatar
+            player={{ avatar: selectedAvatar, displayName: displayName || '?' }}
+            size={null}
+            className="lobby-preview-avatar"
+            fallbackClassName="lobby-preview-avatar--initials"
+            variant="simple"
+          />
           <div className="lobby-preview-info">
             <div className="lobby-preview-name">
               {displayName || (

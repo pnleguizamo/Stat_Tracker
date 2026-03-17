@@ -1,4 +1,5 @@
 import { FC, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import { useHostSfx } from "game/hooks/useHostSfx";
 import { Player } from "types/game";
 import { HostCard } from "./HostMinigamePrimitives";
@@ -173,47 +174,6 @@ export const PlayerVotes: FC<Props> = ({
     });
   }, []);
 
-  const getInitials = (name?: string | null) => {
-    return (name || "")
-      .split(" ")
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
-  };
-
-  const renderAvatar = (player: Player, size = 32) => {
-    const label = player.displayName || player.name || "";
-    if (player.avatar) {
-      return (
-        <img
-          src={player.avatar}
-          alt={label}
-          style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }}
-        />
-      );
-    }
-    return (
-      <div
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          background: "#2b6cb0",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-          fontSize: Math.max(10, size * 0.35),
-        }}
-      >
-        {getInitials(label)}
-      </div>
-    );
-  };
-
   useEffect(() => {
     if (isRevealed) return;
     previousRevealMapRef.current = {};
@@ -368,7 +328,7 @@ export const PlayerVotes: FC<Props> = ({
                 )}
                 style={{ '--pv-item-index': String(index) } as CSSProperties}
               >
-                {renderAvatar(player, 44)}
+                <PlayerAvatar player={player} size={44} variant="simple" />
                 <div className="player-votes-player-name">
                   {player.displayName || player.name}
                   {showSubmissionChecks && hasSubmitted && status === "collecting" && (
@@ -460,7 +420,7 @@ export const PlayerVotes: FC<Props> = ({
                     👑
                   </div>
                 </div>
-                {renderAvatar(player, 50)}
+                <PlayerAvatar player={player} size={50} variant="simple" />
                 <div className="player-votes-column-name">
                   {player.displayName || player.name}
                   {isWinnerLockedTop && <span>🏆</span>}
@@ -554,7 +514,11 @@ export const PlayerVotes: FC<Props> = ({
                             animationIterationCount: isNewestVoter ? 1 : undefined,
                           }}
                         >
-                          {renderAvatar(voter, Math.max(10, avatarSize - 4))}
+                          <PlayerAvatar
+                            player={voter}
+                            size={Math.max(10, avatarSize - 4)}
+                            variant="simple"
+                          />
                         </div>
                       );
                     })}

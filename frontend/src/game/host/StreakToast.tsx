@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Player, StreakEntry } from "types/game";
 import "./styles/StreakToast.css";
 
@@ -6,7 +6,7 @@ const STREAK_MILESTONES = new Set([3, 5, 7, 10]);
 
 type ToastItem = {
   id: number;
-  playerName: string;
+  playerId: string;
   streak: number;
 };
 
@@ -20,6 +20,14 @@ export const StreakToast: React.FC<Props> = ({ players, streaks, roundId }) => {
   const [queue, setQueue] = useState<ToastItem[]>([]);
   const prevStreaksRef = useRef<Record<string, number>>({});
   const counterRef = useRef(0);
+  const playerNamesById = useMemo(
+    () =>
+      players.reduce<Record<string, string>>((acc, player) => {
+        acc[player.playerId] = player.displayName ?? "Someone";
+        return acc;
+      }, {}),
+    [players]
+  );
 
   useEffect(() => {
     if (!streaks || !roundId) return;
@@ -29,10 +37,9 @@ export const StreakToast: React.FC<Props> = ({ players, streaks, roundId }) => {
       const prev = prevStreaksRef.current[playerId] ?? 0;
       const curr = entry.current;
       if (curr > prev && STREAK_MILESTONES.has(curr)) {
-        const player = players.find((p) => p.playerId === playerId);
         newToasts.push({
           id: ++counterRef.current,
-          playerName: player?.displayName ?? "Someone",
+          playerId,
           streak: curr,
         });
       }
@@ -42,7 +49,6 @@ export const StreakToast: React.FC<Props> = ({ players, streaks, roundId }) => {
     if (newToasts.length > 0) {
       setQueue((q) => [...q, ...newToasts]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundId, streaks]);
 
   useEffect(() => {
@@ -56,12 +62,13 @@ export const StreakToast: React.FC<Props> = ({ players, streaks, roundId }) => {
   if (queue.length === 0) return null;
   // TODOo multiple toasts at a time?
   const toast = queue[0];
+  const playerName = playerNamesById[toast.playerId] ?? "Someone";
 
   return (
     <div className="streak-toast" key={toast.id}>
       <span className="streak-toast-fire">🔥</span>
       <span className="streak-toast-text">
-        <strong>{toast.playerName}</strong> is on a {toast.streak}-streak!
+        <strong>{playerName}</strong> is on a {toast.streak}-streak!
       </span>
     </div>
   );

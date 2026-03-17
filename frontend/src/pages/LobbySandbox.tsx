@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import "../styles/gameShell.css";
 import "../styles/lobby.css";
 
@@ -297,23 +298,13 @@ export default function LobbySandbox() {
                 <div className="lobby-player-grid">
                   {actualPlayers.map((player) => (
                     <div key={player.playerId} className="lobby-player-card">
-                      {player.avatar ? (
-                        <img
-                          src={player.avatar}
-                          alt={player.displayName || player.name}
-                          className="lobby-player-avatar"
-                        />
-                      ) : (
-                        <div className="lobby-player-avatar lobby-player-avatar--initials">
-                          {(player.displayName || player.name || "")
-                            .split(" ")
-                            .map((value) => value[0])
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase()}
-                        </div>
-                      )}
+                      <PlayerAvatar
+                        player={player}
+                        size={null}
+                        className="lobby-player-avatar"
+                        fallbackClassName="lobby-player-avatar--initials"
+                        variant="simple"
+                      />
                       <div className="lobby-player-name">
                         {player.displayName || player.name}
                       </div>

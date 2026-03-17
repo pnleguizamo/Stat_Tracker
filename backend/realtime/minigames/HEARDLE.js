@@ -405,9 +405,9 @@ function registerHeardle(io, socket, deps = {}) {
     if (awards.length) {
       applyAwards(room, awards);
     }
-    if (applyAwards) {
-      const bonuses = updateStreaks(room, idx, round.id, winners, 'HEARDLE');
-      if (bonuses.length) applyAwards(room, bonuses);
+    const bonuses = updateStreaks(room, idx, round.id, winners, 'HEARDLE');
+    if (bonuses.length && applyAwards) {
+      applyAwards(room, bonuses);
     }
 
     round.results = {

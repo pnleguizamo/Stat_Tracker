@@ -4,6 +4,7 @@ import { useHostSfx } from "game/hooks/useHostSfx";
 import { useAutoFitScale } from "game/hooks/useAutoFitScale";
 import { Leaderboard } from "./Leaderboard";
 import "./styles/FinalRecap.css";
+import { PlayerAvatar } from "components/PlayerAvatar";
 
 const MINIGAME_LABELS: Record<string, string> = {
   WHO_LISTENED_MOST: "Who Listened Most",
@@ -205,17 +206,12 @@ function AwardCard({
 function PlayerChip({ player }: { player: RecapFeaturedPlayer }) {
   return (
     <div className="final-recap__award-player">
-      {player.avatar ? (
-        <img
-          className="final-recap__award-avatar"
-          src={player.avatar}
-          alt={player.displayName}
-        />
-      ) : (
-        <div className="final-recap__award-avatar--placeholder">
-          {player.displayName.charAt(0).toUpperCase()}
-        </div>
-      )}
+      <PlayerAvatar
+        player={player}
+        imgClassName="final-recap__award-avatar"
+        fallbackClassName="final-recap__award-avatar--placeholder"
+        variant="simple"
+      />
       <span className="final-recap__award-player-name">{player.displayName}</span>
     </div>
   );

@@ -10,9 +10,9 @@ import { socket } from "socket";
 import { GameState, HeardleRoundState, MinigameId } from "types/game";
 import { Leaderboard } from "./Leaderboard";
 import { StreakToast } from "./StreakToast";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import { useHostSfx } from "game/hooks/useHostSfx";
 import { RadialTimer } from "./minigames/components/RadialTimer";
-import { PlayerAvatar } from "./minigames/components/PlayerAvatar";
 import "../../styles/gameShell.css";
 import "./minigames/styles/hostMinigame.css";
 
@@ -230,7 +230,7 @@ const HostGame = () => {
   }, [gameState?.scoreboard, gameState?.players]);
 
   const totalTimerMs = useMemo(() => {
-    const round = gameState?.currentRoundState;
+    const round = currentRoundState;
     if (!round) return 30000;
 
     if (round.minigameId === "HEARDLE") {
@@ -245,9 +245,7 @@ const HostGame = () => {
 
     if (!round.expiresAt || !round.startedAt) return 30000;
     return Math.max(1000, round.expiresAt - round.startedAt);
-  }, [
-    gameState?.currentRoundState,
-  ]);
+  }, [currentRoundState]);
   
   if (!gameState) {
     return (

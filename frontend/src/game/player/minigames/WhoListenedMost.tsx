@@ -1,6 +1,7 @@
 import { FC, useEffect, useMemo, useState } from "react";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import { socket } from "socket";
-import { GameState, Player, WhoListenedMostRoundState } from "types/game";
+import { GameState, WhoListenedMostRoundState } from "types/game";
 
 type Props = {
   roomCode: string;
@@ -23,47 +24,6 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
     : null;
   const isPrivilegedUser = myPlayer?.userId === "pnleguizamo";
   const isResultsShown = round?.status === "revealed";
-
-   const getInitials = (name?: string | null) => {
-    return (name || "")
-      .split(" ")
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
-  };
-
-  const renderAvatar = (player: Player, size = 32) => {
-    const label = player.displayName || player.name || "";
-    if (player.avatar) {
-      return (
-        <img
-          src={player.avatar}
-          alt={label}
-          style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }}
-        />
-      );
-    }
-    return (
-      <div
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          background: "#2b6cb0",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-          fontSize: Math.max(10, size * 0.35),
-        }}
-      >
-        {getInitials(label)}
-      </div>
-    );
-  };
 
   function handleVote(targetPlayerId: string) {
     if (!roomCode || !targetPlayerId) return;
@@ -149,7 +109,7 @@ export const WhoListenedMostPlayerView: FC<Props> = ({ roomCode, gameState }) =>
                   transition: "transform 0.2s ease, border 0.2s ease",
                 }}
               >
-                {renderAvatar(player, 38)}
+                <PlayerAvatar player={player} size={38} variant="simple" />
                 <div>
                   <div style={{ fontWeight: 600, lineHeight: 1.2 }}>
                     {player.displayName || player.name}

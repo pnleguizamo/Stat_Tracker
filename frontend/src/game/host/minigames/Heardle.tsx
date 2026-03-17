@@ -1,4 +1,5 @@
 import { CSSProperties, FC, useEffect, useMemo, useRef, useState } from 'react';
+import { PlayerAvatar } from 'components/PlayerAvatar';
 import api from 'lib/api';
 import { useAutoFitScale } from 'game/hooks/useAutoFitScale';
 import { useHostSfx } from 'game/hooks/useHostSfx';
@@ -93,16 +94,6 @@ function getReleaseYear(song?: { releaseDate?: string | null; release_date?: str
   if (!releaseDate || typeof releaseDate !== 'string') return null;
   const match = releaseDate.match(/^(\d{4})/);
   return match?.[1] || null;
-}
-
-function getPlayerInitials(name?: string | null) {
-  return (name || '')
-    .split(' ')
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
 }
 
 const WAITING_CHIP_TEXTS = [
@@ -709,13 +700,12 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
               className="heardle-player-card"
             >
               <div className="heardle-player-header">
-                {player.avatar ? (
-                  <img src={player.avatar} alt={playerLabel} className="heardle-player-avatar" />
-                ) : (
-                  <div className="heardle-player-avatar heardle-player-avatar--fallback">
-                    {getPlayerInitials(playerLabel)}
-                  </div>
-                )}
+                <PlayerAvatar
+                  player={player}
+                  className="heardle-player-avatar"
+                  fallbackClassName="heardle-player-avatar--fallback"
+                  variant="simple"
+                />
                 <div className="heardle-player-name">{playerLabel}</div>
               </div>
               <div className="heardle-player-outcome">

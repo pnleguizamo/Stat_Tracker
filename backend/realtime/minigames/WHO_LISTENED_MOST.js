@@ -230,9 +230,15 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
       }));
       applyAwards(room, awards);
     }
-    if (applyAwards) {
-      const bonuses = updateStreaks(room, idx, round.id, round.results?.winners ?? [], 'WHO_LISTENED_MOST');
-      if (bonuses.length) applyAwards(room, bonuses);
+    const bonuses = updateStreaks(
+      room,
+      idx,
+      round.id,
+      round.results?.winners ?? [],
+      'WHO_LISTENED_MOST'
+    );
+    if (bonuses.length && applyAwards) {
+      applyAwards(room, bonuses);
     }
     appendRoundHistory(room, idx, {
       id: round.id,

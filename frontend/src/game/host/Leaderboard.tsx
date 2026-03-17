@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import { useHostSfx } from "game/hooks/useHostSfx";
 import { GameState, Player, ScoreAward, ScoreboardEntry, StreakEntry } from "types/game";
-import { PlayerAvatar } from "./minigames/components/PlayerAvatar";
 import "./styles/Leaderboard.css";
 
 const joinClasses = (...values: Array<string | false | null | undefined>) =>

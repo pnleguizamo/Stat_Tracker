@@ -1,51 +1,11 @@
 import { FC, useState } from "react";
+import { PlayerAvatar } from "components/PlayerAvatar";
 import { socket } from "socket";
-import { GameState, GuessWrappedRoundState, Player } from "types/game";
+import { GameState, GuessWrappedRoundState } from "types/game";
 
 type Props = {
   roomCode: string;
   gameState: GameState;
-};
-
-const getInitials = (name?: string | null) =>
-  (name || "")
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-const renderAvatar = (player: Player, size = 38) => {
-  const label = player.displayName || player.name || "";
-  if (player.avatar) {
-    return (
-      <img
-        src={player.avatar}
-        alt={label}
-        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-      />
-    );
-  }
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: "#2b6cb0",
-        color: "white",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 700,
-        fontSize: Math.max(10, size * 0.35),
-        flexShrink: 0,
-      }}
-    >
-      {getInitials(label)}
-    </div>
-  );
 };
 
 export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
@@ -137,7 +97,7 @@ export const GuessWrappedPlayerView: FC<Props> = ({ roomCode, gameState }) => {
                   transition: "transform 0.2s ease, border 0.2s ease",
                 }}
               >
-                {renderAvatar(player, 38)}
+                <PlayerAvatar player={player} size={38} variant="simple" />
                 <div>
                   <div style={{ fontWeight: 600, lineHeight: 1.2 }}>
                     {player.displayName || player.name}

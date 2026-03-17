@@ -531,9 +531,7 @@ function streakAward(room, stageIndex) {
   return {
     id: 'on_fire',
     title: 'On Fire',
-    description: best === 1
-      ? `Answered correctly ${best} round in a row.`
-      : `Answered correctly ${best} rounds in a row.`,
+    description: `Answered correctly ${best} rounds in a row.`,
     featuredPlayers: winners.map((p) => ({
       ...playerProfile(room, p),
       statLabel: `${best}-streak`,
