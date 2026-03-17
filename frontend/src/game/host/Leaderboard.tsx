@@ -1,6 +1,11 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useHostSfx } from "game/hooks/useHostSfx";
-import { GameState, Player, ScoreAward, ScoreboardEntry } from "types/game";
+import { GameState, Player, ScoreAward, ScoreboardEntry, StreakEntry } from "types/game";
+import { PlayerAvatar } from "./minigames/components/PlayerAvatar";
+import "./styles/Leaderboard.css";
+
+const joinClasses = (...values: Array<string | false | null | undefined>) =>
+  values.filter(Boolean).join(" ");
 
 type Props = {
   scoreboard?: GameState["scoreboard"];
@@ -8,6 +13,11 @@ type Props = {
   roundId?: string | null;
   onClose?: () => void;
   isVisible?: boolean;
+  soundEnabled?: boolean;
+  panelWidth?: number;
+  overflowMode?: "fit" | "paged";
+  pageDurationMs?: number;
+  streaks?: Record<string, StreakEntry>;
 };
 
 function formatAward(award: ScoreAward) {
@@ -22,63 +32,17 @@ function resolvePlayer(players: Player[], playerId: string): Player {
   );
 }
 
-function getInitials(name?: string | null) {
-  return (name || "")
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-function renderAvatar(player: Player) {
-  const label = player.displayName || player.name || "Player";
-  if (player.avatar) {
-    return (
-      <img
-        src={player.avatar}
-        alt={label}
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: "50%",
-          objectFit: "cover",
-          border: "1px solid rgba(255,255,255,0.14)",
-          flexShrink: 0,
-        }}
-      />
-    );
-  }
-
-  return (
-    <div
-      style={{
-        width: 34,
-        height: 34,
-        borderRadius: "50%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(145deg, rgba(59, 130, 246, 0.42), rgba(15, 23, 42, 0.92))",
-        border: "1px solid rgba(96, 165, 250, 0.35)",
-        color: "#dbeafe",
-        fontWeight: 700,
-        fontSize: 12,
-        flexShrink: 0,
-      }}
-    >
-      {getInitials(label)}
-    </div>
-  );
-}
-
 export const Leaderboard: React.FC<Props> = ({
   scoreboard,
   players,
   roundId,
   onClose,
   isVisible = true,
+  soundEnabled = true,
+  panelWidth,
+  overflowMode = "fit",
+  pageDurationMs = 4000,
+  streaks,
 }) => {
   const entries = useMemo(
     () =>
@@ -88,10 +52,14 @@ export const Leaderboard: React.FC<Props> = ({
       })),
     [scoreboard]
   );
-  
+
   const [animatedPoints, setAnimatedPoints] = useState<Record<string, number>>({});
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window === "undefined" ? 900 : window.innerHeight
+  );
+  const [pageIndex, setPageIndex] = useState(0);
   const animationRef = useRef<number | null>(null);
-  const { playScoreTick } = useHostSfx();
+  const { playScoreTick } = useHostSfx({ enabled: soundEnabled });
   const previousAnimatedByPlayerRef = useRef<Record<string, number>>({});
   const pointTickBudgetRef = useRef(0);
   const lastPointTickAtRef = useRef(0);
@@ -110,7 +78,62 @@ export const Leaderboard: React.FC<Props> = ({
     () => new Map(sortedEntries.map((entry, index) => [entry.playerId, index])),
     [sortedEntries]
   );
+  const maxVisibleRows = useMemo(() => {
+    const overlayVerticalPadding = 64;
+    const panelChromeHeight = 132;
+    const reservedSpace = overlayVerticalPadding + panelChromeHeight;
+    let remainingHeight = Math.max(0, viewportHeight - reservedSpace);
+    let visibleCount = 0;
 
+    for (let index = 0; index < sortedEntries.length; index += 1) {
+      const rowHeight = index < 3 ? 98 : 68;
+      const gapHeight = index > 0 ? 10 : 0;
+      const neededHeight = rowHeight + gapHeight;
+      if (visibleCount > 0 && remainingHeight < neededHeight) break;
+      if (remainingHeight < neededHeight) return 1;
+      remainingHeight -= neededHeight;
+      visibleCount += 1;
+    }
+
+    return Math.max(1, visibleCount);
+  }, [sortedEntries.length, viewportHeight]);
+  const totalPages = Math.max(1, Math.ceil(sortedEntries.length / maxVisibleRows));
+  const currentPageIndex = Math.min(pageIndex, totalPages - 1);
+  const pageStartIndex = overflowMode === "paged" ? currentPageIndex * maxVisibleRows : 0;
+  const visibleEntries = useMemo(
+    () => sortedEntries.slice(pageStartIndex, pageStartIndex + maxVisibleRows),
+    [maxVisibleRows, pageStartIndex, sortedEntries]
+  );
+  const hiddenEntryCount = Math.max(0, sortedEntries.length - visibleEntries.length);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => setViewportHeight(window.innerHeight);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [overflowMode, roundId, sortedEntries.length]);
+
+  useEffect(() => {
+    if (pageIndex <= totalPages - 1) return;
+    setPageIndex(Math.max(0, totalPages - 1));
+  }, [pageIndex, totalPages]);
+
+  useEffect(() => {
+    if (!isVisible || overflowMode !== "paged" || totalPages <= 1) return;
+
+    const timerId = window.setInterval(() => {
+      setPageIndex((current) => (current + 1) % totalPages);
+    }, pageDurationMs);
+
+    return () => window.clearInterval(timerId);
+  }, [isVisible, overflowMode, pageDurationMs, totalPages]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -217,7 +240,7 @@ export const Leaderboard: React.FC<Props> = ({
     });
 
     prevPositionsRef.current = nextPositions;
-  }, [sortedEntries, isVisible]);
+  }, [visibleEntries, isVisible]);
 
   useEffect(() => {
     if (!roundId) {
@@ -235,50 +258,39 @@ export const Leaderboard: React.FC<Props> = ({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.3)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2rem",
-        zIndex: 2000,
-        opacity: isVisible ? 1 : 0,
-        pointerEvents: isVisible ? "auto" : "none",
-        visibility: isVisible ? "visible" : "hidden",
-        transition: "opacity 200ms ease, visibility 200ms ease",
-      }}
+      className={`leaderboard-overlay ${isVisible ? 'leaderboard-overlay--visible' : 'leaderboard-overlay--hidden'}`}
       aria-hidden={!isVisible}
     >
       <div
-        style={{
-          background: "#0f172a",
-          color: "white",
-          borderRadius: 16,
-          padding: "24px 32px",
-          width: "min(720px, 100%)",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.35)",
-        }}
+        className="leaderboard-panel"
+        style={panelWidth ? { width: `min(${panelWidth}px, 100%)` } : undefined}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>Leaderboard</h2>
+        <div className="leaderboard-header">
+          <h2 className="leaderboard-title">Leaderboard</h2>
           {onClose && (
-            <button onClick={onClose} style={{ padding: "6px 10px", borderRadius: 8 }}>
+            <button onClick={onClose} className="leaderboard-close-btn">
               Close
             </button>
           )}
         </div>
-        <div style={{ marginTop: 16 }}>
-          {sortedEntries.length === 0 && <div>No scores yet.</div>}
-          {sortedEntries.map(({ playerId, entry }, idx) => {
+        <div className="leaderboard-list">
+          {visibleEntries.length === 0 && <div>No scores yet.</div>}
+          {visibleEntries.map(({ playerId, entry }, idx) => {
             const player = resolvePlayer(players, playerId);
+            const currentOverallIndex = pageStartIndex + idx;
+            const rank = currentOverallIndex + 1;
             const recentAwards = roundId
               ? (entry.awards || []).filter((a) => a.meta?.roundId === roundId)
               : [];
             const displayPoints = animatedPoints[playerId] ?? entry.points ?? 0;
             const prevRank = prevRankMapRef.current.get(playerId);
-            const rankDelta = typeof prevRank === "number" ? prevRank - idx : 0;
+            const rankDelta =
+              typeof prevRank === "number" ? prevRank - currentOverallIndex : 0;
+            const roundDelta = roundId
+              ? (entry.awards || [])
+                  .filter((a) => a.meta?.roundId === roundId)
+                  .reduce((sum, a) => sum + (a.points || 0), 0)
+              : 0;
 
             return (
               <div
@@ -287,29 +299,43 @@ export const Leaderboard: React.FC<Props> = ({
                   if (node) rowRefs.current.set(playerId, node);
                   else rowRefs.current.delete(playerId);
                 }}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 0",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                }}
+                className={joinClasses(
+                  "leaderboard-row",
+                  rank === 1 && "leaderboard-row--rank-1",
+                  rank === 2 && "leaderboard-row--rank-2",
+                  rank === 3 && "leaderboard-row--rank-3"
+                )}
               >
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ width: 24, textAlign: "right", opacity: 0.8 }}>{idx + 1}</div>
-                  {renderAvatar(player)}
+                <div className="leaderboard-row-left">
+                  <div
+                    className={joinClasses(
+                      "leaderboard-rank",
+                      rank <= 3 && "leaderboard-rank--podium"
+                    )}
+                  >
+                    {rank}
+                  </div>
+                  <PlayerAvatar player={player} size={34} className="leaderboard-avatar" />
                   <div>
-                    <div style={{ fontWeight: 700 }}>{player.displayName}{" "}
-                    {rankDelta > 0 && <span style={{ color: "#38a169", fontSize: 12 }}>▲</span>}
-                    {rankDelta < 0 && <span style={{ color: "#e53e3e", fontSize: 12 }}>▼</span>}</div>
+                    <div className="leaderboard-name">{player.displayName}{" "}
+                    {rankDelta > 0 && <span className="leaderboard-rank-delta--up">&#9650;</span>}
+                    {rankDelta < 0 && <span className="leaderboard-rank-delta--down">&#9660;</span>}
+                    {(streaks?.[playerId]?.current ?? 0) >= 3 && (
+                      <span className="leaderboard-streak-badge">
+                        🔥{streaks![playerId].current}
+                      </span>
+                    )}</div>
                   </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800 }}>{displayPoints} pts</div>
+                <div className="leaderboard-right">
+                  {isVisible && roundDelta > 0 && (
+                    <span className="leaderboard-point-delta">+{roundDelta}</span>
+                  )}
+                  <div className="leaderboard-points">{displayPoints} pts</div>
                   {recentAwards.length > 0 && (
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    <div className="leaderboard-awards">
                       {recentAwards.slice(-3).map((a, i) => (
-                        <span key={i} style={{ marginLeft: i ? 8 : 0 }}>
+                        <span key={i} className="leaderboard-award-item">
                           {formatAward(a)}
                         </span>
                       ))}
@@ -320,6 +346,16 @@ export const Leaderboard: React.FC<Props> = ({
             );
           })}
         </div>
+        {overflowMode === "paged" && totalPages > 1 ? (
+          <div className="leaderboard-truncation-note">
+            Page {currentPageIndex + 1} of {totalPages} · Showing ranks {pageStartIndex + 1}-
+            {pageStartIndex + visibleEntries.length} of {sortedEntries.length}
+          </div>
+        ) : hiddenEntryCount > 0 ? (
+          <div className="leaderboard-truncation-note">
+            Showing top {visibleEntries.length} of {sortedEntries.length}
+          </div>
+        ) : null}
       </div>
     </div>
   );

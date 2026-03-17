@@ -16,6 +16,7 @@ import Wrapped from './pages/Wrapped.jsx';
 import PlayerVotesSandbox from './pages/PlayerVotesSandbox.tsx';
 import LobbySandbox from './pages/LobbySandbox.tsx';
 import FinalRecapSandbox from './pages/FinalRecapSandbox.tsx';
+import LeaderboardSandbox from './pages/LeaderboardSandbox.tsx';
 
 function ProtectedLayout() {
   return (
@@ -40,6 +41,7 @@ function App() {
         <Route path="/sandbox/player-votes" element={<PlayerVotesSandbox />} />
         <Route path="/sandbox/lobby" element={<LobbySandbox />} />
         <Route path="/sandbox/final-recap" element={<FinalRecapSandbox />} />
+        <Route path="/sandbox/leaderboard" element={<LeaderboardSandbox />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<CurrentlyPlaying />} />
           <Route path="/recently_played" element={<RecentlyPlayed />} />

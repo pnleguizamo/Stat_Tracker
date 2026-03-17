@@ -7,9 +7,12 @@ import { StageRecap } from "./StageRecap";
 import { FinalRecap } from "./FinalRecap";
 import { useParams } from "react-router-dom";
 import { socket } from "socket";
-import { GameState, MinigameId } from "types/game";
+import { GameState, HeardleRoundState, MinigameId } from "types/game";
 import { Leaderboard } from "./Leaderboard";
+import { StreakToast } from "./StreakToast";
 import { useHostSfx } from "game/hooks/useHostSfx";
+import { RadialTimer } from "./minigames/components/RadialTimer";
+import { PlayerAvatar } from "./minigames/components/PlayerAvatar";
 import "../../styles/gameShell.css";
 import "./minigames/styles/hostMinigame.css";
 
@@ -39,6 +42,7 @@ const HostGame = () => {
   const roomCode = params.roomCode || "";
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [streakToastRoundId, setStreakToastRoundId] = useState<string | null>(null);
   const lastRevealedRoundIdRef = useRef<string | null>(null);
   const activeRoundRef = useRef<GameState["currentRoundState"] | null>(null);
   const leaderboardShowRef = useRef<number | null>(null);
@@ -47,6 +51,8 @@ const HostGame = () => {
   const previousStageIndexRef = useRef<number | null>(null);
   const previousRoundIdRef = useRef<string | null>(null);
   const { playStageTransition, playRoundTransition } = useHostSfx();
+  const currentRoundState = gameState?.currentRoundState;
+  const currentMinigameId = gameState?.currentStageConfig?.minigameId;
 
   useEffect(() => {
     if (!roomCode) return;
@@ -64,16 +70,16 @@ const HostGame = () => {
   }, [roomCode]);
 
   useEffect(() => {
-    if (!gameState?.currentRoundState) return;
-    const round = gameState.currentRoundState;
+    if (!currentRoundState) return;
+    const round = currentRoundState;
     if (round.status !== "revealed") return;
     if (round.id === lastRevealedRoundIdRef.current) return;
 
-    const minigameId = gameState.currentStageConfig?.minigameId;
-    if (minigameId === "WHO_LISTENED_MOST") return;
-    if (minigameId === "GUESS_SPOTIFY_WRAPPED") return;
+    if (currentMinigameId === "WHO_LISTENED_MOST") return;
+    if (currentMinigameId === "GUESS_SPOTIFY_WRAPPED") return;
 
     lastRevealedRoundIdRef.current = round.id;
+    setStreakToastRoundId((currentRoundId) => (currentRoundId === round.id ? currentRoundId : round.id));
     if (leaderboardShowRef.current) {
       window.clearTimeout(leaderboardShowRef.current);
       leaderboardShowRef.current = null;
@@ -84,16 +90,15 @@ const HostGame = () => {
     }
     leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
     leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
-  }, [gameState]);
+  }, [currentMinigameId, currentRoundState]);
 
   useEffect(() => {
-    activeRoundRef.current = gameState?.currentRoundState ?? null;
-  }, [gameState?.currentRoundState]);
+    activeRoundRef.current = currentRoundState ?? null;
+  }, [currentRoundState]);
 
   useEffect(() => {
     const stageIndex = gameState?.currentStageIndex;
-    const minigameId = gameState?.currentStageConfig?.minigameId;
-    const roundId = gameState?.currentRoundState?.id ?? null;
+    const roundId = currentRoundState?.id ?? null;
     let stageChanged = false;
 
     if (typeof stageIndex === "number") {
@@ -120,21 +125,24 @@ const HostGame = () => {
 
     if (roundId !== previousRoundId) {
       previousRoundIdRef.current = roundId;
-      if (!stageChanged && minigameId !== "HEARDLE") {
+      if (!stageChanged && currentMinigameId !== "HEARDLE") {
         playRoundTransition();
       }
     }
   }, [
     gameState?.currentStageIndex,
-    gameState?.currentStageConfig?.minigameId,
-    gameState?.currentRoundState?.id,
+    currentMinigameId,
+    currentRoundState?.id,
     playStageTransition,
     playRoundTransition,
   ]);
 
   useEffect(() => {
-    const round = gameState?.currentRoundState;
-    if (!round || round.status === "revealed") return;
+    const round = currentRoundState;
+    if (!round || round.status === "revealed") {
+      if (!round) setStreakToastRoundId(null);
+      return;
+    }
 
     if (leaderboardShowRef.current) {
       window.clearTimeout(leaderboardShowRef.current);
@@ -145,10 +153,14 @@ const HostGame = () => {
       leaderboardHideRef.current = null;
     }
     setShowLeaderboard(false);
-  }, [gameState?.currentRoundState?.id, gameState?.currentRoundState?.status]);
+    setStreakToastRoundId(null);
+  }, [currentRoundState]);
 
   const handleRevealComplete = (onSequenceComplete?: () => void) => {
     const revealRoundId = activeRoundRef.current?.id ?? null;
+    if (revealRoundId) {
+      setStreakToastRoundId((currentRoundId) => (currentRoundId === revealRoundId ? currentRoundId : revealRoundId));
+    }
     if (leaderboardShowRef.current) {
       window.clearTimeout(leaderboardShowRef.current);
       leaderboardShowRef.current = null;
@@ -187,7 +199,7 @@ const HostGame = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const round = gameState?.currentRoundState;
+      const round = currentRoundState;
       const expiresAt = round?.expiresAt;
       if (!expiresAt || round?.status === 'revealed') {
         setRemainingMs(null);
@@ -197,13 +209,45 @@ const HostGame = () => {
       setRemainingMs(delta > 0 ? delta : 0);
     }, 100);
     return () => clearInterval(interval);
-  }, [gameState?.currentRoundState?.expiresAt, gameState?.currentRoundState?.status]);
+  }, [currentRoundState]);
 
   const currentStage = gameState?.currentStageConfig;
   const HostMinigame = useMemo(() => {
     if (!currentStage) return null;
     return MINIGAME_HOST_COMPONENTS[currentStage.minigameId] || null;
   }, [currentStage]);
+
+  const topPlayers = useMemo(() => {
+    if (!gameState?.scoreboard || !gameState?.players) return [];
+    return Object.entries(gameState.scoreboard)
+      .map(([id, entry]) => ({
+        id,
+        points: entry.points ?? 0,
+        player: gameState.players.find(p => p.playerId === id),
+      }))
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 4);
+  }, [gameState?.scoreboard, gameState?.players]);
+
+  const totalTimerMs = useMemo(() => {
+    const round = gameState?.currentRoundState;
+    if (!round) return 30000;
+
+    if (round.minigameId === "HEARDLE") {
+      const heardleRound = round as HeardleRoundState;
+      if (heardleRound.guessWindowMs) {
+        return Math.max(1000, heardleRound.guessWindowMs);
+      }
+      if (heardleRound.expiresAt && heardleRound.snippetStartedAt) {
+        return Math.max(1000, heardleRound.expiresAt - heardleRound.snippetStartedAt);
+      }
+    }
+
+    if (!round.expiresAt || !round.startedAt) return 30000;
+    return Math.max(1000, round.expiresAt - round.startedAt);
+  }, [
+    gameState?.currentRoundState,
+  ]);
   
   if (!gameState) {
     return (
@@ -246,21 +290,33 @@ const HostGame = () => {
 
   return (
     <div className="host-layout host-layout--viewport">
-      {/* Shared chrome */}
+      {/* Scoreboard ticker header */}
       {gameState?.currentRoundState?.status !== "revealed" && <header className="host-header">
-        <div>Room {gameState.roomCode}</div>
         <div>
-          {typeof gameState.currentStageIndex === "number"
-            ? `Stage ${gameState.currentStageIndex + 1} / ${gameState.stagePlan.length}`
-            : "Waiting for first stage"}
+          <span className="host-header-room-chip">{gameState.roomCode}</span>
         </div>
-        <div>
-          <h2 style={{ fontSize: 28 }}>
-            {remainingMs !== null
-              ? `Time left: ${Math.max(0, Math.ceil(remainingMs / 1000))}s`
-              : "No timer running"}
-
-          </h2>
+        <div className="host-header-scoreboard">
+          {topPlayers.map(({ id, points, player }) => (
+            <div key={id} className="host-header-player">
+              {player && <PlayerAvatar player={player} size={48} />}
+              <span className="host-header-player-name">{player?.displayName || player?.name || "?"}</span>
+              <span className="host-header-player-points">{points}</span>
+            </div>
+          ))}
+          {topPlayers.length === 0 && (
+            <span style={{ color: 'var(--gs-muted)', fontSize: 13 }}>
+              {typeof gameState.currentStageIndex === "number"
+                ? `Stage ${gameState.currentStageIndex + 1} / ${gameState.stagePlan.length}`
+                : "Waiting for first stage"}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          {remainingMs !== null ? (
+            <RadialTimer remainingMs={remainingMs} totalMs={totalTimerMs} size={52} strokeWidth={4} />
+          ) : (
+            <span style={{ color: 'var(--gs-muted)', fontSize: 13 }}>No timer</span>
+          )}
         </div>
       </header>}
 
@@ -291,6 +347,12 @@ const HostGame = () => {
         roundId={gameState.currentRoundState?.id}
         onClose={() => setShowLeaderboard(false)}
         isVisible={showLeaderboard && gameState.currentRoundState?.status === "revealed"}
+        streaks={gameState.streaks}
+      />
+      <StreakToast
+        players={gameState.players}
+        streaks={gameState.streaks}
+        roundId={streakToastRoundId}
       />
     </div>
   );

@@ -1,8 +1,26 @@
 const { MongoClient } = require("mongodb");
 
-const client = new MongoClient(process.env.URI);
+const mongoUri = process.env.URI || process.env.MONGO_URI;
+
+if (!mongoUri) {
+  throw new Error("Mongo URI is not configured. Set URI or MONGO_URI.");
+}
+
+function parseTimeout(name, fallback) {
+  const raw = process.env[name];
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+const client = new MongoClient(mongoUri, {
+  serverSelectionTimeoutMS: parseTimeout("MONGO_SERVER_SELECTION_TIMEOUT_MS", 5000),
+  connectTimeoutMS: parseTimeout("MONGO_CONNECT_TIMEOUT_MS", 5000),
+  socketTimeoutMS: parseTimeout("MONGO_SOCKET_TIMEOUT_MS", 30000),
+  maxPoolSize: parseTimeout("MONGO_MAX_POOL_SIZE", 20),
+});
 let db;
 let indexesEnsured = false;
+let connectPromise = null;
 
 const COLLECTIONS = {
   rawStreams: process.env.COLLECTION_NAME,
@@ -59,13 +77,24 @@ async function ensureIndexes(dbInstance) {
 }
 
 async function initDb() {
-  if (!db) {
+  if (db) return db;
+  if (connectPromise) return connectPromise;
+
+  connectPromise = (async () => {
     await client.connect();
-    db = client.db(process.env.DB_NAME);
-    await ensureIndexes(db);
+    const dbInstance = client.db(process.env.DB_NAME);
+    await ensureIndexes(dbInstance);
+    db = dbInstance;
     console.log("Mongo connected");
+    return db;
+  })();
+
+  try {
+    return await connectPromise;
+  } catch (err) {
+    connectPromise = null;
+    throw err;
   }
-  return db;
 }
 
 module.exports = { initDb, client, COLLECTIONS };
