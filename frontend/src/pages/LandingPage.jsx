@@ -1,11 +1,12 @@
 import '../styles/LandingPage.css';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api.js';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data, isLoading } = useQuery({
     queryKey: ['auth', 'status'],
     queryFn: () => api.get('/api/auth/status'),
@@ -14,16 +15,24 @@ const LandingPage = () => {
   });
   const queryClient = useQueryClient();
   const [loadingGuest, setLoadingGuest] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   async function redirectToAuthCodeFlow() {
     try {
-      const json = await api.post('/api/auth/start');
+      setAuthError('');
+      const inviteToken = searchParams.get('invite') || undefined;
+      const json = await api.post('/api/auth/start', inviteToken ? { inviteToken } : undefined);
       if (!json || !json.url) throw new Error('No authorize URL returned from server');
       document.location = json.url;
     } catch (err) {
-      const message = err?.message || 'Failed to start auth flow';
+      const message =
+        err?.body?.message ||
+        (err?.status === 409
+          ? 'First-time Spotify login requires your invite link on this browser.'
+          : err?.message) ||
+        'Failed to start auth flow';
       console.error('redirectToAuthCodeFlow error', err);
-      throw new Error(message);
+      setAuthError(message);
     }
   }
 
@@ -62,6 +71,10 @@ const LandingPage = () => {
             <button onClick={redirectToAuthCodeFlow} className="login-btn">
               Login with Spotify
             </button>
+
+            {authError ? (
+              <small style={{ color: '#b42318' }}>{authError}</small>
+            ) : null}
 
             <div className="guest-cta">
               <button

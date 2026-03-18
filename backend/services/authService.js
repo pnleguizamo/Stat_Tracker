@@ -1,11 +1,16 @@
 const { initDb } = require('../mongo.js');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('crypto');
+const { getDefaultSpotifyAppKey, getSpotifyAppConfig } = require('../config/spotifyApps.js');
 
-async function storeTokensAndCreateSession(accessToken, refreshToken, expiresIn, spotifyUser) {
+const AUTH_TOKEN_TTL = '7d';
+
+async function storeTokensAndCreateSession(accessToken, refreshToken, expiresIn, spotifyUser, spotifyAppKey) {
   const db = await initDb();
   const oauthTokens = db.collection('oauth_tokens');
   const accountId = spotifyUser.id;
+  const resolvedSpotifyAppKey = spotifyAppKey || getDefaultSpotifyAppKey();
+  getSpotifyAppConfig(resolvedSpotifyAppKey);
 
   await oauthTokens.updateOne(
     { accountId },
@@ -18,15 +23,36 @@ async function storeTokensAndCreateSession(accessToken, refreshToken, expiresIn,
         accessToken,
         accessTokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),
         refreshToken,
+        spotifyAppKey: resolvedSpotifyAppKey,
         updatedAt: new Date(),
       },
     },
     { upsert: true }
   );
 
-  const appToken = jwt.sign({ sub: accountId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  const appToken = jwt.sign({ sub: accountId }, process.env.JWT_SECRET, { expiresIn: AUTH_TOKEN_TTL });
 
   return { accountId, displayName: spotifyUser.display_name, appToken };
+}
+
+async function ensureSpotifyAppKey(tokensCol, row) {
+  if (row.spotifyAppKey) {
+    getSpotifyAppConfig(row.spotifyAppKey);
+    return row.spotifyAppKey;
+  }
+
+  const spotifyAppKey = getDefaultSpotifyAppKey();
+  await tokensCol.updateOne(
+    { accountId: row.accountId },
+    {
+      $set: {
+        spotifyAppKey,
+        updatedAt: new Date(),
+      },
+    }
+  );
+  row.spotifyAppKey = spotifyAppKey;
+  return spotifyAppKey;
 }
 
 async function refreshAccessTokenWithSpotify(row) {
@@ -35,7 +61,8 @@ async function refreshAccessTokenWithSpotify(row) {
     refresh_token: row.refreshToken,
   });
 
-  const basic = Buffer.from(`${process.env.CLIENT_ID}:${process.env.CLIENT_SECRET}`).toString('base64');
+  const spotifyApp = getSpotifyAppConfig(row.spotifyAppKey || getDefaultSpotifyAppKey());
+  const basic = Buffer.from(`${spotifyApp.clientId}:${spotifyApp.clientSecret}`).toString('base64');
 
   const r = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
@@ -58,6 +85,7 @@ async function getAccessToken(accountId) {
   const row = await tokensCol.findOne({ accountId });
 
   if (!row) return null;
+  const spotifyAppKey = await ensureSpotifyAppKey(tokensCol, row);
 
   const now = new Date();
   if (row.accessToken && row.accessTokenExpiresAt && new Date(row.accessTokenExpiresAt) > now) {
@@ -75,6 +103,7 @@ async function getAccessToken(accountId) {
   const update = {
     accessToken: newAccess,
     accessTokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),
+    spotifyAppKey,
     updatedAt: new Date(),
   };
   if (refreshed.refresh_token) update.refreshToken = refreshed.refresh_token;
@@ -99,7 +128,7 @@ async function createGuestSession() {
   };
 
   const appToken = jwt.sign(claims, process.env.JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn: AUTH_TOKEN_TTL,
   });
 
   return { accountId: claims.sub, appToken };
