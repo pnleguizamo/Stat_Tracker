@@ -162,6 +162,7 @@ function createRoom(hostSocketId, hostPlayerId, profile = {}, displayName, userI
     hostUserId: userId || null,
     phase: 'lobby',
     scoreboard: {},
+    revealState: null,
     roundState: {},
     stageRoundHistory: {},
     stageRecap: null,
@@ -239,7 +240,26 @@ function startGame(roomCode) {
   room.currentStageIndex = 0;
   room.scoreboard = {};
   room.roundTimers = {};
+  room.revealState = null;
 
+  return room;
+}
+
+function setRevealPhase(roomCode, phase, expectedRoundId) {
+  const room = rooms.get(roomCode);
+  if (!room) return null;
+
+  const currentStageIndex = typeof room.currentStageIndex === 'number' ? room.currentStageIndex : null;
+  if (currentStageIndex === null) return null;
+
+  const round = room.roundState?.[currentStageIndex] || null;
+  if (!round || round.status !== 'revealed') return null;
+  if (expectedRoundId && round.id !== expectedRoundId) return null;
+
+  room.revealState = {
+    roundId: round.id,
+    phase,
+  };
   return room;
 }
 
@@ -454,6 +474,12 @@ function getGameState(roomCode) {
       : null,
     stageRecap: room.stageRecap || null,
     finalRecap: room.finalRecap || null,
+    revealPhase:
+      currentRoundState?.status === 'revealed'
+        ? room.revealState?.roundId === currentRoundState.id
+          ? room.revealState.phase
+          : 'revealing'
+        : null,
     streaks: getStreakMap(room, currentStageIndex),
     scoreboard: (() => {
       const board = room.scoreboard || {};
@@ -509,5 +535,6 @@ module.exports = {
   isPlayerInRoom,
   getRoomPayload,
   getGameState,
+  setRevealPhase,
   updatePlayerProfile,
 };

@@ -36,6 +36,11 @@ const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<H
 
 // Award cards stay readable at host-display scale with up to two featured players.
 const FINAL_RECAP_MAX_PLAYERS_PER_AWARD = 2;
+const HOST_BANNER_MEDALS = [
+  { label: "Gold", icon: "🥇" },
+  { label: "Silver", icon: "🥈" },
+  { label: "Bronze", icon: "🥉" },
+] as const;
 
 const HostGame = () => {
   const params = useParams();
@@ -68,29 +73,6 @@ const HostGame = () => {
       socket.off("gameStateUpdated", handler);
     };
   }, [roomCode]);
-
-  useEffect(() => {
-    if (!currentRoundState) return;
-    const round = currentRoundState;
-    if (round.status !== "revealed") return;
-    if (round.id === lastRevealedRoundIdRef.current) return;
-
-    if (currentMinigameId === "WHO_LISTENED_MOST") return;
-    if (currentMinigameId === "GUESS_SPOTIFY_WRAPPED") return;
-
-    lastRevealedRoundIdRef.current = round.id;
-    setStreakToastRoundId((currentRoundId) => (currentRoundId === round.id ? currentRoundId : round.id));
-    if (leaderboardShowRef.current) {
-      window.clearTimeout(leaderboardShowRef.current);
-      leaderboardShowRef.current = null;
-    }
-    if (leaderboardHideRef.current) {
-      window.clearTimeout(leaderboardHideRef.current);
-      leaderboardHideRef.current = null;
-    }
-    leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
-    leaderboardHideRef.current = window.setTimeout(() => setShowLeaderboard(false), 6000);
-  }, [currentMinigameId, currentRoundState]);
 
   useEffect(() => {
     activeRoundRef.current = currentRoundState ?? null;
@@ -158,6 +140,9 @@ const HostGame = () => {
 
   const handleRevealComplete = (onSequenceComplete?: () => void) => {
     const revealRoundId = activeRoundRef.current?.id ?? null;
+    if (!revealRoundId || revealRoundId === lastRevealedRoundIdRef.current) return;
+
+    lastRevealedRoundIdRef.current = revealRoundId;
     if (revealRoundId) {
       setStreakToastRoundId((currentRoundId) => (currentRoundId === revealRoundId ? currentRoundId : revealRoundId));
     }
@@ -170,7 +155,19 @@ const HostGame = () => {
       leaderboardHideRef.current = null;
     }
     
-    leaderboardShowRef.current = window.setTimeout(() => setShowLeaderboard(true), 2000);
+    leaderboardShowRef.current = window.setTimeout(() => {
+      const currentRound = activeRoundRef.current;
+      const isStillSameRevealedRound =
+        !!currentRound &&
+        currentRound.status === "revealed" &&
+        currentRound.id === revealRoundId;
+      if (!isStillSameRevealedRound) return;
+
+      setShowLeaderboard(true);
+      if (roomCode && revealRoundId) {
+        socket.emit("completeRoundRevealPresentation", { roomCode, roundId: revealRoundId });
+      }
+    }, 2000);
     leaderboardHideRef.current = window.setTimeout(() => {
       const currentRound = activeRoundRef.current;
       const isStillSameRevealedRound =
@@ -226,7 +223,7 @@ const HostGame = () => {
         player: gameState.players.find(p => p.playerId === id),
       }))
       .sort((a, b) => b.points - a.points)
-      .slice(0, 4);
+      .slice(0, 3);
   }, [gameState?.scoreboard, gameState?.players]);
 
   const totalTimerMs = useMemo(() => {
@@ -290,30 +287,41 @@ const HostGame = () => {
     <div className="host-layout host-layout--viewport">
       {/* Scoreboard ticker header */}
       {gameState?.currentRoundState?.status !== "revealed" && <header className="host-header">
-        <div>
+        <div className="host-header-room">
           <span className="host-header-room-chip">{gameState.roomCode}</span>
         </div>
         <div className="host-header-scoreboard">
-          {topPlayers.map(({ id, points, player }) => (
-            <div key={id} className="host-header-player">
-              {player && <PlayerAvatar player={player} size={48} />}
-              <span className="host-header-player-name">{player?.displayName || player?.name || "?"}</span>
-              <span className="host-header-player-points">{points}</span>
-            </div>
-          ))}
+          {topPlayers.map(({ id, points, player }, index) => {
+            const rank = index + 1;
+            const medal = HOST_BANNER_MEDALS[index];
+
+            return (
+              <div key={id} className="host-header-player">
+                <span className={`host-header-player-medal host-header-player-medal--rank-${rank}`} aria-hidden="true">
+                  <span className="host-header-player-medal-icon">{medal?.icon ?? "•"}</span>
+                  <span className="host-header-player-medal-label">{medal?.label ?? `${rank}`}</span>
+                </span>
+                {player && <PlayerAvatar player={player} size={48} className="host-header-player-avatar" />}
+                <span className="host-header-player-body">
+                  <span className="host-header-player-name">{player?.displayName || player?.name || "?"}</span>
+                  <span className="host-header-player-points">{points}</span>
+                </span>
+              </div>
+            );
+          })}
           {topPlayers.length === 0 && (
-            <span style={{ color: 'var(--gs-muted)', fontSize: 13 }}>
+            <span className="host-header-scoreboard-empty">
               {typeof gameState.currentStageIndex === "number"
                 ? `Stage ${gameState.currentStageIndex + 1} / ${gameState.stagePlan.length}`
                 : "Waiting for first stage"}
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div className="host-header-timer">
           {remainingMs !== null ? (
             <RadialTimer remainingMs={remainingMs} totalMs={totalTimerMs} size={52} strokeWidth={4} />
           ) : (
-            <span style={{ color: 'var(--gs-muted)', fontSize: 13 }}>No timer</span>
+            <span className="host-header-scoreboard-empty">No timer</span>
           )}
         </div>
       </header>}
@@ -351,6 +359,7 @@ const HostGame = () => {
         players={gameState.players}
         streaks={gameState.streaks}
         roundId={streakToastRoundId}
+        stageIndex={gameState.currentStageIndex}
       />
     </div>
   );

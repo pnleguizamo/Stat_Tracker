@@ -11,6 +11,7 @@ const {
   isPlayerInRoom,
   getRoomPayload,
   updatePlayerProfile,
+  setRevealPhase,
   getGameState,
 } = roomsModule;
 const { applyAwards, computeTimeScore } = require('./scoring');
@@ -197,6 +198,33 @@ function initGameSockets(io) {
 
       emitRoomUpdate(roomCode);
       broadcastGameState(roomCode);
+    });
+
+    socket.on('completeRoundRevealPresentation', ({ roomCode, roundId } = {}, cb) => {
+      if (!roomCode) {
+        cb?.({ ok: false, error: 'ROOM_REQUIRED' });
+        return;
+      }
+
+      const room = getRoom(roomCode);
+      if (!room) {
+        cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
+        return;
+      }
+
+      if (room.hostPlayerId !== socket.playerId) {
+        cb?.({ ok: false, error: 'NOT_HOST' });
+        return;
+      }
+
+      const updatedRoom = setRevealPhase(roomCode, 'postReveal', roundId);
+      if (!updatedRoom) {
+        cb?.({ ok: false, error: 'ROUND_NOT_REVEALED' });
+        return;
+      }
+
+      const state = broadcastGameState(roomCode);
+      cb?.({ ok: true, state });
     });
 
     socket.on('disconnect', () => {

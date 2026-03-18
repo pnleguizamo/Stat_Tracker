@@ -119,9 +119,11 @@ type Props = {
   roomCode: string;
   gameState: GameState;
   onAdvance: () => void;
+  onRevealComplete: (onSequenceComplete?: () => void) => void;
+  remainingMs: number | null;
 };
 
-export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
+export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance, onRevealComplete }) => {
   const round =
     gameState.currentRoundState && gameState.currentRoundState.minigameId === 'HEARDLE'
       ? (gameState.currentRoundState as HeardleRoundState)
@@ -146,6 +148,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
   const playbackSessionRef = useRef(0);
   const heardleSfxRoundRef = useRef<string | null>(null);
   const heardleSfxGuessKeyByPlayerRef = useRef<Map<string, string>>(new Map());
+  const revealCompleteRoundIdRef = useRef<string | null>(null);
 
   const snippetPlan = round?.snippetPlan || [];
   const historyRowCount = Math.max(1, snippetPlan.length || 1);
@@ -267,6 +270,18 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
     const id = setInterval(() => setTimelineNowMs(Date.now()), 100);
     return () => clearInterval(id);
   }, [round?.id, round?.status, round?.currentSnippetIndex]);
+
+  useEffect(() => {
+    if (!round) {
+      revealCompleteRoundIdRef.current = null;
+      return;
+    }
+    if (round.status !== 'revealed') return;
+    if (revealCompleteRoundIdRef.current === round.id) return;
+
+    revealCompleteRoundIdRef.current = round.id;
+    onRevealComplete();
+  }, [onRevealComplete, round]);
 
   useEffect(() => {
     // restart snippet loop on song or snippet change
@@ -777,7 +792,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
 
       <HostActionRow>
         <button
-          className="game-shell-button game-shell-button--dramatic"
+          className="game-shell-button"
           onClick={handleReveal}
           disabled={actionBusy === 'reveal' || round.status === 'revealed'}
         >
@@ -790,7 +805,7 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance }) => {
         >
           {actionBusy === 'start' ? 'Loading…' : 'Next Song'}
         </button>
-        <button className="game-shell-button game-shell-button--forward" onClick={onAdvance}>Next Stage</button>
+        <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
       </HostActionRow>
 
       {error && <div className="host-minigame-error">{error}</div>}

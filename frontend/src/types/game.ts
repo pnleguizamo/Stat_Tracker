@@ -257,6 +257,8 @@ export type StreakEntry = {
   best: number;
 };
 
+export type RevealPhase = 'revealing' | 'postReveal';
+
 export type ScoreboardEntry = {
   points: number;
   stats?: Record<string, unknown>;
@@ -273,4 +275,5 @@ export type GameState = RoomState & {
   stageRecap?: StageRecap | null;
   finalRecap?: FinalRecap | null;
   streaks?: Record<string, StreakEntry>;
+  revealPhase?: RevealPhase | null;
 };

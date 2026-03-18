@@ -268,7 +268,7 @@ const timerCritical =
 
             {roundStatus !== "revealed" && <HostActionRow className="wlm-action-row">
               <button
-                className="game-shell-button game-shell-button--dramatic"
+                className="game-shell-button"
                 onClick={handleReveal}
                 disabled={actionBusy === "reveal" || submissions === 0 }
               >
@@ -281,7 +281,7 @@ const timerCritical =
               >
                 {actionBusy === "prompt" ? "Loading…" : "New Prompt"}
               </button>
-              <button className="game-shell-button game-shell-button--forward" onClick={onAdvance}>Next Stage</button>
+              <button className="game-shell-button" onClick={onAdvance}>Next Stage</button>
             </HostActionRow>}
 
             {error && <div className="host-minigame-error">{error}</div>}
