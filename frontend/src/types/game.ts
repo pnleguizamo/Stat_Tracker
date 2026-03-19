@@ -1,5 +1,6 @@
 export type MinigameId =
   | 'WHO_LISTENED_MOST'
+  | 'HIGHER_LOWER'
   | 'GUESS_SPOTIFY_WRAPPED' 
   | 'HEARDLE'
   | 'FIRST_PLAY'
@@ -31,6 +32,12 @@ export type MinigameId =
 export type StageConfig = {
   index: number;
   minigameId: MinigameId;
+  metric?: 'plays' | 'minutes';
+  options?: {
+    metric?: 'plays' | 'minutes';
+    maxRounds?: number;
+    [key: string]: unknown;
+  };
 };
 
 export type Player = {
@@ -85,6 +92,54 @@ export type WhoListenedMostRoundState = {
     topListenerSocketIds: string[] | null;
     listenCounts?: Record<string, number>;
     winners?: string[];
+  };
+};
+
+export type HigherLowerDatapoint = {
+  id: string;
+  metric: string;
+  scope: string;
+  timeframe: string;
+  entityType: string;
+  ownerPlayerId: string | null;
+  ownerLabel: string | null;
+  entityId: string | null;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  value?: number;
+  displayValue?: number;
+};
+
+export type HigherLowerRoundState = {
+  id: string;
+  minigameId: 'HIGHER_LOWER';
+  status: 'collecting' | 'pending' | 'revealed';
+  metric: string;
+  roundNumber: number;
+  maxRounds: number;
+  left: HigherLowerDatapoint;
+  right: HigherLowerDatapoint;
+  answers: Record<
+    string,
+    {
+      answer: { choice: 'LEFT' | 'RIGHT' };
+      at: number;
+    }
+  >;
+  startedAt: number;
+  expiresAt: number;
+  revealedAt?: number;
+  stageComplete?: boolean;
+  results?: {
+    leftValue: number;
+    rightValue: number;
+    leftDisplayValue: number;
+    rightDisplayValue: number;
+    winnerSide: 'LEFT' | 'RIGHT' | 'TIE';
+    winners: string[];
+    tally: { LEFT: number; RIGHT: number };
+    totalVotes: number;
   };
 };
 
@@ -218,7 +273,11 @@ export type HeardleRoundState = {
   };
 };
 
-export type MinigameRoundState = WhoListenedMostRoundState | GuessWrappedRoundState | HeardleRoundState;
+export type MinigameRoundState =
+  | WhoListenedMostRoundState
+  | HigherLowerRoundState
+  | GuessWrappedRoundState
+  | HeardleRoundState;
 
 export type RecapFeaturedPlayer = {
   playerId: string;

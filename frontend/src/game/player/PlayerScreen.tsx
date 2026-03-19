@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../../socket';
 import { GameState, MinigameId, StreakEntry } from 'types/game';
 import { WhoListenedMostPlayerView } from './minigames/WhoListenedMost';
+import { HigherLowerPlayerView } from './minigames/HigherLower';
 import { GuessWrappedPlayerView } from './minigames/GuessWrapped';
 import { HeardlePlayerView } from './minigames/Heardle';
 import '../../styles/gameShell.css';
@@ -14,6 +15,7 @@ type PlayerMinigameProps = {
 
 const PLAYER_MINIGAME_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<PlayerMinigameProps>>> = {
   WHO_LISTENED_MOST: WhoListenedMostPlayerView,
+  HIGHER_LOWER: HigherLowerPlayerView,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedPlayerView,
   HEARDLE: HeardlePlayerView,
 };

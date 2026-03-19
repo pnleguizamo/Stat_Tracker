@@ -31,6 +31,8 @@ const COLLECTIONS = {
   trackAliases: process.env.TRACK_ALIASES_COLLECTION || 'track_aliases',
   userTrackCounts: process.env.USER_TRACK_COUNTS_COLLECTION,
   userArtistCounts: process.env.USER_ARTIST_COUNTS_COLLECTION,
+  userAlbumCounts: process.env.USER_ALBUM_COUNTS_COLLECTION || 'user_album_counts',
+  userGenreCounts: process.env.USER_GENRE_COUNTS_COLLECTION || 'user_genre_counts',
   userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION,
   userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION,
   userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION,
@@ -51,6 +53,8 @@ async function ensureIndexes(dbInstance) {
     
     { collection: COLLECTIONS.userTrackCounts, keys: { userId: 1, trackId: 1 }, options: { unique: true, name: "utc_user_track" } },
     { collection: COLLECTIONS.userArtistCounts, keys: { userId: 1, artistId: 1 }, options: { unique: true, name: "uac_user_artist" } },
+    { collection: COLLECTIONS.userAlbumCounts, keys: { userId: 1, albumId: 1 }, options: { unique: true, name: "ualc_user_album" } },
+    { collection: COLLECTIONS.userGenreCounts, keys: { userId: 1, genre: 1 }, options: { unique: true, name: "ugc_user_genre" } },
 
     { collection: COLLECTIONS.tracks, keys: { status: 1, nextRefreshAt: 1 }, options: { name: "tracks_status_refresh" } },
     { collection: COLLECTIONS.tracks, keys: { lockedAt: 1 }, options: { name: "tracks_locked_at" } },

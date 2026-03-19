@@ -443,6 +443,8 @@ function getGameState(roomCode) {
           const clone = {
             ...currentRoundState,
             answers: { ...(currentRoundState.answers || {}) },
+            left: currentRoundState.left ? { ...currentRoundState.left } : undefined,
+            right: currentRoundState.right ? { ...currentRoundState.right } : undefined,
             results: (() => {
               if (!currentRoundState.results) return undefined;
               const resClone = { ...currentRoundState.results };
@@ -467,6 +469,18 @@ function getGameState(roomCode) {
             if (clone.results) {
               if (clone.results.ownerPlayerId) clone.results.ownerPlayerId = null;
               if (clone.results.ownerProfile) clone.results.ownerProfile = null;
+            }
+          }
+          if (clone.minigameId === 'HIGHER_LOWER' && clone.status !== 'revealed') {
+            if (clone.right) {
+              clone.right = { ...clone.right };
+              delete clone.right.value;
+              delete clone.right.displayValue;
+            }
+            if (clone.roundNumber === 1 && clone.left) {
+              clone.left = { ...clone.left };
+              delete clone.left.value;
+              delete clone.left.displayValue;
             }
           }
           return clone;

@@ -1,6 +1,7 @@
 // HostGameScreen.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WhoListenedMost } from "./minigames/WhoListenedMost";
+import { HigherLowerHost } from "./minigames/HigherLower";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
 import { StageRecap } from "./StageRecap";
@@ -28,6 +29,7 @@ const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<H
   WHO_LISTENED_MOST: WhoListenedMost,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedHost,
   HEARDLE: HeardleHost,
+  HIGHER_LOWER: HigherLowerHost,
 //   GENRE_GUESS: GenreGuessHostView,
 //   FIRST_PLAY: FirstPlayHostView,
 //   GRAPH_GUESS: GraphGuessHostView,

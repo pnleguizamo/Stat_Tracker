@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const { client } = require('../mongo.js');
 const { runFullBackfill } = require('../services/rollupService.js');
-const { rollupUserCounts } = require('../services/mongoServices.js');
+const { rollupUserEntityCounts } = require('../services/mongoServices.js');
 
 async function main() {
   const userIds = [];
@@ -10,7 +10,7 @@ async function main() {
   const start = Date.now();
 
   const result = await runFullBackfill({userIds});
-  await rollupUserCounts();
+  await rollupUserEntityCounts();
   
   const duration = Date.now() - start;
   console.log(`[canonical-backfill] finished in ${duration} ms (${(duration / 1000).toFixed(2)}s)`);

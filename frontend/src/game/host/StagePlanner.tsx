@@ -99,6 +99,7 @@ const StagePlanner: React.FC = () => {
     { id: 'WHO_LISTENED_MOST', name: 'Who Listened Most' },
     { id: 'GUESS_SPOTIFY_WRAPPED', name: 'Guess the Wrapped' },
     { id: 'HEARDLE', name: 'Heardle' },
+    { id: 'HIGHER_LOWER', name: 'Higher / Lower' },
     // { id: 'FIRST_PLAY', name: 'First Play' },
     // { id: 'GENRE_GUESS', name: 'Genre Guess' },
     // { id: 'GRAPH_GUESS', name: 'Graph Guess' },

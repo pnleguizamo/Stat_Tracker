@@ -1,13 +1,12 @@
 require('dotenv').config();
 
-const { initDb, COLLECTIONS } = require('../mongo.js');
-const { rollupUserCounts } = require('../services/mongoServices.js');
+const { rollupUserEntityCounts } = require('../services/mongoServices.js');
 
 async function main() {
   try {
     const start = Date.now();
     
-    await rollupUserCounts();
+    await rollupUserEntityCounts();
     
     const end = Date.now();
     const ms = end - start;

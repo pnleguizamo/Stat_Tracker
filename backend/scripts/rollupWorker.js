@@ -3,7 +3,7 @@ require('dotenv').config();
 const cron = require('node-cron');
 const { client } = require('../mongo.js');
 const { buildUserTrackDailyFromStreams, buildUserSnapshots } = require('../services/rollupService.js');
-const { rollupUserCounts } = require('../services/mongoServices.js');
+const { rollupUserEntityCounts } = require('../services/mongoServices.js');
 const { enrichRecentStreamsWithCanonicalIds } = require('../services/canonicalEnrichmentService.js');
 
 const SCHEDULE = process.env.ROLLUP_CRON || '30 15 * * *';
@@ -33,7 +33,7 @@ async function runRollups(reason = 'manual') {
   const startTime = Date.now();
   const daily = await buildUserTrackDailyFromStreams({ startDate: start, endDate: end });
   const snapshots = await buildUserSnapshots();
-  await rollupUserCounts();
+  await rollupUserEntityCounts();
   
   const endTime = Date.now();
   const ms = endTime - startTime;

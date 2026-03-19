@@ -792,6 +792,8 @@ module.exports = {
   buildUserTrackDailyFromStreams,
   buildUserSnapshots,
   getStreamsDateRange,
+  buildWindowBounds,
+  addYearWindows,
   runFullBackfill,
   constants: {
     DEFAULT_QUALIFIED_MS,
