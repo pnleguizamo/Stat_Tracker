@@ -107,6 +107,9 @@ export type HigherLowerDatapoint = {
   title: string;
   subtitle: string | null;
   imageUrl: string | null;
+  previewKind?: 'track' | 'artist' | null;
+  previewTrackName?: string | null;
+  previewArtistName?: string | null;
   value?: number;
   displayValue?: number;
 };

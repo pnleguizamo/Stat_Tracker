@@ -1,7 +1,11 @@
-const { buildHigherLowerStageState, pickChallenger } = require('../../services/higherLowerService');
+const {
+  buildHigherLowerStageState,
+  pickChallenger,
+  helpers: { appendRecentPromptTraitValues, getRecentOwnerKey },
+} = require('../../services/higherLowerService');
 const { appendRoundHistory, updateStreaks } = require('../scoring');
 
-const ROUND_DURATION_MS = 15_000;
+const ROUND_DURATION_MS = 20_000;
 
 function safeRoomLookup(getRoom, roomCode) {
   const room = getRoom(roomCode);
@@ -117,6 +121,55 @@ function getChampionById(stageState, datapointId) {
   return stageState?.pool?.find((entry) => entry?.id === datapointId) || null;
 }
 
+function rememberSeenOwners(stageState, datapoints = []) {
+  if (!stageState) return;
+  const seenOwners = Array.isArray(stageState.ownersSeenThisCycle)
+    ? [...stageState.ownersSeenThisCycle]
+    : [];
+
+  for (const datapoint of datapoints) {
+    const ownerId = getRecentOwnerKey(datapoint);
+    if (!ownerId) continue;
+    if (!seenOwners.includes(ownerId)) seenOwners.push(ownerId);
+  }
+
+  stageState.ownersSeenThisCycle = seenOwners;
+}
+
+function rememberRecentPromptTraits(stageState, datapoints = []) {
+  if (!stageState) return;
+
+  stageState.recentEntityTypes = appendRecentPromptTraitValues(
+    stageState.recentEntityTypes,
+    datapoints.map((datapoint) => datapoint?.entityType)
+  );
+  stageState.recentScopes = appendRecentPromptTraitValues(
+    stageState.recentScopes,
+    datapoints.map((datapoint) => datapoint?.scope)
+  );
+}
+
+function resetSeenOwnersIfExhausted(stageState, champion) {
+  if (!stageState?.pool?.length || !champion?.id) return;
+
+  const usedSet = new Set(Array.isArray(stageState.usedDatapointIds) ? stageState.usedDatapointIds : []);
+  const availableOwnerKeys = new Set(
+    stageState.pool
+      .filter((entry) => entry?.id && entry.id !== champion.id && !usedSet.has(entry.id))
+      .map((entry) => getRecentOwnerKey(entry))
+      .filter(Boolean)
+  );
+
+  if (!availableOwnerKeys.size) return;
+
+  const seenOwnerSet = new Set((stageState.ownersSeenThisCycle || []).filter(Boolean));
+  const hasUnseenOwner = Array.from(availableOwnerKeys).some((ownerKey) => !seenOwnerSet.has(ownerKey));
+  if (hasUnseenOwner) return;
+
+  const championOwnerKey = getRecentOwnerKey(champion);
+  stageState.ownersSeenThisCycle = championOwnerKey ? [championOwnerKey] : [];
+}
+
 function canAdvanceStage(room, socket) {
   return room?.hostPlayerId && socket?.playerId && room.hostPlayerId === socket.playerId;
 }
@@ -177,14 +230,26 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
 
     if (round.results.winnerSide === 'RIGHT') {
       stageState.championDatapointId = round.right?.id || stageState.championDatapointId;
+      stageState.championDefenseCount = 0;
+    } else {
+      stageState.championDefenseCount = (Number(stageState.championDefenseCount) || 0) + 1;
     }
+    rememberSeenOwners(stageState, [round.left, round.right]);
+    rememberRecentPromptTraits(stageState, [round.left, round.right]);
+
 
     const nextChampion =
       getChampionById(stageState, stageState.championDatapointId) || round.left || round.right;
+    resetSeenOwnersIfExhausted(stageState, nextChampion);
     const hasNextChallenger = !!pickChallenger({
       pool: stageState.pool || [],
       champion: nextChampion,
       usedIds: stageState.usedDatapointIds || [],
+      ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
+      recentEntityTypes: stageState.recentEntityTypes || [],
+      recentScopes: stageState.recentScopes || [],
+      championDefenseCount: stageState.championDefenseCount || 0,
+      logSelection: false,
     });
     if (stageState.roundNumber >= stageState.maxRounds || !hasNextChallenger) {
       round.stageComplete = true;
@@ -234,10 +299,15 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
         return cb?.({ ok: false, error: 'NO_DATAPOINTS_AVAILABLE' });
       }
 
+      resetSeenOwnersIfExhausted(stageState, champion);
       const challenger = pickChallenger({
         pool: stageState.pool || [],
         champion,
         usedIds: stageState.usedDatapointIds || [],
+        ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
+        recentEntityTypes: stageState.recentEntityTypes || [],
+        recentScopes: stageState.recentScopes || [],
+        championDefenseCount: stageState.championDefenseCount || 0,
       });
 
       room.roundState = room.roundState || {};
