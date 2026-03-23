@@ -1,7 +1,15 @@
 const {
   buildHigherLowerStageState,
   pickChallenger,
-  helpers: { appendRecentPromptTraitValues, getRecentOwnerKey, resolveHigherLowerMode },
+  helpers: {
+    appendRecentPromptTraitValues,
+    getHigherLowerAnchor,
+    getHigherLowerAnchorHoldCount,
+    getRecentOwnerKey,
+    resolveHigherLowerMode,
+    resolveHigherLowerNextAnchorState,
+    syncHigherLowerAnchorState,
+  },
 } = require('../../services/higherLowerService');
 const { appendRoundHistory, updateStreaks } = require('../scoring');
 
@@ -51,17 +59,17 @@ function cloneDatapoint(datapoint) {
   return datapoint ? { ...datapoint } : null;
 }
 
-function createRoundState(stageState, champion, challenger, overrides = {}) {
+function createRoundState(stageState, anchor, candidate, overrides = {}) {
   const now = Date.now();
   return {
     id: overrides.id || `higher-lower-${now}`,
     minigameId: 'HIGHER_LOWER',
     status: overrides.status || 'collecting',
-    metric: stageState.metric || champion?.metric || challenger?.metric || 'plays',
+    metric: stageState.metric || anchor?.metric || candidate?.metric || 'plays',
     roundNumber: stageState.roundNumber || 0,
     maxRounds: stageState.maxRounds || 0,
-    left: cloneDatapoint(champion),
-    right: cloneDatapoint(challenger || champion),
+    left: cloneDatapoint(anchor),
+    right: cloneDatapoint(candidate || anchor),
     answers: {},
     startedAt: overrides.startedAt || now,
     expiresAt: overrides.expiresAt || now,
@@ -116,69 +124,6 @@ function computeResults(round) {
   };
 }
 
-function getChampionById(stageState, datapointId) {
-  if (!datapointId) return null;
-  return stageState?.pool?.find((entry) => entry?.id === datapointId) || null;
-}
-
-function getStageMode(stageState) {
-  return resolveHigherLowerMode(stageState);
-}
-
-function getAnchorDatapointId(stageState) {
-  return stageState?.anchorDatapointId || stageState?.championDatapointId || null;
-}
-
-function getAnchorHoldCount(stageState) {
-  const anchorHoldCount = Number(stageState?.anchorHoldCount);
-  if (Number.isFinite(anchorHoldCount) && anchorHoldCount >= 0) {
-    return anchorHoldCount;
-  }
-  return Math.max(0, Number(stageState?.championDefenseCount) || 0);
-}
-
-function syncAnchorState(stageState, { anchorDatapointId, anchorHoldCount } = {}) {
-  if (!stageState) return stageState;
-  const nextAnchorDatapointId = anchorDatapointId ?? getAnchorDatapointId(stageState);
-  const nextAnchorHoldCount = anchorHoldCount === undefined
-    ? getAnchorHoldCount(stageState)
-    : Math.max(0, Number(anchorHoldCount) || 0);
-  stageState.anchorDatapointId = nextAnchorDatapointId || null;
-  stageState.championDatapointId = nextAnchorDatapointId || null;
-  stageState.anchorHoldCount = nextAnchorHoldCount;
-  stageState.championDefenseCount = nextAnchorHoldCount;
-  return stageState;
-}
-
-function getAnchorById(stageState, datapointId = getAnchorDatapointId(stageState)) {
-  return getChampionById(stageState, datapointId);
-}
-
-function resolveNextAnchorState(stageState, round) {
-  const mode = getStageMode(stageState);
-  const currentAnchorDatapointId = getAnchorDatapointId(stageState);
-  const currentAnchorHoldCount = getAnchorHoldCount(stageState);
-
-  if (mode === 'right_advances') {
-    return {
-      anchorDatapointId: round?.right?.id || currentAnchorDatapointId,
-      anchorHoldCount: 0,
-    };
-  }
-
-  if (round?.results?.winnerSide === 'RIGHT') {
-    return {
-      anchorDatapointId: round?.right?.id || currentAnchorDatapointId,
-      anchorHoldCount: 0,
-    };
-  }
-
-  return {
-    anchorDatapointId: round?.left?.id || currentAnchorDatapointId,
-    anchorHoldCount: currentAnchorHoldCount + 1,
-  };
-}
-
 function rememberSeenOwners(stageState, datapoints = []) {
   if (!stageState) return;
   const seenOwners = Array.isArray(stageState.ownersSeenThisCycle)
@@ -207,13 +152,13 @@ function rememberRecentPromptTraits(stageState, datapoints = []) {
   );
 }
 
-function resetSeenOwnersIfExhausted(stageState, champion) {
-  if (!stageState?.pool?.length || !champion?.id) return;
+function resetSeenOwnersIfExhausted(stageState, anchor) {
+  if (!stageState?.pool?.length || !anchor?.id) return;
 
   const usedSet = new Set(Array.isArray(stageState.usedDatapointIds) ? stageState.usedDatapointIds : []);
   const availableOwnerKeys = new Set(
     stageState.pool
-      .filter((entry) => entry?.id && entry.id !== champion.id && !usedSet.has(entry.id))
+      .filter((entry) => entry?.id && entry.id !== anchor.id && !usedSet.has(entry.id))
       .map((entry) => getRecentOwnerKey(entry))
       .filter(Boolean)
   );
@@ -224,8 +169,8 @@ function resetSeenOwnersIfExhausted(stageState, champion) {
   const hasUnseenOwner = Array.from(availableOwnerKeys).some((ownerKey) => !seenOwnerSet.has(ownerKey));
   if (hasUnseenOwner) return;
 
-  const championOwnerKey = getRecentOwnerKey(champion);
-  stageState.ownersSeenThisCycle = championOwnerKey ? [championOwnerKey] : [];
+  const anchorOwnerKey = getRecentOwnerKey(anchor);
+  stageState.ownersSeenThisCycle = anchorOwnerKey ? [anchorOwnerKey] : [];
 }
 
 function canAdvanceStage(room, socket) {
@@ -286,7 +231,7 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
       applyAwards(room, bonuses);
     }
 
-    syncAnchorState(stageState, resolveNextAnchorState(stageState, round));
+    syncHigherLowerAnchorState(stageState, resolveHigherLowerNextAnchorState(stageState, round));
     rememberSeenOwners(stageState, [round.left, round.right]);
     rememberRecentPromptTraits(stageState, [round.left, round.right]);
 
@@ -295,18 +240,19 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
     console.log(stageState.recentEntityTypes);
     console.log(stageState.recentScopes);
 
-    const nextChampion =
-      getAnchorById(stageState) || round.right || round.left;
-    resetSeenOwnersIfExhausted(stageState, nextChampion);
+    const nextAnchor =
+      getHigherLowerAnchor(stageState) || round.right || round.left;
+    resetSeenOwnersIfExhausted(stageState, nextAnchor);
+    const mode = resolveHigherLowerMode(stageState);
     const hasNextChallenger = !!pickChallenger({
       pool: stageState.pool || [],
-      champion: nextChampion,
+      anchor: nextAnchor,
       usedIds: stageState.usedDatapointIds || [],
       ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
       recentEntityTypes: stageState.recentEntityTypes || [],
       recentScopes: stageState.recentScopes || [],
-      mode: getStageMode(stageState),
-      championDefenseCount: getAnchorHoldCount(stageState),
+      mode,
+      anchorHoldCount: getHigherLowerAnchorHoldCount(stageState),
       logSelection: false,
     });
     if (stageState.roundNumber >= stageState.maxRounds || !hasNextChallenger) {
@@ -349,32 +295,32 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
           metric: resolveMetric(room, idx, params),
           options: resolveStageOptions(room, idx, params),
         });
-        syncAnchorState(stageState);
         stageStates[idx] = stageState;
       }
 
-      const champion = getAnchorById(stageState);
-      if (!champion) {
+      const anchor = getHigherLowerAnchor(stageState);
+      if (!anchor) {
         return cb?.({ ok: false, error: 'NO_DATAPOINTS_AVAILABLE' });
       }
 
-      resetSeenOwnersIfExhausted(stageState, champion);
+      resetSeenOwnersIfExhausted(stageState, anchor);
+      const mode = resolveHigherLowerMode(stageState);
       const challenger = pickChallenger({
         pool: stageState.pool || [],
-        champion,
+        anchor,
         usedIds: stageState.usedDatapointIds || [],
         ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
         recentEntityTypes: stageState.recentEntityTypes || [],
         recentScopes: stageState.recentScopes || [],
-        mode: getStageMode(stageState),
-        championDefenseCount: getAnchorHoldCount(stageState),
+        mode,
+        anchorHoldCount: getHigherLowerAnchorHoldCount(stageState),
       });
 
       room.roundState = room.roundState || {};
 
       if (!challenger) {
         clearRoundTimer?.(room, idx);
-        room.roundState[idx] = createRoundState(stageState, champion, null, {
+        room.roundState[idx] = createRoundState(stageState, anchor, null, {
           status: 'pending',
           stageComplete: true,
         });
@@ -389,7 +335,7 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
         : [];
       stageState.usedDatapointIds.push(challenger.id);
 
-      const roundState = createRoundState(stageState, champion, challenger);
+      const roundState = createRoundState(stageState, anchor, challenger);
       room.roundState[idx] = roundState;
       roundState.expiresAt = scheduleRoundTimer?.(room, idx, ROUND_DURATION_MS, () => {
         try {
@@ -471,10 +417,4 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
 
 module.exports = {
   register: registerHIGHER_LOWER,
-  helpers: {
-    getAnchorDatapointId,
-    getAnchorHoldCount,
-    resolveNextAnchorState,
-    syncAnchorState,
-  },
 };

@@ -16,6 +16,7 @@ const HIGHER_LOWER_MODE_CONFIG = {
   winner_stays: {
     openingMinPercentile: 0.1,
     openingMaxPercentile: 0.2,
+    poolTrimBottomPercent: 0,
     directionLowQuantile: 0.1,
     directionHighQuantile: 0.8,
     distanceBands: [
@@ -28,6 +29,7 @@ const HIGHER_LOWER_MODE_CONFIG = {
   right_advances: {
     openingMinPercentile: 0.4,
     openingMaxPercentile: 0.6,
+    poolTrimBottomPercent: 0.3,
     directionLowQuantile: 0.2,
     directionHighQuantile: 0.99,
     distanceBands: [
@@ -72,6 +74,50 @@ function getHigherLowerModeConfig(options = {}) {
   return {
     mode,
     ...HIGHER_LOWER_MODE_CONFIG[mode],
+  };
+}
+
+function getHigherLowerDatapointById(stageState, datapointId) {
+  if (!datapointId) return null;
+  return stageState?.pool?.find((entry) => entry?.id === datapointId) || null;
+}
+
+function getHigherLowerAnchorDatapointId(stageState) {
+  return stageState?.anchorDatapointId || null;
+}
+
+function getHigherLowerAnchorHoldCount(stageState) {
+  return Math.max(0, Number(stageState?.anchorHoldCount) || 0);
+}
+
+function syncHigherLowerAnchorState(stageState, { anchorDatapointId, anchorHoldCount } = {}) {
+  if (!stageState) return stageState;
+  stageState.anchorDatapointId = anchorDatapointId ?? getHigherLowerAnchorDatapointId(stageState);
+  stageState.anchorHoldCount = anchorHoldCount === undefined
+    ? getHigherLowerAnchorHoldCount(stageState)
+    : Math.max(0, Number(anchorHoldCount) || 0);
+  return stageState;
+}
+
+function getHigherLowerAnchor(stageState, datapointId = getHigherLowerAnchorDatapointId(stageState)) {
+  return getHigherLowerDatapointById(stageState, datapointId);
+}
+
+function resolveHigherLowerNextAnchorState(stageState, round) {
+  const mode = resolveHigherLowerMode(stageState);
+  const currentAnchorDatapointId = getHigherLowerAnchorDatapointId(stageState);
+  const currentAnchorHoldCount = getHigherLowerAnchorHoldCount(stageState);
+
+  if (mode === 'right_advances' || round?.results?.winnerSide === 'RIGHT') {
+    return {
+      anchorDatapointId: round?.right?.id || currentAnchorDatapointId,
+      anchorHoldCount: 0,
+    };
+  }
+
+  return {
+    anchorDatapointId: round?.left?.id || currentAnchorDatapointId,
+    anchorHoldCount: currentAnchorHoldCount + 1,
   };
 }
 
@@ -206,6 +252,12 @@ function buildDatapointId(parts = []) {
   return parts
     .map((part) => (part === null || part === undefined || part === '' ? 'none' : String(part)))
     .join('::');
+}
+
+function compareDatapointsByValueAsc(left, right) {
+  const valueDelta = (Number(left?.value) || 0) - (Number(right?.value) || 0);
+  if (valueDelta !== 0) return valueDelta;
+  return String(left?.id || '').localeCompare(String(right?.id || ''));
 }
 
 function clonePlayerEntry(playerId, player = {}) {
@@ -1156,7 +1208,7 @@ async function buildHigherLowerDatapointPool({ room, metric = 'plays', options =
 
 function pickOpeningDatapoint(pool = [], options = {}) {
   if (!pool.length) return null;
-  const sorted = [...pool].sort((a, b) => a.value - b.value);
+  const sorted = [...pool].sort(compareDatapointsByValueAsc);
   const modeConfig = getHigherLowerModeConfig(options);
   const minPercentile = clampNumber(
     Number(options.openingMinPercentile),
@@ -1185,6 +1237,26 @@ function pickOpeningDatapoint(pool = [], options = {}) {
   const end = Math.min(sorted.length, centerIndex + radius + 1);
   const candidates = sorted.slice(start, end);
   return candidates[Math.floor(Math.random() * candidates.length)] || sorted[centerIndex] || sorted[0];
+}
+
+function trimHigherLowerPoolForMode(pool = [], options = {}) {
+  if (!Array.isArray(pool) || pool.length < 2) return Array.isArray(pool) ? pool : [];
+
+  const modeConfig = getHigherLowerModeConfig(options);
+  const trimBottomPercent = clampNumber(
+    Number(options.poolTrimBottomPercent),
+    0,
+    0.95,
+    modeConfig.poolTrimBottomPercent || 0
+  );
+  if (trimBottomPercent <= 0) return pool;
+
+  const sorted = [...pool].sort(compareDatapointsByValueAsc);
+  const maxTrimCount = Math.max(0, sorted.length - 2);
+  const trimCount = Math.min(maxTrimCount, Math.floor(sorted.length * trimBottomPercent));
+  if (trimCount <= 0) return pool;
+
+  return sorted.slice(trimCount);
 }
 
 function buildSeenOwnerList(ownerIds = []) {
@@ -1266,7 +1338,7 @@ function selectWeightedGroup(groups = []) {
   return availableGroups[availableGroups.length - 1];
 }
 
-function buildOutcomeSummary(candidates = [], championValue = 0) {
+function buildOutcomeSummary(candidates = [], anchorValue = 0) {
   const summary = {
     total: candidates.length,
     greaterCount: 0,
@@ -1279,9 +1351,9 @@ function buildOutcomeSummary(candidates = [], championValue = 0) {
 
   for (const entry of candidates) {
     const entryValue = Number(entry?.value) || 0;
-    if (entryValue > championValue) {
+    if (entryValue > anchorValue) {
       summary.greaterCount += 1;
-    } else if (entryValue < championValue) {
+    } else if (entryValue < anchorValue) {
       summary.lessCount += 1;
     } else {
       summary.equalCount += 1;
@@ -1297,13 +1369,13 @@ function buildOutcomeSummary(candidates = [], championValue = 0) {
   return summary;
 }
 
-function buildDirectionalGroups(candidates = [], championValue = 0) {
+function buildDirectionalGroups(candidates = [], anchorValue = 0) {
   const higher = [];
   const lowerOrEqual = [];
 
   for (const entry of candidates) {
     const entryValue = Number(entry?.value) || 0;
-    if (entryValue > championValue) {
+    if (entryValue > anchorValue) {
       higher.push(entry);
     } else {
       lowerOrEqual.push(entry);
@@ -1329,7 +1401,7 @@ function getQuantileValue(sortedValues = [], quantile = 0.5) {
 
 function buildValueScaleSummary({
   sortedValues = [],
-  championValue = 0,
+  anchorValue = 0,
   lowQuantile = null,
   highQuantile = null,
   mode = DEFAULT_HIGHER_LOWER_MODE,
@@ -1369,10 +1441,10 @@ function buildValueScaleSummary({
   const highAnchorValue = getQuantileValue(sortedValues, resolvedHighQuantile);
   const lowAnchorLog = Math.log1p(Math.max(0, lowAnchorValue));
   const highAnchorLog = Math.log1p(Math.max(0, highAnchorValue));
-  const championLogValue = Math.log1p(Math.max(0, Number(championValue) || 0));
+  const anchorLogValue = Math.log1p(Math.max(0, Number(anchorValue) || 0));
   const logRange = highAnchorLog - lowAnchorLog;
   const unclampedPosition = logRange > 1e-9
-    ? (championLogValue - lowAnchorLog) / logRange
+    ? (anchorLogValue - lowAnchorLog) / logRange
     : 0.5;
   const logScaledPosition = clampNumber(unclampedPosition, 0, 1, 0.5);
 
@@ -1387,13 +1459,13 @@ function buildValueScaleSummary({
 
 function computeHigherDirectionChance({
   sortedValues = [],
-  championValue = 0,
-  championDefenseCount = 0,
+  anchorValue = 0,
+  anchorHoldCount = 0,
   mode = DEFAULT_HIGHER_LOWER_MODE,
 }) {
   const valueScaleSummary = buildValueScaleSummary({
     sortedValues,
-    championValue,
+    anchorValue,
     mode,
   });
   const baseHigherChance = clampNumber(
@@ -1402,7 +1474,7 @@ function computeHigherDirectionChance({
     0.82,
     0.5
   );
-  const streakBoost = Math.min(0.6, Math.max(0, Number(championDefenseCount) || 0) * 0.1);
+  const streakBoost = Math.min(0.6, Math.max(0, Number(anchorHoldCount) || 0) * 0.1);
   const targetHigherChance = clampNumber(
     baseHigherChance + streakBoost,
     0.18,
@@ -1420,18 +1492,18 @@ function computeHigherDirectionChance({
 
 function computeRightAdvancesDirectionChance({
   sortedValues = [],
-  championValue = 0,
+  anchorValue = 0,
   mode = DEFAULT_HIGHER_LOWER_MODE,
 }) {
   const valueScaleSummary = buildValueScaleSummary({
     sortedValues,
-    championValue,
+    anchorValue,
     mode,
   });
   const targetHigherChance = clampNumber(
-    0.5 + ((0.5 - valueScaleSummary.logScaledPosition) * 0.3),
+    0.5 + ((0.5 - valueScaleSummary.logScaledPosition) * 0.5),
     0.35,
-    0.65,
+    0.75,
     0.5
   );
 
@@ -1510,25 +1582,25 @@ function pickDirectionalCandidate(candidates = [], selectionContext = {}) {
 
 function pickChallenger({
   pool = [],
-  champion,
+  anchor,
   usedIds = [],
   maxAttempts = 4,
   ownersSeenThisCycle = [],
   recentEntityTypes = [],
   recentScopes = [],
   mode = DEFAULT_HIGHER_LOWER_MODE,
-  championDefenseCount = 0,
+  anchorHoldCount = 0,
   logSelection = true,
 }) {
-  if (!champion) return null;
+  if (!anchor) return null;
   const resolvedMode = resolveHigherLowerMode({ mode });
   const usedSet = new Set(usedIds);
-  const available = pool.filter((entry) => entry?.id && entry.id !== champion.id && !usedSet.has(entry.id));
+  const available = pool.filter((entry) => entry?.id && entry.id !== anchor.id && !usedSet.has(entry.id));
   if (!available.length) {
     if (logSelection) {
       logHigherLowerPerf('pickChallenger no candidates', {
-        championId: champion?.id || null,
-        championTitle: champion?.title || null,
+        anchorId: anchor?.id || null,
+        anchorTitle: anchor?.title || null,
         usedCount: usedSet.size,
         poolSize: pool.length,
       });
@@ -1536,21 +1608,21 @@ function pickChallenger({
     return null;
   }
 
-  const sorted = [...available].sort((a, b) => a.value - b.value);
+  const sorted = [...available].sort(compareDatapointsByValueAsc);
   const sortedValues = sorted.map((entry) => Math.max(0, Number(entry?.value) || 0));
-  const rawChampionValue = Number(champion.value) || 0;
-  const championValue = Math.max(1, rawChampionValue || 1);
-  const availableOutcomeSummary = buildOutcomeSummary(sorted, rawChampionValue);
+  const rawAnchorValue = Number(anchor.value) || 0;
+  const anchorValue = Math.max(1, rawAnchorValue || 1);
+  const availableOutcomeSummary = buildOutcomeSummary(sorted, rawAnchorValue);
   const directionPlan = resolvedMode === 'right_advances'
     ? computeRightAdvancesDirectionChance({
         sortedValues,
-        championValue: rawChampionValue,
+        anchorValue: rawAnchorValue,
         mode: resolvedMode,
       })
     : computeHigherDirectionChance({
         sortedValues,
-        championValue: rawChampionValue,
-        championDefenseCount,
+        anchorValue: rawAnchorValue,
+        anchorHoldCount,
         mode: resolvedMode,
       });
   const distanceBands = getHigherLowerModeConfig({ mode: resolvedMode })
@@ -1560,7 +1632,7 @@ function pickChallenger({
   const groupedCandidates = distanceBands.map((band, index) => {
     const rawCandidates = sorted.filter((entry) => {
       const entryValue = Math.max(1, entry.value || 1);
-      const ratio = Math.max(entryValue / championValue, championValue / entryValue);
+      const ratio = Math.max(entryValue / anchorValue, anchorValue / entryValue);
       const withinLowerBound = index === 0 ? ratio >= band.minRatio : ratio > band.minRatio;
       return withinLowerBound && ratio <= band.maxRatio;
     });
@@ -1573,11 +1645,11 @@ function pickChallenger({
       maxRatio: band.maxRatio,
       weight: band.weight,
       rawCount: rawCandidates.length,
-      rawOutcomeSummary: buildOutcomeSummary(rawCandidates, rawChampionValue),
+      rawOutcomeSummary: buildOutcomeSummary(rawCandidates, rawAnchorValue),
       unseenOwnerCount: candidates.length,
       items: candidates,
-      directionalGroups: buildDirectionalGroups(candidates, rawChampionValue),
-      outcomeSummary: buildOutcomeSummary(candidates, rawChampionValue),
+      directionalGroups: buildDirectionalGroups(candidates, rawAnchorValue),
+      outcomeSummary: buildOutcomeSummary(candidates, rawAnchorValue),
     };
   });
 
@@ -1604,11 +1676,11 @@ function pickChallenger({
 
     if (logSelection) {
       logHigherLowerPerf('pickChallenger selected challenger', {
-        champion: {
-          id: champion?.id || null,
-          title: champion?.title || null,
-          value: rawChampionValue,
-          defenseCount: Number(championDefenseCount) || 0,
+        anchor: {
+          id: anchor?.id || null,
+          title: anchor?.title || null,
+          value: rawAnchorValue,
+          holdCount: Number(anchorHoldCount) || 0,
         },
         mode: resolvedMode,
         ownersSeenThisCycle,
@@ -1649,9 +1721,9 @@ function pickChallenger({
           id: challenger?.id || null,
           title: challenger?.title || null,
           value: Number(challenger?.value) || 0,
-          relationToChampion: (Number(challenger?.value) || 0) > rawChampionValue
+          relationToAnchor: (Number(challenger?.value) || 0) > rawAnchorValue
             ? 'higher'
-            : (Number(challenger?.value) || 0) < rawChampionValue
+            : (Number(challenger?.value) || 0) < rawAnchorValue
             ? 'lower'
             : 'equal',
         },
@@ -1662,7 +1734,7 @@ function pickChallenger({
   }
 
   const fallbackCandidates = preferUnseenOwners(sorted, ownersSeenThisCycle);
-  const fallbackDirectionalGroups = buildDirectionalGroups(fallbackCandidates, rawChampionValue);
+  const fallbackDirectionalGroups = buildDirectionalGroups(fallbackCandidates, rawAnchorValue);
   const fallbackDirectionSelection = planDirectionalSelection({
     targetHigherChance: directionPlan.targetHigherChance,
     hasHigher: fallbackDirectionalGroups.higher.length > 0,
@@ -1680,12 +1752,12 @@ function pickChallenger({
   if (!challenger) return null;
 
   if (logSelection) {
-    logHigherLowerPerf('pickChallenger fallback challenger', {
-      champion: {
-        id: champion?.id || null,
-        title: champion?.title || null,
-        value: rawChampionValue,
-        defenseCount: Number(championDefenseCount) || 0,
+      logHigherLowerPerf('pickChallenger fallback challenger', {
+      anchor: {
+        id: anchor?.id || null,
+        title: anchor?.title || null,
+        value: rawAnchorValue,
+        holdCount: Number(anchorHoldCount) || 0,
       },
       mode: resolvedMode,
       ownersSeenThisCycle,
@@ -1695,7 +1767,7 @@ function pickChallenger({
       availableOutcomeSummary,
       directionPlan,
       fallbackCandidateCount: fallbackCandidates.length,
-      fallbackOutcomeSummary: buildOutcomeSummary(fallbackCandidates, rawChampionValue),
+      fallbackOutcomeSummary: buildOutcomeSummary(fallbackCandidates, rawAnchorValue),
       fallbackDirectionalCounts: {
         higher: fallbackDirectionalGroups.higher.length,
         lowerOrEqual: fallbackDirectionalGroups.lowerOrEqual.length,
@@ -1711,9 +1783,9 @@ function pickChallenger({
         id: challenger?.id || null,
         title: challenger?.title || null,
         value: Number(challenger?.value) || 0,
-        relationToChampion: (Number(challenger?.value) || 0) > rawChampionValue
+        relationToAnchor: (Number(challenger?.value) || 0) > rawAnchorValue
           ? 'higher'
-          : (Number(challenger?.value) || 0) < rawChampionValue
+          : (Number(challenger?.value) || 0) < rawAnchorValue
           ? 'lower'
           : 'equal',
       },
@@ -1725,9 +1797,10 @@ function pickChallenger({
 
 async function buildHigherLowerStageState({ room, metric = 'plays', options = {} }) {
   const timer = startPerfTimer();
-  const pool = await buildHigherLowerDatapointPool({ room, metric, options });
-  const openingDatapoint = pickOpeningDatapoint(pool, options);
   const mode = resolveHigherLowerMode(options);
+  const untrimmedPool = await buildHigherLowerDatapointPool({ room, metric, options });
+  const pool = trimHigherLowerPoolForMode(untrimmedPool, { ...options, mode });
+  const openingDatapoint = pickOpeningDatapoint(pool, { ...options, mode });
   const stageState = {
     mode,
     metric,
@@ -1735,10 +1808,8 @@ async function buildHigherLowerStageState({ room, metric = 'plays', options = {}
     roundNumber: 0,
     anchorHoldCount: 0,
     anchorDatapointId: openingDatapoint?.id || null,
-    championDefenseCount: 0,
     pool,
     usedDatapointIds: openingDatapoint?.id ? [openingDatapoint.id] : [],
-    championDatapointId: openingDatapoint?.id || null,
     ownersSeenThisCycle: buildSeenOwnerList([getRecentOwnerKey(openingDatapoint)]),
     recentEntityTypes: appendRecentPromptTraitValues([], [openingDatapoint?.entityType]),
     recentScopes: appendRecentPromptTraitValues([], [openingDatapoint?.scope]),
@@ -1765,7 +1836,9 @@ async function buildHigherLowerStageState({ room, metric = 'plays', options = {}
     mode,
     metric,
     roomCode: room?.code || room?.roomCode || null,
+    untrimmedPoolSize: untrimmedPool.length,
     poolSize: pool.length,
+    trimmedPoolCount: Math.max(0, untrimmedPool.length - pool.length),
     maxRounds: stageState.maxRounds,
     ownersSeenThisCycle: stageState.ownersSeenThisCycle,
     recentEntityTypes: stageState.recentEntityTypes,
@@ -1797,8 +1870,15 @@ module.exports = {
     displayMetricValue,
     formatTimeframeLabel,
     getEligiblePlayers,
+    getHigherLowerAnchor,
+    getHigherLowerAnchorDatapointId,
+    getHigherLowerAnchorHoldCount,
+    getHigherLowerDatapointById,
     getRecentOwnerKey,
+    resolveHigherLowerNextAnchorState,
     resolveHigherLowerMode,
     resolveSupportedTimeframes,
+    syncHigherLowerAnchorState,
+    trimHigherLowerPoolForMode,
   },
 };

@@ -10,7 +10,12 @@ const {
   helpers: {
     appendRecentPromptTraitValues,
     displayMetricValue,
+    getHigherLowerAnchor,
+    getHigherLowerAnchorHoldCount,
     getRecentOwnerKey,
+    resolveHigherLowerNextAnchorState,
+    resolveHigherLowerMode,
+    syncHigherLowerAnchorState,
   },
 } = require('../services/higherLowerService.js');
 
@@ -84,6 +89,7 @@ function buildOptions(args = {}) {
   const openingMaxPercentile = parseNumber(args['opening-max-percentile']);
   const openingWindowPercent = parseNumber(args['opening-window-percent']);
   const timeframes = parseList(args.timeframes);
+  const mode = resolveHigherLowerMode({ mode: args.mode });
 
   if (Number.isFinite(maxRounds) && maxRounds > 0) options.maxRounds = maxRounds;
   if (Number.isFinite(maxPerBucket) && maxPerBucket > 0) options.maxPerBucket = maxPerBucket;
@@ -91,6 +97,7 @@ function buildOptions(args = {}) {
   if (Number.isFinite(openingMaxPercentile)) options.openingMaxPercentile = openingMaxPercentile;
   if (Number.isFinite(openingWindowPercent)) options.openingWindowPercent = openingWindowPercent;
   if (timeframes.length) options.timeframes = timeframes;
+  options.mode = mode;
 
   return options;
 }
@@ -117,16 +124,12 @@ Options:
   --sim-players=<number>
   --accuracy=<0-1>           Used by --strategy=smart
   --room-code=<code>
+  --mode=winner_stays|right_advances
   --opening-min-percentile=<0-1>
   --opening-max-percentile=<0-1>
   --opening-window-percent=<0-1>
   --help
 `.trim());
-}
-
-function getChampionById(stageState, datapointId) {
-  if (!datapointId) return null;
-  return stageState?.pool?.find((entry) => entry?.id === datapointId) || null;
 }
 
 function rememberSeenOwners(stageState, datapoints = []) {
@@ -158,13 +161,13 @@ function rememberRecentPromptTraits(stageState, datapoints = []) {
   );
 }
 
-function resetSeenOwnersIfExhausted(stageState, champion) {
-  if (!stageState?.pool?.length || !champion?.id) return;
+function resetSeenOwnersIfExhausted(stageState, anchor) {
+  if (!stageState?.pool?.length || !anchor?.id) return;
 
   const usedSet = new Set(Array.isArray(stageState.usedDatapointIds) ? stageState.usedDatapointIds : []);
   const availableOwnerKeys = new Set(
     stageState.pool
-      .filter((entry) => entry?.id && entry.id !== champion.id && !usedSet.has(entry.id))
+      .filter((entry) => entry?.id && entry.id !== anchor.id && !usedSet.has(entry.id))
       .map((entry) => getRecentOwnerKey(entry))
       .filter(Boolean)
   );
@@ -175,8 +178,8 @@ function resetSeenOwnersIfExhausted(stageState, champion) {
   const hasUnseenOwner = Array.from(availableOwnerKeys).some((ownerKey) => !seenOwnerSet.has(ownerKey));
   if (hasUnseenOwner) return;
 
-  const championOwnerKey = getRecentOwnerKey(champion);
-  stageState.ownersSeenThisCycle = championOwnerKey ? [championOwnerKey] : [];
+  const anchorOwnerKey = getRecentOwnerKey(anchor);
+  stageState.ownersSeenThisCycle = anchorOwnerKey ? [anchorOwnerKey] : [];
 }
 
 function pickChoice({ strategy, winnerSide, accuracy, index }) {
@@ -284,12 +287,15 @@ function formatDatapointBlock(label, datapoint) {
 
 function formatSummary(summary) {
   return [
+    `mode: ${summary.mode}`,
     `roundsPlayed: ${summary.roundsPlayed}`,
     `terminationReason: ${summary.terminationReason}`,
     `leftWins: ${summary.leftWins}`,
     `rightWins: ${summary.rightWins}`,
     `ties: ${summary.ties}`,
-    `championChanges: ${summary.championChanges}`,
+    `upMoves: ${summary.upMoves}`,
+    `downMoves: ${summary.downMoves}`,
+    `flatMoves: ${summary.flatMoves}`,
     `averageRatio: ${summary.averageRatio}`,
     `maxRatio: ${summary.maxRatio}`,
   ].join('\n');
@@ -299,18 +305,21 @@ function buildTranscript({
   generatedAt,
   roomCode,
   metric,
+  mode,
   strategy,
   accuracy,
   simulatedPlayerCount,
   stageState,
-  openingChampion,
+  openingAnchor,
   rounds,
   terminationReason,
 }) {
   const leftWins = rounds.filter((round) => round.results.winnerSide === 'LEFT').length;
   const rightWins = rounds.filter((round) => round.results.winnerSide === 'RIGHT').length;
   const ties = rounds.filter((round) => round.results.winnerSide === 'TIE').length;
-  const championChanges = rounds.filter((round) => round.results.winnerSide === 'RIGHT').length;
+  const upMoves = rounds.filter((round) => round.anchorMovement === 'up').length;
+  const downMoves = rounds.filter((round) => round.anchorMovement === 'down').length;
+  const flatMoves = rounds.filter((round) => round.anchorMovement === 'flat').length;
   const ratios = rounds
     .map((round) => round.ratio)
     .filter((ratio) => Number.isFinite(ratio));
@@ -323,21 +332,25 @@ function buildTranscript({
     `generatedAt: ${generatedAt}`,
     `roomCode: ${roomCode}`,
     `metric: ${metric}`,
+    `mode: ${mode}`,
     `strategy: ${strategy}`,
     `accuracy: ${strategy === 'smart' ? accuracy : 'n/a'}`,
     `simulatedPlayerCount: ${strategy === 'none' ? 0 : simulatedPlayerCount}`,
     `poolSize: ${stageState.pool?.length || 0}`,
     `maxRounds: ${stageState.maxRounds || 0}`,
-    `openingChampion: ${formatDatapointLabel(openingChampion)}`,
+    `openingAnchor: ${formatDatapointLabel(openingAnchor)}`,
     '',
     '[summary]',
     formatSummary({
+      mode,
       roundsPlayed: rounds.length,
       terminationReason,
       leftWins,
       rightWins,
       ties,
-      championChanges,
+      upMoves,
+      downMoves,
+      flatMoves,
       averageRatio,
       maxRatio,
     }),
@@ -361,8 +374,9 @@ function buildTranscript({
       `ratio: ${round.ratioDisplay}`,
       `votes: LEFT=${round.results.tally.LEFT} RIGHT=${round.results.tally.RIGHT}`,
       `winningPlayers: ${round.results.winners.join(', ') || 'none'}`,
-      `nextChampion: ${formatDatapointLabel(round.nextChampion)}`,
-      `championDefenseCount: ${round.championDefenseCount}`,
+      `nextAnchor: ${formatDatapointLabel(round.nextAnchor)}`,
+      `anchorHoldCount: ${round.anchorHoldCount}`,
+      `anchorMovement: ${round.anchorMovement}`,
       `ownersSeenThisCycle: ${(round.ownersSeenThisCycle || []).join(', ') || 'none'}`,
       `recentEntityTypes: ${(round.recentEntityTypes || []).join(', ') || 'none'}`,
       `recentScopes: ${(round.recentScopes || []).join(', ') || 'none'}`,
@@ -389,26 +403,28 @@ async function writeTranscript({ roomCode, metric, transcript }) {
 async function simulateMatch({ roomCode, metric, options, strategy, simulatedPlayerCount, accuracy }) {
   const room = createRoom(roomCode);
   const stageState = await buildHigherLowerStageState({ room, metric, options });
-  let champion = getChampionById(stageState, stageState.championDatapointId);
+  let anchor = getHigherLowerAnchor(stageState);
 
-  if (!champion) {
-    throw new Error('No opening champion was selected. The datapoint pool may be empty.');
+  if (!anchor) {
+    throw new Error('No opening anchor was selected. The datapoint pool may be empty.');
   }
 
-  const openingChampion = champion;
+  const openingAnchor = anchor;
   const rounds = [];
   let terminationReason = 'NO_CHALLENGER_AVAILABLE';
 
   while (stageState.roundNumber < stageState.maxRounds) {
-    resetSeenOwnersIfExhausted(stageState, champion);
+    resetSeenOwnersIfExhausted(stageState, anchor);
+    const mode = resolveHigherLowerMode(stageState);
     const challenger = pickChallenger({
       pool: stageState.pool || [],
-      champion,
+      anchor,
       usedIds: stageState.usedDatapointIds || [],
       ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
       recentEntityTypes: stageState.recentEntityTypes || [],
       recentScopes: stageState.recentScopes || [],
-      championDefenseCount: stageState.championDefenseCount || 0,
+      mode,
+      anchorHoldCount: getHigherLowerAnchorHoldCount(stageState),
     });
 
     if (!challenger) {
@@ -421,7 +437,7 @@ async function simulateMatch({ roomCode, metric, options, strategy, simulatedPla
       ? stageState.usedDatapointIds
       : [];
     stageState.usedDatapointIds.push(challenger.id);
-    const leftDatapoint = { ...champion };
+    const leftDatapoint = { ...anchor };
     const rightDatapoint = { ...challenger };
 
     const answers = simulateAnswers({
@@ -439,12 +455,18 @@ async function simulateMatch({ roomCode, metric, options, strategy, simulatedPla
     rememberSeenOwners(stageState, [leftDatapoint, rightDatapoint]);
     rememberRecentPromptTraits(stageState, [leftDatapoint, rightDatapoint]);
 
-    if (results.winnerSide === 'RIGHT') {
-      stageState.championDatapointId = challenger.id;
-      stageState.championDefenseCount = 0;
-      champion = challenger;
-    } else {
-      stageState.championDefenseCount = (Number(stageState.championDefenseCount) || 0) + 1;
+    syncHigherLowerAnchorState(stageState, resolveHigherLowerNextAnchorState(stageState, {
+      left: leftDatapoint,
+      right: rightDatapoint,
+      results,
+    }));
+    anchor = getHigherLowerAnchor(stageState) || challenger || anchor;
+
+    let anchorMovement = 'flat';
+    if ((Number(anchor?.value) || 0) > (Number(leftDatapoint?.value) || 0)) {
+      anchorMovement = 'up';
+    } else if ((Number(anchor?.value) || 0) < (Number(leftDatapoint?.value) || 0)) {
+      anchorMovement = 'down';
     }
 
     rounds.push({
@@ -455,8 +477,9 @@ async function simulateMatch({ roomCode, metric, options, strategy, simulatedPla
       difference: Math.abs(results.leftValue - results.rightValue),
       ratio: computeRatio(results.leftValue, results.rightValue),
       ratioDisplay: `${computeRatio(results.leftValue, results.rightValue).toFixed(3)}x`,
-      nextChampion: { ...champion },
-      championDefenseCount: stageState.championDefenseCount,
+      nextAnchor: { ...anchor },
+      anchorHoldCount: getHigherLowerAnchorHoldCount(stageState),
+      anchorMovement,
       ownersSeenThisCycle: [...(stageState.ownersSeenThisCycle || [])],
       recentEntityTypes: [...(stageState.recentEntityTypes || [])],
       recentScopes: [...(stageState.recentScopes || [])],
@@ -471,11 +494,12 @@ async function simulateMatch({ roomCode, metric, options, strategy, simulatedPla
   return {
     roomCode,
     metric,
+    mode: resolveHigherLowerMode(stageState),
     strategy,
     accuracy,
     simulatedPlayerCount,
     stageState,
-    openingChampion,
+    openingAnchor,
     rounds,
     terminationReason,
   };
