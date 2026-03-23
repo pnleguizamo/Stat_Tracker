@@ -6,14 +6,38 @@ const { addYearWindows, buildWindowBounds, constants: rollupConstants } = requir
 
 const DEFAULT_MAX_PER_BUCKET = 50;
 const DEFAULT_MAX_ROUNDS = 40;
-const DEFAULT_OPENING_MIN_PERCENTILE = 0.1;
-const DEFAULT_OPENING_MAX_PERCENTILE = 0.2;
 const DEFAULT_OPENING_WINDOW_PERCENT = 0.03;
-const DEFAULT_DIRECTION_LOW_QUANTILE = 0.1;
-const DEFAULT_DIRECTION_HIGH_QUANTILE = 0.8;
 const DEFAULT_RECENT_PROMPT_TRAIT_WINDOW = 2;
+const DEFAULT_HIGHER_LOWER_MODE = 'right_advances';
+const VALID_HIGHER_LOWER_MODES = new Set(['winner_stays', 'right_advances']);
 const HIGHER_LOWER_LOG_PREFIX = '[higher-lower]';
 const HIGHER_LOWER_DEBUG_DIR = path.resolve(__dirname, '..', 'debug', 'higher-lower');
+const HIGHER_LOWER_MODE_CONFIG = {
+  winner_stays: {
+    openingMinPercentile: 0.1,
+    openingMaxPercentile: 0.2,
+    directionLowQuantile: 0.1,
+    directionHighQuantile: 0.8,
+    distanceBands: [
+      { minRatio: 1, maxRatio: 1.8, weight: 0.65 },
+      { minRatio: 1.8, maxRatio: 3.5, weight: 0.25 },
+      { minRatio: 3.5, maxRatio: 8, weight: 0.08 },
+      { minRatio: 8, maxRatio: Infinity, weight: 0.02 },
+    ],
+  },
+  right_advances: {
+    openingMinPercentile: 0.4,
+    openingMaxPercentile: 0.6,
+    directionLowQuantile: 0.2,
+    directionHighQuantile: 0.99,
+    distanceBands: [
+      { minRatio: 1, maxRatio: 1.8, weight: 0.55 },
+      { minRatio: 1.8, maxRatio: 3.5, weight: 0.25 },
+      { minRatio: 3.5, maxRatio: 8, weight: 0.13 },
+      { minRatio: 8, maxRatio: Infinity, weight: 0.07 },
+    ],
+  },
+};
 
 function startPerfTimer() {
   return process.hrtime.bigint();
@@ -34,6 +58,21 @@ function clampNumber(value, min, max, fallback) {
 
 function logHigherLowerPerf(message, details = {}) {
   console.info(`${HIGHER_LOWER_LOG_PREFIX} ${message}`, details);
+}
+
+function resolveHigherLowerMode(options = {}) {
+  const candidate = options?.mode;
+  return VALID_HIGHER_LOWER_MODES.has(candidate)
+    ? candidate
+    : DEFAULT_HIGHER_LOWER_MODE;
+}
+
+function getHigherLowerModeConfig(options = {}) {
+  const mode = resolveHigherLowerMode(options);
+  return {
+    mode,
+    ...HIGHER_LOWER_MODE_CONFIG[mode],
+  };
 }
 
 function sanitizeFileSegment(value, fallback = 'unknown') {
@@ -1118,17 +1157,18 @@ async function buildHigherLowerDatapointPool({ room, metric = 'plays', options =
 function pickOpeningDatapoint(pool = [], options = {}) {
   if (!pool.length) return null;
   const sorted = [...pool].sort((a, b) => a.value - b.value);
+  const modeConfig = getHigherLowerModeConfig(options);
   const minPercentile = clampNumber(
     Number(options.openingMinPercentile),
     0,
     0.99,
-    DEFAULT_OPENING_MIN_PERCENTILE
+    modeConfig.openingMinPercentile
   );
   const maxPercentile = clampNumber(
     Number(options.openingMaxPercentile),
     minPercentile,
     1,
-    DEFAULT_OPENING_MAX_PERCENTILE
+    modeConfig.openingMaxPercentile
   );
   const windowPercent = clampNumber(
     Number(options.openingWindowPercent),
@@ -1290,25 +1330,40 @@ function getQuantileValue(sortedValues = [], quantile = 0.5) {
 function buildValueScaleSummary({
   sortedValues = [],
   championValue = 0,
-  lowQuantile = DEFAULT_DIRECTION_LOW_QUANTILE,
-  highQuantile = DEFAULT_DIRECTION_HIGH_QUANTILE,
+  lowQuantile = null,
+  highQuantile = null,
+  mode = DEFAULT_HIGHER_LOWER_MODE,
 }) {
+  const modeConfig = getHigherLowerModeConfig({ mode });
+  const fallbackLowQuantile = modeConfig.directionLowQuantile;
+  const fallbackHighQuantile = modeConfig.directionHighQuantile;
+  const requestedLowQuantile = lowQuantile === null || lowQuantile === undefined
+    ? fallbackLowQuantile
+    : Number.isFinite(Number(lowQuantile))
+    ? Number(lowQuantile)
+    : fallbackLowQuantile;
+  const requestedHighQuantile = highQuantile === null || highQuantile === undefined
+    ? fallbackHighQuantile
+    : Number.isFinite(Number(highQuantile))
+    ? Number(highQuantile)
+    : fallbackHighQuantile;
+
   if (!sortedValues.length) {
     return {
-      lowQuantile: Number(lowQuantile.toFixed(3)),
-      highQuantile: Number(highQuantile.toFixed(3)),
+      lowQuantile: Number(requestedLowQuantile.toFixed(3)),
+      highQuantile: Number(requestedHighQuantile.toFixed(3)),
       lowAnchorValue: 0,
       highAnchorValue: 0,
       logScaledPosition: 0.5,
     };
   }
 
-  const resolvedLowQuantile = clampNumber(Number(lowQuantile), 0, 0.99, DEFAULT_DIRECTION_LOW_QUANTILE);
+  const resolvedLowQuantile = clampNumber(requestedLowQuantile, 0, 0.99, fallbackLowQuantile);
   const resolvedHighQuantile = clampNumber(
-    Number(highQuantile),
+    requestedHighQuantile,
     resolvedLowQuantile + 0.01,
     1,
-    DEFAULT_DIRECTION_HIGH_QUANTILE
+    fallbackHighQuantile
   );
   const lowAnchorValue = getQuantileValue(sortedValues, resolvedLowQuantile);
   const highAnchorValue = getQuantileValue(sortedValues, resolvedHighQuantile);
@@ -1334,10 +1389,12 @@ function computeHigherDirectionChance({
   sortedValues = [],
   championValue = 0,
   championDefenseCount = 0,
+  mode = DEFAULT_HIGHER_LOWER_MODE,
 }) {
   const valueScaleSummary = buildValueScaleSummary({
     sortedValues,
     championValue,
+    mode,
   });
   const baseHigherChance = clampNumber(
     0.82 - (valueScaleSummary.logScaledPosition * 0.64),
@@ -1357,6 +1414,31 @@ function computeHigherDirectionChance({
     ...valueScaleSummary,
     baseHigherChance: Number(baseHigherChance.toFixed(3)),
     streakBoost: Number(streakBoost.toFixed(3)),
+    targetHigherChance: Number(targetHigherChance.toFixed(3)),
+  };
+}
+
+function computeRightAdvancesDirectionChance({
+  sortedValues = [],
+  championValue = 0,
+  mode = DEFAULT_HIGHER_LOWER_MODE,
+}) {
+  const valueScaleSummary = buildValueScaleSummary({
+    sortedValues,
+    championValue,
+    mode,
+  });
+  const targetHigherChance = clampNumber(
+    0.5 + ((0.5 - valueScaleSummary.logScaledPosition) * 0.3),
+    0.35,
+    0.65,
+    0.5
+  );
+
+  return {
+    ...valueScaleSummary,
+    baseHigherChance: Number(targetHigherChance.toFixed(3)),
+    streakBoost: 0,
     targetHigherChance: Number(targetHigherChance.toFixed(3)),
   };
 }
@@ -1434,10 +1516,12 @@ function pickChallenger({
   ownersSeenThisCycle = [],
   recentEntityTypes = [],
   recentScopes = [],
+  mode = DEFAULT_HIGHER_LOWER_MODE,
   championDefenseCount = 0,
   logSelection = true,
 }) {
   if (!champion) return null;
+  const resolvedMode = resolveHigherLowerMode({ mode });
   const usedSet = new Set(usedIds);
   const available = pool.filter((entry) => entry?.id && entry.id !== champion.id && !usedSet.has(entry.id));
   if (!available.length) {
@@ -1457,17 +1541,21 @@ function pickChallenger({
   const rawChampionValue = Number(champion.value) || 0;
   const championValue = Math.max(1, rawChampionValue || 1);
   const availableOutcomeSummary = buildOutcomeSummary(sorted, rawChampionValue);
-  const directionPlan = computeHigherDirectionChance({
-    sortedValues,
-    championValue: rawChampionValue,
-    championDefenseCount,
-  });
-  const distanceBands = [
-    { minRatio: 1, maxRatio: 1.8, weight: 0.65 },
-    { minRatio: 1.8, maxRatio: 3.5, weight: 0.25 },
-    { minRatio: 3.5, maxRatio: 8, weight: 0.08 },
-    { minRatio: 8, maxRatio: Infinity, weight: 0.02 },
-  ].slice(0, Math.max(1, maxAttempts));
+  const directionPlan = resolvedMode === 'right_advances'
+    ? computeRightAdvancesDirectionChance({
+        sortedValues,
+        championValue: rawChampionValue,
+        mode: resolvedMode,
+      })
+    : computeHigherDirectionChance({
+        sortedValues,
+        championValue: rawChampionValue,
+        championDefenseCount,
+        mode: resolvedMode,
+      });
+  const distanceBands = getHigherLowerModeConfig({ mode: resolvedMode })
+    .distanceBands
+    .slice(0, Math.max(1, maxAttempts));
 
   const groupedCandidates = distanceBands.map((band, index) => {
     const rawCandidates = sorted.filter((entry) => {
@@ -1522,6 +1610,7 @@ function pickChallenger({
           value: rawChampionValue,
           defenseCount: Number(championDefenseCount) || 0,
         },
+        mode: resolvedMode,
         ownersSeenThisCycle,
         recentEntityTypes,
         recentScopes,
@@ -1598,6 +1687,7 @@ function pickChallenger({
         value: rawChampionValue,
         defenseCount: Number(championDefenseCount) || 0,
       },
+      mode: resolvedMode,
       ownersSeenThisCycle,
       recentEntityTypes,
       recentScopes,
@@ -1637,10 +1727,14 @@ async function buildHigherLowerStageState({ room, metric = 'plays', options = {}
   const timer = startPerfTimer();
   const pool = await buildHigherLowerDatapointPool({ room, metric, options });
   const openingDatapoint = pickOpeningDatapoint(pool, options);
+  const mode = resolveHigherLowerMode(options);
   const stageState = {
+    mode,
     metric,
     maxRounds: Number(options.maxRounds) > 0 ? Number(options.maxRounds) : DEFAULT_MAX_ROUNDS,
     roundNumber: 0,
+    anchorHoldCount: 0,
+    anchorDatapointId: openingDatapoint?.id || null,
     championDefenseCount: 0,
     pool,
     usedDatapointIds: openingDatapoint?.id ? [openingDatapoint.id] : [],
@@ -1668,6 +1762,7 @@ async function buildHigherLowerStageState({ room, metric = 'plays', options = {}
 
   logHigherLowerPerf('buildHigherLowerStageState complete', {
     durationMs: roundPerfMs(timer),
+    mode,
     metric,
     roomCode: room?.code || room?.roomCode || null,
     poolSize: pool.length,
@@ -1703,6 +1798,7 @@ module.exports = {
     formatTimeframeLabel,
     getEligiblePlayers,
     getRecentOwnerKey,
+    resolveHigherLowerMode,
     resolveSupportedTimeframes,
   },
 };

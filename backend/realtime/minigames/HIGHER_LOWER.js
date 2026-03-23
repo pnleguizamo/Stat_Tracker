@@ -1,7 +1,7 @@
 const {
   buildHigherLowerStageState,
   pickChallenger,
-  helpers: { appendRecentPromptTraitValues, getRecentOwnerKey },
+  helpers: { appendRecentPromptTraitValues, getRecentOwnerKey, resolveHigherLowerMode },
 } = require('../../services/higherLowerService');
 const { appendRoundHistory, updateStreaks } = require('../scoring');
 
@@ -121,6 +121,64 @@ function getChampionById(stageState, datapointId) {
   return stageState?.pool?.find((entry) => entry?.id === datapointId) || null;
 }
 
+function getStageMode(stageState) {
+  return resolveHigherLowerMode(stageState);
+}
+
+function getAnchorDatapointId(stageState) {
+  return stageState?.anchorDatapointId || stageState?.championDatapointId || null;
+}
+
+function getAnchorHoldCount(stageState) {
+  const anchorHoldCount = Number(stageState?.anchorHoldCount);
+  if (Number.isFinite(anchorHoldCount) && anchorHoldCount >= 0) {
+    return anchorHoldCount;
+  }
+  return Math.max(0, Number(stageState?.championDefenseCount) || 0);
+}
+
+function syncAnchorState(stageState, { anchorDatapointId, anchorHoldCount } = {}) {
+  if (!stageState) return stageState;
+  const nextAnchorDatapointId = anchorDatapointId ?? getAnchorDatapointId(stageState);
+  const nextAnchorHoldCount = anchorHoldCount === undefined
+    ? getAnchorHoldCount(stageState)
+    : Math.max(0, Number(anchorHoldCount) || 0);
+  stageState.anchorDatapointId = nextAnchorDatapointId || null;
+  stageState.championDatapointId = nextAnchorDatapointId || null;
+  stageState.anchorHoldCount = nextAnchorHoldCount;
+  stageState.championDefenseCount = nextAnchorHoldCount;
+  return stageState;
+}
+
+function getAnchorById(stageState, datapointId = getAnchorDatapointId(stageState)) {
+  return getChampionById(stageState, datapointId);
+}
+
+function resolveNextAnchorState(stageState, round) {
+  const mode = getStageMode(stageState);
+  const currentAnchorDatapointId = getAnchorDatapointId(stageState);
+  const currentAnchorHoldCount = getAnchorHoldCount(stageState);
+
+  if (mode === 'right_advances') {
+    return {
+      anchorDatapointId: round?.right?.id || currentAnchorDatapointId,
+      anchorHoldCount: 0,
+    };
+  }
+
+  if (round?.results?.winnerSide === 'RIGHT') {
+    return {
+      anchorDatapointId: round?.right?.id || currentAnchorDatapointId,
+      anchorHoldCount: 0,
+    };
+  }
+
+  return {
+    anchorDatapointId: round?.left?.id || currentAnchorDatapointId,
+    anchorHoldCount: currentAnchorHoldCount + 1,
+  };
+}
+
 function rememberSeenOwners(stageState, datapoints = []) {
   if (!stageState) return;
   const seenOwners = Array.isArray(stageState.ownersSeenThisCycle)
@@ -228,18 +286,17 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
       applyAwards(room, bonuses);
     }
 
-    if (round.results.winnerSide === 'RIGHT') {
-      stageState.championDatapointId = round.right?.id || stageState.championDatapointId;
-      stageState.championDefenseCount = 0;
-    } else {
-      stageState.championDefenseCount = (Number(stageState.championDefenseCount) || 0) + 1;
-    }
+    syncAnchorState(stageState, resolveNextAnchorState(stageState, round));
     rememberSeenOwners(stageState, [round.left, round.right]);
     rememberRecentPromptTraits(stageState, [round.left, round.right]);
 
+    
+    console.log(stageState.ownersSeenThisCycle);
+    console.log(stageState.recentEntityTypes);
+    console.log(stageState.recentScopes);
 
     const nextChampion =
-      getChampionById(stageState, stageState.championDatapointId) || round.left || round.right;
+      getAnchorById(stageState) || round.right || round.left;
     resetSeenOwnersIfExhausted(stageState, nextChampion);
     const hasNextChallenger = !!pickChallenger({
       pool: stageState.pool || [],
@@ -248,7 +305,8 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
       ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
       recentEntityTypes: stageState.recentEntityTypes || [],
       recentScopes: stageState.recentScopes || [],
-      championDefenseCount: stageState.championDefenseCount || 0,
+      mode: getStageMode(stageState),
+      championDefenseCount: getAnchorHoldCount(stageState),
       logSelection: false,
     });
     if (stageState.roundNumber >= stageState.maxRounds || !hasNextChallenger) {
@@ -291,10 +349,11 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
           metric: resolveMetric(room, idx, params),
           options: resolveStageOptions(room, idx, params),
         });
+        syncAnchorState(stageState);
         stageStates[idx] = stageState;
       }
 
-      const champion = getChampionById(stageState, stageState.championDatapointId);
+      const champion = getAnchorById(stageState);
       if (!champion) {
         return cb?.({ ok: false, error: 'NO_DATAPOINTS_AVAILABLE' });
       }
@@ -307,7 +366,8 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
         ownersSeenThisCycle: stageState.ownersSeenThisCycle || [],
         recentEntityTypes: stageState.recentEntityTypes || [],
         recentScopes: stageState.recentScopes || [],
-        championDefenseCount: stageState.championDefenseCount || 0,
+        mode: getStageMode(stageState),
+        championDefenseCount: getAnchorHoldCount(stageState),
       });
 
       room.roundState = room.roundState || {};
@@ -411,4 +471,10 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
 
 module.exports = {
   register: registerHIGHER_LOWER,
+  helpers: {
+    getAnchorDatapointId,
+    getAnchorHoldCount,
+    resolveNextAnchorState,
+    syncAnchorState,
+  },
 };

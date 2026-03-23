@@ -34,6 +34,7 @@ export type StageConfig = {
   minigameId: MinigameId;
   metric?: 'plays' | 'minutes';
   options?: {
+    mode?: 'winner_stays' | 'right_advances';
     metric?: 'plays' | 'minutes';
     maxRounds?: number;
     [key: string]: unknown;
