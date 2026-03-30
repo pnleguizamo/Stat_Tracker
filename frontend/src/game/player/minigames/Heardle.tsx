@@ -1,4 +1,4 @@
-import { FC, useEffect, useMemo, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from 'lib/api';
 import { socket } from 'socket';
 import { GameState, HeardleGuessOutcome, HeardleRoundState } from 'types/game';
@@ -30,6 +30,8 @@ function outcomeLabel(outcome: HeardleGuessOutcome | null) {
   if (outcome === 'gave_up') return { text: 'Gave up', color: '#60a5fa', icon: '>>' };
   return { text: 'No guess yet', color: '#94a3b8', icon: '…' };
 }
+
+const LOAD_MORE_SCROLL_NUDGE_PX = 72;
 
 export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const round =
@@ -67,8 +69,71 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [pendingGiveUp, setPendingGiveUp] = useState<PendingGiveUp | null>(null);
-
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultsContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    // reset selection when snippet changes
+    setSelected(null);
+    setSubmitError(null);
+    setQuery("");
+  }, [round?.currentSnippetIndex, round?.id]);
+
+  const performSearch = useCallback(async (term: string, nextOffset = 0, reset = false) => {
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const res: any = await api.get(
+        `/api/heardle/tracks/search?q=${encodeURIComponent(term)}&limit=10&offset=${nextOffset}`
+      );
+      if (requestId !== searchRequestIdRef.current) return;
+
+      const incomingResults = res.results || [];
+      setResults((prev) => (reset ? incomingResults : [...prev, ...incomingResults]));
+      setOffset((prevOffset) => {
+        if (typeof res.nextOffset === 'number') return res.nextOffset;
+        if (reset) return incomingResults.length;
+        return Math.max(prevOffset, nextOffset + incomingResults.length);
+      });
+      setHasMore(!!res.hasMore);
+
+      if (reset) {
+        resultsContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+      } else if (incomingResults.length) {
+        requestAnimationFrame(() => {
+          // Roughly one row so newly appended items visibly move into view.
+          resultsContainerRef.current?.scrollBy({ top: LOAD_MORE_SCROLL_NUDGE_PX, behavior: 'smooth' });
+        });
+      }
+    } catch (err: any) {
+      if (requestId !== searchRequestIdRef.current) return;
+      console.error(err);
+      setSearchError('Search failed, try again');
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        setSearching(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!query || query.trim().length < 2) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      searchRequestIdRef.current += 1;
+      setResults([]);
+      setHasMore(false);
+      setOffset(0);
+      setSearching(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      performSearch(query, 0, true);
+    }, 300);
+  }, [performSearch, query]);
 
   useEffect(() => {
     if (!round?.expiresAt || round.status === 'revealed') {
@@ -83,44 +148,11 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
   }, [round?.expiresAt, round?.status]);
 
   useEffect(() => {
-    // reset selection when snippet changes
-    setSelected(null);
-    setSubmitError(null);
-    setQuery("");
-  }, [round?.currentSnippetIndex, round?.id]);
-
-  useEffect(() => {
-    if (!query || query.trim().length < 2) {
+    return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      setResults([]);
-      setHasMore(false);
-      setOffset(0);
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      performSearch(query, 0, true);
-    }, 300);
-  }, [query]);
-
-  const performSearch = async (term: string, nextOffset = 0, reset = false) => {
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const res: any = await api.get(
-        `/api/heardle/tracks/search?q=${encodeURIComponent(term)}&limit=10&offset=${nextOffset}`
-      );
-      const newResults = reset ? res.results || [] : [...results, ...(res.results || [])];
-      setResults(newResults);
-      setOffset(res.nextOffset || newResults.length);
-      setHasMore(!!res.hasMore);
-    } catch (err: any) {
-      console.error(err);
-      setSearchError('Search failed, try again');
-    } finally {
-      setSearching(false);
-    }
-  };
+      searchRequestIdRef.current += 1;
+    };
+  }, []);
 
   const handleSubmit = () => {
     if (!roomCode || !round || !selected) return;
@@ -214,6 +246,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
           resp?.error === 'NO_SONGS_REMAINING'
             ? 'No songs left in this stage — advance or adjust the plan.'
             : resp?.error || 'Failed to start Heardle round';
+        setSubmitError(message);
       }
     });
   };
@@ -292,7 +325,7 @@ export const HeardlePlayerView: FC<Props> = ({ roomCode, gameState }) => {
             </div>
           </div>
           {searchError && <div style={{ color: 'salmon', marginBottom: 8 }}>{searchError}</div>}
-          <div className="heardle-results">
+          <div ref={resultsContainerRef} className="heardle-results">
             {results.map((track) => {
               const isSelected = selected?.id === track.id;
               const isGuessed = guessedTrackIds.has(track.id);

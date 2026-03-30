@@ -4,3 +4,5 @@ backend/uploads
 backend/debug
 frontend/public/gamerpics
 backend/public/mongo.*
+.claude
+.codex
