@@ -241,6 +241,8 @@ function startGame(roomCode) {
   room.scoreboard = {};
   room.roundTimers = {};
   room.revealState = null;
+  room.higherLowerStages = {};
+  room._hlPreloads = new Map();
 
   return room;
 }

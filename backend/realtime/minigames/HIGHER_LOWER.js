@@ -56,7 +56,11 @@ function ensureStageStateBucket(room) {
 }
 
 function cloneDatapoint(datapoint) {
-  return datapoint ? { ...datapoint } : null;
+  if (!datapoint) return null;
+  return {
+    ...datapoint,
+    contributorPlayerIds: datapoint.contributorPlayerIds ? [...datapoint.contributorPlayerIds] : null,
+  };
 }
 
 function createRoundState(stageState, anchor, candidate, overrides = {}) {
@@ -290,11 +294,18 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
       let stageState = stageStates[idx];
 
       if (!stageState) {
-        stageState = await buildHigherLowerStageState({
-          room,
-          metric: resolveMetric(room, idx, params),
-          options: resolveStageOptions(room, idx, params),
-        });
+        const preloadPromise = room._hlPreloads?.get(idx);
+        if (preloadPromise) {
+          stageState = await preloadPromise;
+          room._hlPreloads.delete(idx);
+        }
+        if (!stageState) {
+          stageState = await buildHigherLowerStageState({
+            room,
+            metric: resolveMetric(room, idx, params),
+            options: resolveStageOptions(room, idx, params),
+          });
+        }
         stageStates[idx] = stageState;
       }
 
@@ -415,6 +426,32 @@ function registerHIGHER_LOWER(io, socket, deps = {}) {
   });
 }
 
+function preloadStages(room) {
+  if (!room?.stagePlan) return;
+  room._hlPreloads = room._hlPreloads || new Map();
+
+  let chain = Promise.resolve();
+  for (let idx = 0; idx < room.stagePlan.length; idx++) {
+    const config = room.stagePlan[idx];
+    if (config?.minigameId !== 'HIGHER_LOWER') continue;
+    if (room.higherLowerStages?.[idx] || room._hlPreloads.has(idx)) continue;
+
+    const metric = config?.metric || config?.options?.metric || 'plays';
+    const options = config?.options || {};
+    const stageIdx = idx;
+
+    const promise = chain = chain.then(() =>
+      buildHigherLowerStageState({ room, metric, options })
+        .catch(err => {
+          console.error(`[HIGHER_LOWER] preload failed for stage ${stageIdx}:`, err);
+          return null;
+        })
+    );
+    room._hlPreloads.set(stageIdx, promise);
+  }
+}
+
 module.exports = {
   register: registerHIGHER_LOWER,
+  preloadStages,
 };

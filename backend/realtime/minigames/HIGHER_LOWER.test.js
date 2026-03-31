@@ -105,3 +105,43 @@ test('right_advances always advances to the right anchor', () => {
     anchorHoldCount: 0,
   });
 });
+
+test('buildContributorMap maps entity ids to sets of player ids', () => {
+  const userIdToPlayerId = new Map([['user-1', 'player-1'], ['user-2', 'player-2']]);
+  const docs = [
+    { trackId: 'track-a', userId: 'user-1' },
+    { trackId: 'track-b', userId: 'user-2' },
+  ];
+
+  const map = serviceHelpers.buildContributorMap(docs, 'trackId', userIdToPlayerId);
+
+  assert.deepEqual(Array.from(map.get('track-a')), ['player-1']);
+  assert.deepEqual(Array.from(map.get('track-b')), ['player-2']);
+});
+
+test('buildContributorMap merges multiple players for the same entity', () => {
+  const userIdToPlayerId = new Map([['user-1', 'player-1'], ['user-2', 'player-2']]);
+  const docs = [
+    { artistId: 'artist-x', userId: 'user-1' },
+    { artistId: 'artist-x', userId: 'user-2' },
+  ];
+
+  const map = serviceHelpers.buildContributorMap(docs, 'artistId', userIdToPlayerId);
+
+  assert.equal(map.get('artist-x').size, 2);
+  assert.ok(map.get('artist-x').has('player-1'));
+  assert.ok(map.get('artist-x').has('player-2'));
+});
+
+test('buildContributorMap skips docs with missing userId or entityId', () => {
+  const userIdToPlayerId = new Map([['user-1', 'player-1']]);
+  const docs = [
+    { trackId: null, userId: 'user-1' },
+    { trackId: 'track-c', userId: null },
+    { trackId: 'track-d', userId: 'user-unknown' },
+  ];
+
+  const map = serviceHelpers.buildContributorMap(docs, 'trackId', userIdToPlayerId);
+
+  assert.equal(map.size, 0);
+});

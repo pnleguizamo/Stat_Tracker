@@ -476,6 +476,7 @@ function createDatapoint({
   previewTrackName = null,
   previewArtistName = null,
   value,
+  contributorPlayerIds = null,
 }) {
   const displayValue = displayMetricValue(metric, value);
   return {
@@ -495,6 +496,7 @@ function createDatapoint({
     previewArtistName,
     value,
     displayValue,
+    contributorPlayerIds,
   };
 }
 
@@ -616,6 +618,18 @@ function addRoomEntityAggregate(target, key, doc = {}) {
   current.plays += Number(doc.plays) || 0;
   current.msPlayed += Number(doc.msPlayed) || 0;
   target.set(key, current);
+}
+
+function buildContributorMap(docs, entityIdField, userIdToPlayerId) {
+  const map = new Map();
+  for (const doc of docs) {
+    const entityId = doc[entityIdField];
+    const playerId = userIdToPlayerId.get(doc.userId);
+    if (!entityId || !playerId) continue;
+    if (!map.has(entityId)) map.set(entityId, new Set());
+    map.get(entityId).add(playerId);
+  }
+  return map;
 }
 
 async function buildAllTimeDatapoints({
@@ -800,11 +814,25 @@ async function buildAllTimeDatapoints({
   }
   const playerBuildMs = roundPerfMs(playerBuildTimer);
 
+  const userIdToPlayerId = new Map(players.map((p) => [p.userId, p.playerId]).filter(([uid]) => uid));
+  const trackContributors = buildContributorMap(playerTrackDocs, 'trackId', userIdToPlayerId);
+  const artistContributors = buildContributorMap(playerArtistDocs, 'artistId', userIdToPlayerId);
+  const albumContributors = buildContributorMap(playerAlbumDocs, 'albumId', userIdToPlayerId);
+  const genreContributors = buildContributorMap(playerGenreDocs, 'genre', userIdToPlayerId);
+
   const roomTotalValue = players.reduce((sum, player) => {
     const snapshot = snapshotsByUserId.get(player.userId);
     const totals = snapshot?.windows?.allTime?.totals || {};
     return sum + (metric === 'minutes' ? totals.msPlayed || 0 : totals.plays || 0);
   }, 0);
+  const totalContributorPlayerIds = players
+    .filter((p) => {
+      const snapshot = snapshotsByUserId.get(p.userId);
+      const totals = snapshot?.windows?.allTime?.totals || {};
+      return (metric === 'minutes' ? totals.msPlayed || 0 : totals.plays || 0) > 0;
+    })
+    .map((p) => p.playerId)
+    .filter(Boolean);
   if (roomTotalValue > 0) {
     datapoints.push(createDatapoint({
       metric,
@@ -814,6 +842,7 @@ async function buildAllTimeDatapoints({
       title: 'Whole Room Total',
       subtitle: 'All Time',
       value: roomTotalValue,
+      contributorPlayerIds: totalContributorPlayerIds.length ? totalContributorPlayerIds : null,
     }));
   }
 
@@ -821,6 +850,7 @@ async function buildAllTimeDatapoints({
     const meta = metadata.tracks.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
+    const contributors = trackContributors.get(doc._id);
     datapoints.push(createDatapoint({
       metric,
       scope: 'ROOM',
@@ -834,6 +864,7 @@ async function buildAllTimeDatapoints({
       previewTrackName: meta.name || 'Unknown Track',
       previewArtistName: (meta.artistNames || []).join(', ') || null,
       value,
+      contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
@@ -841,6 +872,7 @@ async function buildAllTimeDatapoints({
     const meta = metadata.artists.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
+    const contributors = artistContributors.get(doc._id);
     datapoints.push(createDatapoint({
       metric,
       scope: 'ROOM',
@@ -853,6 +885,7 @@ async function buildAllTimeDatapoints({
       previewKind: 'artist',
       previewArtistName: meta.name || 'Unknown Artist',
       value,
+      contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
@@ -860,6 +893,7 @@ async function buildAllTimeDatapoints({
     const meta = metadata.albums.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
+    const contributors = albumContributors.get(doc._id);
     datapoints.push(createDatapoint({
       metric,
       scope: 'ROOM',
@@ -870,12 +904,14 @@ async function buildAllTimeDatapoints({
       subtitle: ['Whole Room', 'All Time', ...(meta.artistNames || [])].filter(Boolean).join(' · '),
       imageUrl: meta.images?.[0]?.url || null,
       value,
+      contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
   for (const doc of sortAndLimitByMetric(metric, roomGenreDocs, maxPerBucket)) {
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
+    const contributors = genreContributors.get(doc._id);
     datapoints.push(createDatapoint({
       metric,
       scope: 'ROOM',
@@ -885,6 +921,7 @@ async function buildAllTimeDatapoints({
       title: doc._id || 'Unknown Genre',
       subtitle: 'Whole Room · All Time',
       value,
+      contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
@@ -923,6 +960,7 @@ async function buildTimeframedDatapoints({
   const timer = startPerfTimer();
   const datapoints = [];
   const userIds = players.map((player) => player.userId).filter(Boolean);
+  const userIdToPlayerId = new Map(players.map((p) => [p.userId, p.playerId]).filter(([uid]) => uid));
   if (!userIds.length) {
     logHigherLowerPerf('buildTimeframedDatapoints skipped', {
       durationMs: roundPerfMs(timer),
@@ -976,6 +1014,7 @@ async function buildTimeframedDatapoints({
             _id: null,
             plays: { $sum: '$totals.plays' },
             msPlayed: { $sum: '$totals.msPlayed' },
+            userIds: { $addToSet: '$userId' },
           },
         },
       ]).toArray(),
@@ -986,6 +1025,7 @@ async function buildTimeframedDatapoints({
             _id: '$trackId',
             plays: { $sum: '$plays' },
             msPlayed: { $sum: '$msPlayed' },
+            userIds: { $addToSet: '$userId' },
           },
         },
       ]).toArray(),
@@ -998,17 +1038,32 @@ async function buildTimeframedDatapoints({
     const roomAlbums = new Map();
     const roomGenres = new Map();
 
+    const trackContributors = new Map();
+    const artistContributors = new Map();
+    const albumContributors = new Map();
+    const genreContributors = new Map();
+
     for (const track of roomTracks) {
       const meta = metadata.tracks.get(track._id) || {};
+      const trackPlayerIds = (track.userIds || []).map((uid) => userIdToPlayerId.get(uid)).filter(Boolean);
+      if (track._id) {
+        trackContributors.set(track._id, new Set(trackPlayerIds));
+      }
       for (const artistId of new Set((meta.artistIds || []).filter(Boolean))) {
         addRoomEntityAggregate(roomArtists, artistId, track);
+        if (!artistContributors.has(artistId)) artistContributors.set(artistId, new Set());
+        for (const pid of trackPlayerIds) artistContributors.get(artistId).add(pid);
         const artistMeta = metadata.artists.get(artistId) || {};
         for (const genre of new Set((artistMeta.genres || []).filter(Boolean))) {
           addRoomEntityAggregate(roomGenres, genre, track);
+          if (!genreContributors.has(genre)) genreContributors.set(genre, new Set());
+          for (const pid of trackPlayerIds) genreContributors.get(genre).add(pid);
         }
       }
       if (meta.albumId) {
         addRoomEntityAggregate(roomAlbums, meta.albumId, track);
+        if (!albumContributors.has(meta.albumId)) albumContributors.set(meta.albumId, new Set());
+        for (const pid of trackPlayerIds) albumContributors.get(meta.albumId).add(pid);
       }
     }
 
@@ -1017,6 +1072,9 @@ async function buildTimeframedDatapoints({
         ? roomTotals[0].msPlayed || 0
         : roomTotals[0].plays || 0
       : 0;
+    const totalContributorPlayerIds = (roomTotals[0]?.userIds || [])
+      .map((uid) => userIdToPlayerId.get(uid))
+      .filter(Boolean);
     if (roomTotalValue > 0) {
       datapoints.push(createDatapoint({
         metric,
@@ -1026,6 +1084,7 @@ async function buildTimeframedDatapoints({
         title: 'Whole Room Total',
         subtitle: formatTimeframeLabel(timeframe),
         value: roomTotalValue,
+        contributorPlayerIds: totalContributorPlayerIds.length ? totalContributorPlayerIds : null,
       }));
     }
 
@@ -1033,6 +1092,7 @@ async function buildTimeframedDatapoints({
       const meta = metadata.tracks.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
+      const contributors = trackContributors.get(doc._id);
       datapoints.push(createDatapoint({
         metric,
         scope: 'ROOM',
@@ -1046,6 +1106,7 @@ async function buildTimeframedDatapoints({
         previewTrackName: meta.name || 'Unknown Track',
         previewArtistName: (meta.artistNames || []).join(', ') || null,
         value,
+        contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
@@ -1053,6 +1114,7 @@ async function buildTimeframedDatapoints({
       const meta = metadata.artists.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
+      const contributors = artistContributors.get(doc._id);
       datapoints.push(createDatapoint({
         metric,
         scope: 'ROOM',
@@ -1065,6 +1127,7 @@ async function buildTimeframedDatapoints({
         previewKind: 'artist',
         previewArtistName: meta.name || 'Unknown Artist',
         value,
+        contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
@@ -1072,6 +1135,7 @@ async function buildTimeframedDatapoints({
       const meta = metadata.albums.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
+      const contributors = albumContributors.get(doc._id);
       datapoints.push(createDatapoint({
         metric,
         scope: 'ROOM',
@@ -1082,12 +1146,14 @@ async function buildTimeframedDatapoints({
         subtitle: ['Whole Room', formatTimeframeLabel(timeframe), ...(meta.artistNames || [])].filter(Boolean).join(' · '),
         imageUrl: meta.images?.[0]?.url || null,
         value,
+        contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
     for (const doc of sortAndLimitByMetric(metric, Array.from(roomGenres.entries()).map(([id, counts]) => ({ _id: id, ...counts })), maxPerBucket)) {
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
+      const contributors = genreContributors.get(doc._id);
       datapoints.push(createDatapoint({
         metric,
         scope: 'ROOM',
@@ -1097,6 +1163,7 @@ async function buildTimeframedDatapoints({
         title: doc._id || 'Unknown Genre',
         subtitle: `Whole Room · ${formatTimeframeLabel(timeframe)}`,
         value,
+        contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
@@ -1866,6 +1933,7 @@ module.exports = {
   pickChallenger,
   helpers: {
     appendRecentPromptTraitValues,
+    buildContributorMap,
     buildSeenOwnerList,
     displayMetricValue,
     formatTimeframeLabel,
