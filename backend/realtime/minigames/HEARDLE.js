@@ -25,6 +25,18 @@ function getStageIndex(room) {
     : 0;
 }
 
+function getStageConfig(room, stageIndex) {
+  return room?.stagePlan?.[stageIndex] || null;
+}
+
+function resolveStageOptions(room, stageIndex, params = {}) {
+  const stageConfig = getStageConfig(room, stageIndex);
+  return {
+    ...(stageConfig?.options || {}),
+    ...(params?.options || {}),
+  };
+}
+
 function getStageState(room, stageIndex) {
   room.heardleStages = room.heardleStages || {};
   if (!room.heardleStages[stageIndex]) {
@@ -317,8 +329,15 @@ async function createRoundState(room, params = {}) {
   const stageIndex = getStageIndex(room);
   room.roundState = room.roundState || {};
 
+  const stageOpts = resolveStageOptions(room, stageIndex, params);
+  const songsPerGame = (typeof stageOpts.songsPerGame === 'number' && stageOpts.songsPerGame > 0)
+    ? stageOpts.songsPerGame
+    : DEFAULT_SONGS_PER_GAME;
+  const guessWindowMs = (typeof stageOpts.guessWindowMs === 'number' && stageOpts.guessWindowMs > 0)
+    ? stageOpts.guessWindowMs
+    : GUESS_WINDOW_MS;
+
   const stageState = getStageState(room, stageIndex);
-  const songsPerGame = DEFAULT_SONGS_PER_GAME;
 
   if (stageState.songsStarted >= songsPerGame) {
     throw new Error('NO_SONGS_REMAINING');
@@ -349,7 +368,7 @@ async function createRoundState(room, params = {}) {
     snippetReplayGapPlanMs,
     snippetHistory: [{ index: 0, startedAt: now, durationMs: snippetPlan[0] || null }],
     currentSnippetIndex: 0,
-    guessWindowMs: GUESS_WINDOW_MS,
+    guessWindowMs,
     maxPointsPerSnippet,
     hints: null,
     stageProgress: {

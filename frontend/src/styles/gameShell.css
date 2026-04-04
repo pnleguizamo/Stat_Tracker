@@ -172,6 +172,7 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  z-index: 0;
   min-height: var(--gs-slot-min-height);
   border: var(--gs-slot-border);
   border-radius: var(--gs-slot-radius);
@@ -251,6 +252,29 @@
   cursor: grabbing !important;
 }
 
+.game-shell-slot-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.game-shell-stage-badge {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #7dd3fc;
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.08);
+}
+
 .game-shell-stage-text {
   display: flex;
   flex-direction: column;
@@ -266,13 +290,30 @@
 }
 
 .game-shell-stage-name {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--gs-text-strong);
   text-shadow: 0 1px 10px rgba(56, 189, 248, 0.18);
+}
+
+.game-shell-button-row {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.game-shell-button--primary {
+  padding: 0.6rem 1.5rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  background: rgba(14, 116, 144, 0.5);
+  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.08), 0 8px 22px rgba(2, 6, 23, 0.28);
+}
+
+.game-shell-button--primary:hover {
+  background: rgba(8, 145, 178, 0.62);
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.2), 0 12px 28px rgba(2, 6, 23, 0.34);
 }
 
 @keyframes gs-slot-drop-pop {
@@ -315,6 +356,123 @@
 
 .game-shell-input::placeholder {
   color: var(--gs-input-placeholder);
+}
+
+.game-shell-select {
+  border: var(--gs-input-border);
+  border-radius: var(--gs-input-radius);
+  padding: var(--gs-input-padding);
+  background: var(--gs-input-bg);
+  color: var(--gs-input-text);
+  font-family: var(--gs-font-family);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.game-shell-input--option {
+  width: 80px;
+  font-size: 0.85rem;
+}
+
+/* ── Slot column variant ───────────────────────────── */
+.game-shell-slot--col {
+  flex-direction: column;
+  align-items: stretch;
+  min-height: var(--gs-slot-min-height);
+  overflow: visible;
+}
+
+.game-shell-slot--col:has(.game-shell-slot-options.is-expanded) {
+  z-index: 8;
+}
+
+/* ── Stage option panel ────────────────────────────── */
+.game-shell-slot-options-wrap {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+}
+
+.game-shell-options-trigger {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.12);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.game-shell-options-trigger:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(125, 211, 252, 0.28);
+  transform: translateY(-1px);
+}
+
+.game-shell-options-trigger[aria-expanded="true"] {
+  background: rgba(8, 47, 73, 0.82);
+  border-color: rgba(56, 189, 248, 0.34);
+}
+
+.game-shell-options-trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.game-shell-options-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+}
+
+.game-shell-slot-options {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: min(280px, calc(100vw - 48px));
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.9));
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(14px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.game-shell-slot-options.is-expanded {
+  padding: 12px;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.game-shell-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.game-shell-option-label {
+  font-size: 0.78rem;
+  color: var(--gs-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .host-layout--center {

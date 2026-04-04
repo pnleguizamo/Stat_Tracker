@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { socket } from '../../socket';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StageConfig, MinigameId } from 'types/game';
+import { MINIGAME_CATALOG, getOptionDefaults } from '../constants/minigameCatalog';
+import StageOptionPanel from './StageOptionPanel';
 import '../../styles/gameShell.css';
 
 type DragState = {
@@ -22,9 +24,9 @@ const StagePlanner: React.FC = () => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const [stagePlan, setStagePlan] = useState<StageConfig[]>([
-    { index: 0, minigameId: 'HEARDLE' },
-    { index: 1, minigameId: 'WHO_LISTENED_MOST' },
-    { index: 2, minigameId: 'GUESS_SPOTIFY_WRAPPED' },
+    { index: 0, minigameId: 'WHO_LISTENED_MOST', options: getOptionDefaults('WHO_LISTENED_MOST') },
+    { index: 1, minigameId: 'GUESS_SPOTIFY_WRAPPED', options: getOptionDefaults('GUESS_SPOTIFY_WRAPPED') },
+    { index: 2, minigameId: 'HEARDLE', options: getOptionDefaults('HEARDLE') },
   ]);
   const [activeDropSlot, setActiveDropSlot] = useState<number | null>(null);
   const [recentlyDroppedSlot, setRecentlyDroppedSlot] = useState<number | null>(null);
@@ -95,16 +97,8 @@ const StagePlanner: React.FC = () => {
     });
   };
 
-  const MINIGAMES: { id: MinigameId; name: string; desc?: string }[] = [
-    { id: 'WHO_LISTENED_MOST', name: 'Who Listened Most' },
-    { id: 'GUESS_SPOTIFY_WRAPPED', name: 'Guess the Wrapped' },
-    { id: 'HEARDLE', name: 'Heardle' },
-    { id: 'HIGHER_LOWER', name: 'Higher / Lower' },
-    // { id: 'FIRST_PLAY', name: 'First Play' },
-    // { id: 'GENRE_GUESS', name: 'Genre Guess' },
-    // { id: 'GRAPH_GUESS', name: 'Graph Guess' },
-    // { id: 'OUTLIER_MODE', name: 'Outlier Mode' },
-  ];
+  const ACTIVE_IDS: MinigameId[] = ['WHO_LISTENED_MOST', 'GUESS_SPOTIFY_WRAPPED', 'HEARDLE', 'HIGHER_LOWER' ];
+  const MINIGAMES = MINIGAME_CATALOG.filter((m) => ACTIVE_IDS.includes(m.id as MinigameId));
 
   function findDropSlot(clientX: number, clientY: number): number | null {
     for (const i of [0, 1, 2]) {
@@ -118,11 +112,23 @@ const StagePlanner: React.FC = () => {
     return null;
   }
 
+  const handleOptionChange = useCallback((slotIndex: number, key: string, value: unknown) => {
+    const newPlan = stagePlanRef.current.map((s, i) => {
+      if (i !== slotIndex) return s;
+      return { ...s, options: { ...(s.options || {}), [key]: value } };
+    });
+    handleReorderOrChange(newPlan);
+  }, [handleReorderOrChange]);
+
   const finishDrag = useCallback((dropSlot: number | null, minigameId: MinigameId) => {
     const currentDrag = dragStateRef.current;
     if (dropSlot !== null) {
       const newPlan = [...stagePlanRef.current];
-      newPlan[dropSlot] = { index: dropSlot, minigameId };
+      const existing = newPlan[dropSlot];
+      const preservedOptions = existing?.minigameId === minigameId
+        ? existing.options
+        : getOptionDefaults(minigameId);
+      newPlan[dropSlot] = { index: dropSlot, minigameId, options: preservedOptions };
       handleReorderOrChange(newPlan);
       setRecentlyDroppedSlot(dropSlot);
       if (dropAnimationTimeoutRef.current) {
@@ -241,6 +247,7 @@ const StagePlanner: React.FC = () => {
   }, [dragState?.pointerId, dragState?.phase, finishDrag]);
 
   const draggedMinigame = dragState ? MINIGAMES.find((m) => m.id === dragState.minigameId) : null;
+  const isDragging = dragState?.phase === 'dragging';
 
   return (
     <div className={`game-shell-layout${dragState?.phase === 'dragging' ? ' is-pointer-dragging' : ''}`}>
@@ -261,7 +268,7 @@ const StagePlanner: React.FC = () => {
                   className={`game-shell-draggable${dragState?.minigameId === m.id ? ' is-source-hidden' : ''}`}
                 >
                   <div style={{ fontWeight: 700 }}>{m.name}</div>
-                  {m.desc && <div className="game-shell-muted" style={{ fontSize: 12 }}>{m.desc}</div>}
+                  {m.description && <div className="game-shell-muted" style={{ fontSize: 12 }}>{m.description}</div>}
                 </div>
               ))}
             </div>
@@ -279,23 +286,32 @@ const StagePlanner: React.FC = () => {
                     ref={(el) => {
                       slotRefs.current[i] = el;
                     }}
-                    className={`game-shell-slot${activeDropSlot === i ? ' is-drop-target' : ''}${
+                    className={`game-shell-slot game-shell-slot--col${activeDropSlot === i ? ' is-drop-target' : ''}${
                       recentlyDroppedSlot === i ? ' is-dropped' : ''
                     }`}
                   >
-                    <div className="game-shell-stage-text">
-                      <div className="game-shell-stage-index">Stage {i + 1}</div>
-                      <div className="game-shell-stage-name">
-                        {assigned ? assigned.name : String(config.minigameId)}
+                    <div className="game-shell-slot-main">
+                      <div className="game-shell-stage-badge">{i + 1}</div>
+                      <div className="game-shell-stage-text">
+                        <div className="game-shell-stage-index">Stage {i + 1}</div>
+                        <div className="game-shell-stage-name">
+                          {assigned ? assigned.name : String(config.minigameId)}
+                        </div>
                       </div>
                     </div>
+                    <StageOptionPanel
+                      minigameId={config.minigameId}
+                      options={config.options || {}}
+                      onChange={(key, value) => handleOptionChange(i, key, value)}
+                      disabled={isDragging}
+                    />
                   </div>
                 );
               })}
             </div>
 
-            <div style={{ marginTop: 18 }}>
-              <button className="game-shell-button" onClick={handleBeginMatch}>Lock & Start Match</button>
+            <div className="game-shell-button-row">
+              <button className="game-shell-button game-shell-button--primary" onClick={handleBeginMatch}>Lock & Start Match</button>
             </div>
           </section>
         </div>
@@ -312,7 +328,7 @@ const StagePlanner: React.FC = () => {
           }}
         >
           <div style={{ fontWeight: 700 }}>{draggedMinigame.name}</div>
-          {draggedMinigame.desc && <div className="game-shell-muted" style={{ fontSize: 12 }}>{draggedMinigame.desc}</div>}
+          {draggedMinigame.description && <div className="game-shell-muted" style={{ fontSize: 12 }}>{draggedMinigame.description}</div>}
         </div>
       )}
     </div>
