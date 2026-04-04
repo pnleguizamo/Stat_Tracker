@@ -1,11 +1,12 @@
-import { CSSProperties, FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAutoFitScale } from "game/hooks/useAutoFitScale";
+import { useTrackPreview } from "game/hooks/useTrackPreview";
 import { socket } from "socket";
-import { GameState, HigherLowerDatapoint, HigherLowerRoundState } from "types/game";
+import { PlayerAvatar } from "components/PlayerAvatar";
+import { GameState, HigherLowerDatapoint, HigherLowerRoundState, Player } from "types/game";
 import {
   HostActionRow,
   HostCard,
-  HostChip,
   HostMinigameStack,
   HostStateMessage,
 } from "./components/HostMinigamePrimitives";
@@ -24,21 +25,19 @@ type RevealAnimationPhase = "idle" | "counting" | "done";
 const joinClasses = (...values: Array<string | false | null | undefined>) =>
   values.filter(Boolean).join(" ");
 
+/* ── Formatting helpers ── */
+
 const TIMEFRAME_LABELS: Record<string, string> = {
-  last7: "Last 7",
-  last30: "Last 30",
-  last90: "Last 90",
-  last180: "Last 180",
-  ytd: "YTD",
+  last7: "Last 7 Days",
+  last30: "Last 30 Days",
+  last90: "Last 90 Days",
+  last180: "Last 180 Days",
+  ytd: "Year to Date",
   allTime: "All Time",
 };
 
 function formatMetricLabel(metric?: string | null) {
   return metric === "minutes" ? "Minutes" : "Plays";
-}
-
-function formatScopeLabel(scope?: string | null) {
-  return scope === "ROOM" ? "Whole Room" : "Player";
 }
 
 function formatTimeframeLabel(timeframe?: string | null) {
@@ -48,68 +47,289 @@ function formatTimeframeLabel(timeframe?: string | null) {
   return timeframe;
 }
 
-function formatEntityType(entityType?: string | null) {
-  if (!entityType) return "Stat";
-  return entityType.charAt(0) + entityType.slice(1).toLowerCase();
-}
-
 function formatDisplayValue(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "?";
   return new Intl.NumberFormat().format(value);
 }
 
-function artFallbackLabel(datapoint?: HigherLowerDatapoint | null) {
-  if (!datapoint?.entityType) return "STAT";
-  if (datapoint.entityType === "TOTAL") return "Σ";
-  return datapoint.entityType.slice(0, 3);
+function formatScopeLabel(scope?: string | null) {
+  return scope === "ROOM" ? "Whole Room" : "Player";
 }
 
-const DatapointArt: FC<{ datapoint: HigherLowerDatapoint; side: "left" | "right" }> = ({
-  datapoint,
-  side,
-}) => {
-  if (datapoint.imageUrl) {
+function humanizePlayerId(playerId: string) {
+  const compact = playerId.trim();
+  if (!compact) return "Guest Player";
+  if (compact.length <= 12) return compact;
+  return `${compact.slice(0, 8)}…`;
+}
+
+function buildFallbackPlayer(playerId: string, displayName?: string | null): Player {
+  const resolvedName = displayName?.trim() || humanizePlayerId(playerId);
+  return {
+    playerId,
+    name: resolvedName,
+    displayName: resolvedName,
+    avatar: null,
+  };
+}
+
+function entityLabel(entityType?: string | null) {
+  if (!entityType) return "Stat";
+  return entityType.charAt(0) + entityType.slice(1).toLowerCase();
+}
+
+// Strip parts from the subtitle that are already shown in corner labels or avatar badges.
+// The backend builds subtitles as "PlayerName · Timeframe · ArtistNames" – we keep only
+// the parts that add new context (e.g. artist names for tracks/albums).
+const SUBTITLE_STRIP_PATTERNS = [
+  /^last \d+ days?$/i,
+  /^last \d+$/i,
+  /^year to date$/i,
+  /^ytd$/i,
+  /^all time$/i,
+  /^whole room$/i,
+  /^\d{4}$/, // bare year
+];
+
+function filterSubtitle(
+  subtitle: string | null | undefined,
+  ownerName?: string | null,
+  ownerLabel?: string | null,
+): string {
+  if (!subtitle) return "";
+  const parts = subtitle.split("·").map((p) => p.trim()).filter(Boolean);
+  const filtered = parts.filter((part) => {
+    if (SUBTITLE_STRIP_PATTERNS.some((re) => re.test(part))) return false;
+    if (ownerName && part === ownerName) return false;
+    if (ownerLabel && part === ownerLabel) return false;
+    return true;
+  });
+  return filtered.join(" · ");
+}
+
+function artFallbackLabel(datapoint?: HigherLowerDatapoint | null) {
+  if (!datapoint?.entityType) return "STAT";
+  if (datapoint.entityType === "TOTAL") return "TOTAL";
+  return datapoint.entityType.slice(0, 10);
+}
+
+/* ── SVG entity icons ── */
+
+const EntityIcon: FC<{ entityType?: string | null }> = ({ entityType }) => {
+  switch (entityType) {
+    case "TRACK":
+      return (
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+        </svg>
+      );
+    case "ARTIST":
+      return (
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3Zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2Z" />
+        </svg>
+      );
+    case "ALBUM":
+      return (
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5Zm0-5.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" />
+        </svg>
+      );
+    default: // TOTAL or unknown
+      return (
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 4H6v2l4.5 6L6 18v2h12v-3h-7l4-5-4-5h7V4Z" />
+        </svg>
+      );
+  }
+};
+
+/* ── Sub-components ── */
+
+const LightningBoltSvg: FC<{ className?: string }> = ({ className }) => (
+  <svg
+    className={joinClasses("hl-vs-bolt", className)}
+    width="18"
+    height="36"
+    viewBox="0 0 18 36"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M10 0L0 20h7L5 36l13-22h-7L14 0h-4Z"
+      fill="url(#bolt-grad)"
+    />
+    <defs>
+      <linearGradient id="bolt-grad" x1="9" y1="0" x2="9" y2="36" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#22d3ee" />
+        <stop offset="1" stopColor="#facc15" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const MAX_CONTRIBUTOR_AVATARS = 5;
+
+const ContributorAvatars: FC<{
+  datapoint: HigherLowerDatapoint;
+  ownerPlayer: Player | null;
+  contributors: Player[] | null;
+}> = ({ datapoint, ownerPlayer, contributors }) => {
+  if (ownerPlayer) {
+    const name = datapoint.ownerLabel || ownerPlayer.displayName || ownerPlayer.name;
     return (
-      <img
-        src={datapoint.imageUrl}
-        alt={datapoint.title}
-        className="hl-card-art"
-      />
+      <div className="hl-card-contributors">
+        <PlayerAvatar player={ownerPlayer} size={40} />
+        <span className="hl-avatar-name">{name}</span>
+      </div>
     );
   }
 
+  if (contributors?.length) {
+    const caption = datapoint.ownerLabel || (datapoint.scope === "ROOM" ? formatScopeLabel(datapoint.scope) : null);
+    return (
+      <div className="hl-card-contributors">
+        <div className="hl-avatar-stack-row">
+          <div className="hl-avatar-stack">
+            {contributors.slice(0, MAX_CONTRIBUTOR_AVATARS).map((p) => (
+              <PlayerAvatar key={p.playerId} player={p} size={32} />
+            ))}
+          </div>
+          {contributors.length > MAX_CONTRIBUTOR_AVATARS && (
+            <span className="hl-avatar-overflow">+{contributors.length - MAX_CONTRIBUTOR_AVATARS}</span>
+          )}
+        </div>
+        {caption && <span className="hl-avatar-name">{caption}</span>}
+      </div>
+    );
+  }
+
+  return null;
+};
+
+/* ── Electric card ── */
+
+const ElectricCard: FC<{
+  datapoint: HigherLowerDatapoint;
+  side: "left" | "right";
+  displayValue: number | null;
+  metric?: string | null;
+  isWinner: boolean;
+  isLoser: boolean;
+  isRevealing: boolean;
+  isCollecting: boolean;
+  showValue: boolean;
+  ownerPlayer: Player | null;
+  contributors: Player[] | null;
+}> = ({
+  datapoint,
+  side,
+  displayValue,
+  metric,
+  isWinner,
+  isLoser,
+  isRevealing,
+  isCollecting,
+  showValue,
+  ownerPlayer,
+  contributors,
+}) => {
+  const subtitle = filterSubtitle(
+    datapoint.subtitle,
+    ownerPlayer?.displayName ?? ownerPlayer?.name,
+    datapoint.ownerLabel,
+  );
+  const wrapClass = joinClasses(
+    "hl-card-wrap",
+    `hl-card-wrap--${side}`,
+    isWinner && "hl-card-wrap--winner",
+    isLoser && "hl-card-wrap--loser",
+    isCollecting && "hl-card-wrap--collecting",
+    isRevealing && "hl-card-wrap--revealing",
+  );
+
+  const cardClass = joinClasses(
+    "hl-card",
+    `hl-card--${side}`,
+    isRevealing && "hl-card--revealing",
+  );
+
   return (
-    <div className={joinClasses("hl-card-art", "hl-card-art--fallback", `hl-card-art--${side}`)}>
-      {artFallbackLabel(datapoint)}
+    <div className={wrapClass}>
+      <div className={cardClass}>
+        {/* Blurred album art background */}
+        {datapoint.imageUrl && (
+          <div className="hl-card-bg-art">
+            <img src={datapoint.imageUrl} alt="" aria-hidden="true" />
+          </div>
+        )}
+
+        <div className="hl-card-content">
+          {/* Header: entity type + timeframe */}
+          <div className="hl-card-header">
+            <span className="hl-entity-badge">
+              <EntityIcon entityType={datapoint.entityType} />
+              {entityLabel(datapoint.entityType)}
+            </span>
+            <span className="hl-timeframe-tag">
+              {formatTimeframeLabel(datapoint.timeframe)}
+            </span>
+          </div>
+
+          {/* Hero art */}
+          {datapoint.imageUrl ? (
+            <div className="hl-card-hero">
+              <img src={datapoint.imageUrl} alt={datapoint.title} />
+              {isWinner && <span className="hl-card-crown">♛</span>}
+            </div>
+          ) : (
+            <div className="hl-card-hero hl-card-hero--fallback">
+              {artFallbackLabel(datapoint)}
+              {isWinner && <span className="hl-card-crown">♛</span>}
+            </div>
+          )}
+
+          {/* Identity */}
+          <div className="hl-card-identity">
+            <h3 className="hl-card-title">{datapoint.title}</h3>
+            {subtitle ? <p className="hl-card-subtitle">{subtitle}</p> : null}
+          </div>
+
+          {/* Contributors */}
+          <ContributorAvatars
+            datapoint={datapoint}
+            ownerPlayer={ownerPlayer}
+            contributors={contributors}
+          />
+
+          {/* Value zone */}
+          <div className="hl-card-value-zone">
+            {showValue ? (
+              <>
+                <div className={joinClasses("hl-value-number", isRevealing && "hl-value-number--counting")}>
+                  {formatDisplayValue(displayValue)}
+                </div>
+                <div className="hl-value-metric">{formatMetricLabel(metric)}</div>
+              </>
+            ) : (
+              <div className="hl-value-mystery">?</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-const EqualizerBars: FC<{ urgent?: boolean }> = ({ urgent = false }) => (
-  <span className={joinClasses("hl-eq-bars", urgent && "hl-eq-bars--urgent")}>
-    {[0.58, 0.96, 0.68, 1, 0.52].map((height, index) => (
-      <span
-        key={index}
-        className="hl-eq-bar"
-        style={
-          {
-            "--hl-eq-max-h": `${Math.round(height * 14)}px`,
-            "--hl-eq-speed": `${0.42 + index * 0.11}s`,
-            animationDelay: `${index * 0.08}s`,
-          } as CSSProperties
-        }
-      />
-    ))}
-  </span>
-);
+/* ── Main host component ── */
 
-export const HigherLowerHost: FC<Props> = ({
-  roomCode,
-  gameState,
-  onAdvance,
-  onRevealComplete,
-  remainingMs,
-}) => {
+export const HigherLowerHost: FC<Props> = (props) => {
+  const {
+    roomCode,
+    gameState,
+    onAdvance,
+    onRevealComplete,
+  } = props;
   const round =
     gameState.currentRoundState && gameState.currentRoundState.minigameId === "HIGHER_LOWER"
       ? (gameState.currentRoundState as HigherLowerRoundState)
@@ -123,11 +343,12 @@ export const HigherLowerHost: FC<Props> = ({
     right: null,
   });
 
-  const animationFrameRef = useRef<number | null>(null);
+  const animationLoopRef = useRef<number | null>(null);
   const nextRoundTimeoutRef = useRef<number | null>(null);
   const roundIdRef = useRef<string | null>(null);
   const busyRef = useRef<"start" | "reveal" | null>(null);
   const revealHandledRoundRef = useRef<string | null>(null);
+  const lastAnimatedKeyRef = useRef<string | null>(null);
 
   const { viewportRef: fitViewportRef, canvasRef: fitCanvasRef } =
     useAutoFitScale({ allowUpscale: false });
@@ -142,9 +363,9 @@ export const HigherLowerHost: FC<Props> = ({
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      if (animationLoopRef.current) {
+        window.cancelAnimationFrame(animationLoopRef.current);
+        animationLoopRef.current = null;
       }
       if (nextRoundTimeoutRef.current) {
         window.clearTimeout(nextRoundTimeoutRef.current);
@@ -152,6 +373,19 @@ export const HigherLowerHost: FC<Props> = ({
       }
     };
   }, []);
+
+  const activeDatapoint = round?.right || round?.left;
+  const previewKind = activeDatapoint?.previewKind ?? null;
+  const previewEnabled = previewKind === "track" || previewKind === "artist";
+
+  useTrackPreview({
+    trackName: activeDatapoint?.previewTrackName ?? undefined,
+    artistName: activeDatapoint?.previewArtistName ?? undefined,
+    previewKey: previewEnabled ? activeDatapoint?.id ?? undefined : undefined,
+    enabled: previewEnabled,
+    volume: round?.status === "revealed" ? 0.1 : 0.3,
+    kind: previewKind === "artist" ? "artist" : "track",
+  });
 
   const handleStartRound = useCallback(() => {
     if (!roomCode) return;
@@ -161,7 +395,8 @@ export const HigherLowerHost: FC<Props> = ({
     }
     setActionBusy("start");
     setError(null);
-    socket.emit("minigame:HIGHER_LOWER:startRound", { roomCode }, (resp?: { ok: boolean; error?: string }) => {
+    socket.emit("minigame:HIGHER_LOWER:startRound", { roomCode },
+      (resp?: { ok: boolean; error?: string }) => {
       setActionBusy(null);
       if (!resp?.ok) {
         setError(resp?.error || "Failed to start Higher / Lower");
@@ -181,36 +416,52 @@ export const HigherLowerHost: FC<Props> = ({
     });
   }, [roomCode]);
 
+  // Auto-start first round
   useEffect(() => {
     if (!roomCode || round || actionBusy === "start" || error) return;
     handleStartRound();
   }, [actionBusy, error, handleStartRound, round, roomCode]);
 
+  // Count-up animation — depends on primitives to avoid re-trigger
+  const roundId = round?.id ?? null;
+  const roundStatus = round?.status ?? null;
+  const roundNumber = round?.roundNumber ?? null;
+  const stageComplete = round?.stageComplete ?? false;
+  const leftDisplayVal = round?.left?.displayValue ?? null;
+  const rightDisplayVal = round?.right?.displayValue ?? null;
+  const resultsLeftVal = round?.results?.leftDisplayValue ?? null;
+  const resultsRightVal = round?.results?.rightDisplayValue ?? null;
+
   useEffect(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (animationLoopRef.current) {
+      window.cancelAnimationFrame(animationLoopRef.current);
+      animationLoopRef.current = null;
     }
 
-    if (!round) {
+    if (!roundId) {
       setRevealPhase("idle");
       setAnimatedValues({ left: null, right: null });
+      lastAnimatedKeyRef.current = null;
       return;
     }
 
-    if (round.status !== "revealed") {
-      setRevealPhase(round.stageComplete ? "done" : "idle");
+    if (roundStatus !== "revealed") {
+      setRevealPhase(stageComplete ? "done" : "idle");
       setAnimatedValues({
-        left: round.roundNumber > 1 ? round.left.displayValue ?? null : null,
+        left: roundNumber !== null && roundNumber > 1 ? leftDisplayVal : null,
         right: null,
       });
       return;
     }
 
-    const targetLeft = round.results?.leftDisplayValue ?? round.left.displayValue ?? null;
-    const targetRight = round.results?.rightDisplayValue ?? round.right.displayValue ?? null;
-    const animateLeft = round.roundNumber === 1;
-    const animateRight = true;
+    // Guard: don't re-animate the same round reveal
+    const animKey = `${roundId}:revealed`;
+    if (lastAnimatedKeyRef.current === animKey) return;
+    lastAnimatedKeyRef.current = animKey;
+
+    const targetLeft = resultsLeftVal ?? leftDisplayVal;
+    const targetRight = resultsRightVal ?? rightDisplayVal;
+    const animateLeft = roundNumber === 1;
 
     if (targetLeft === null && targetRight === null) {
       setRevealPhase("done");
@@ -221,7 +472,7 @@ export const HigherLowerHost: FC<Props> = ({
     setRevealPhase("counting");
     setAnimatedValues({
       left: animateLeft ? 0 : targetLeft,
-      right: animateRight ? 0 : targetRight,
+      right: 0,
     });
 
     const durationMs = 1500;
@@ -241,24 +492,23 @@ export const HigherLowerHost: FC<Props> = ({
         right:
           targetRight === null
             ? null
-            : animateRight
-            ? Math.round(targetRight * eased)
-            : targetRight,
+            : Math.round(targetRight * eased),
       });
 
       if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(step);
+        animationLoopRef.current = window.requestAnimationFrame(step);
         return;
       }
 
-      animationFrameRef.current = null;
+      animationLoopRef.current = null;
       setAnimatedValues({ left: targetLeft, right: targetRight });
       setRevealPhase("done");
     };
 
-    animationFrameRef.current = requestAnimationFrame(step);
-  }, [round]);
+    animationLoopRef.current = window.requestAnimationFrame(step);
+  }, [roundId, roundStatus, roundNumber, stageComplete, leftDisplayVal, rightDisplayVal, resultsLeftVal, resultsRightVal]);
 
+  // Post-reveal sequence (leaderboard, next round)
   useEffect(() => {
     if (!round || round.status !== "revealed" || revealPhase !== "done") return;
     if (revealHandledRoundRef.current === round.id) return;
@@ -282,27 +532,12 @@ export const HigherLowerHost: FC<Props> = ({
     });
   }, [handleStartRound, onRevealComplete, revealPhase, round, roomCode]);
 
-  const liveRemainingMs =
-    remainingMs ?? (round?.expiresAt ? Math.max(0, round.expiresAt - Date.now()) : null);
-  const timerCritical =
-    round?.status === "collecting" &&
-    liveRemainingMs !== null &&
-    liveRemainingMs > 0 &&
-    liveRemainingMs < 5000;
-
-  const statusLabel = useMemo(() => {
-    if (!round) return "Pending";
-    if (round.stageComplete && round.status !== "collecting") return "Stage Complete";
-    if (round.status === "revealed") return "Revealed";
-    if (round.status === "collecting") {
-      if (liveRemainingMs === null) return "Collecting";
-      return `Collecting · ${Math.ceil(liveRemainingMs / 1000)}s`;
-    }
-    return "Pending";
-  }, [liveRemainingMs, round]);
-
-  const winnerSide = round?.results?.winnerSide;
+  // Derived state
+  const winnerSide = revealPhase === "done" ? round?.results?.winnerSide : undefined;
   const isTie = winnerSide === "TIE";
+  const isRevealing = revealPhase === "counting";
+  const isCollecting = round?.status === "collecting";
+
   const leftKnownValue =
     round?.status === "revealed"
       ? animatedValues.left
@@ -310,6 +545,48 @@ export const HigherLowerHost: FC<Props> = ({
       ? round.left.displayValue ?? null
       : null;
   const rightKnownValue = round?.status === "revealed" ? animatedValues.right : null;
+
+  const showLeftValue = round?.status === "revealed" || (round !== null && round.roundNumber > 1);
+  const showRightValue = round?.status === "revealed";
+
+  function resolvePlayer(playerId: string | null | undefined, displayName?: string | null): Player | null {
+    if (!playerId) return null;
+    return gameState.players?.find((p) => p.playerId === playerId) ?? buildFallbackPlayer(playerId, displayName);
+  }
+
+  const leftPlayer = resolvePlayer(round?.left?.ownerPlayerId, round?.left?.ownerLabel);
+  const rightPlayer = resolvePlayer(round?.right?.ownerPlayerId, round?.right?.ownerLabel);
+
+  function resolveContributors(datapoint: HigherLowerDatapoint | null | undefined): Player[] | null {
+    if (!datapoint?.contributorPlayerIds?.length) return null;
+    return datapoint.contributorPlayerIds
+      .map((id) => resolvePlayer(id))
+      .filter((p): p is Player => p != null);
+  }
+
+  const leftContributors = resolveContributors(round?.left);
+  const rightContributors = resolveContributors(round?.right);
+
+  // Round dots
+  const roundDots = useMemo(() => {
+    if (!round) return [];
+    return Array.from({ length: round.maxRounds }, (_, i) => {
+      const num = i + 1;
+      if (num < round.roundNumber) return "completed";
+      if (num === round.roundNumber) return "active";
+      return "pending";
+    });
+  }, [round]);
+
+  // Winner datapoint for summary card
+  const winnerDatapoint =
+    winnerSide === "RIGHT" ? round?.right : winnerSide === "LEFT" ? round?.left : null;
+  const winnerValue =
+    winnerSide === "RIGHT"
+      ? round?.results?.rightDisplayValue ?? round?.right.displayValue
+      : winnerSide === "LEFT"
+      ? round?.results?.leftDisplayValue ?? round?.left?.displayValue
+      : null;
 
   if (!round) {
     return (
@@ -325,96 +602,89 @@ export const HigherLowerHost: FC<Props> = ({
       <div className="hl-fit-center">
         <div ref={fitCanvasRef} className="hl-fit-canvas">
           <HostMinigameStack className="hl-stack">
-            <HostCard padded className="hl-top-card">
-              <div className="host-minigame-chip-row">
-                <HostChip>{formatMetricLabel(round.metric)}</HostChip>
-                <HostChip>Round {Math.max(1, round.roundNumber)} of {round.maxRounds}</HostChip>
-                <HostChip
-                  className={joinClasses(
-                    "hl-status-chip",
-                    round.status === "revealed" && "hl-status-chip--revealed",
-                    round.status === "collecting" && "hl-status-chip--collecting",
-                    timerCritical && "hl-status-chip--urgent",
-                    round.stageComplete && round.status !== "collecting" && "hl-status-chip--complete"
-                  )}
-                >
-                  {statusLabel}
-                  {round.status === "collecting" && <EqualizerBars urgent={timerCritical} />}
-                </HostChip>
+            {/* Question header */}
+            <HostCard padded className="hl-question-header">
+              <h2 className="hl-question-title">
+                Which has more{" "}
+                <span className="hl-metric-highlight">{formatMetricLabel(round.metric)}</span>?
+              </h2>
+              <div className="hl-round-row">
+                <div className="hl-round-dots">
+                  {roundDots.map((state, i) => (
+                    <span
+                      key={i}
+                      className={joinClasses(
+                        "hl-round-dot",
+                        state === "active" && "hl-round-dot--active",
+                        state === "completed" && "hl-round-dot--completed",
+                      )}
+                    />
+                  ))}
+                </div>
               </div>
             </HostCard>
 
+            {/* Versus row */}
             <div className={joinClasses("hl-versus-row", isTie && "hl-versus-row--tie")}>
-              <HostCard
-                padded
-                className={joinClasses(
-                  "hl-card",
-                  "hl-card--left",
-                  winnerSide === "LEFT" && "hl-card--winner",
-                  winnerSide === "RIGHT" && "hl-card--loser"
-                )}
-              >
-                <div className="hl-card-media">
-                  <DatapointArt datapoint={round.left} side="left" />
-                  {winnerSide === "LEFT" && <span className="hl-card-crown">♛</span>}
-                </div>
-                <div className="hl-card-badges">
-                  <span className="hl-mini-badge">{formatEntityType(round.left.entityType)}</span>
-                  <span className="hl-mini-badge">{formatTimeframeLabel(round.left.timeframe)}</span>
-                  <span className="hl-mini-badge">{formatScopeLabel(round.left.scope)}</span>
-                </div>
-                <h3 className="hl-card-title">{round.left.title}</h3>
-                <p className="hl-card-subtitle">{round.left.subtitle || round.left.ownerLabel || "Stat"}</p>
-                <div className="hl-value">{formatDisplayValue(leftKnownValue)}</div>
-              </HostCard>
+              <ElectricCard
+                datapoint={round.left}
+                side="left"
+                displayValue={leftKnownValue}
+                metric={round.metric}
+                isWinner={winnerSide === "LEFT"}
+                isLoser={winnerSide === "RIGHT"}
+                isRevealing={isRevealing}
+                isCollecting={!!isCollecting}
+                showValue={showLeftValue}
+                ownerPlayer={leftPlayer}
+                contributors={leftContributors}
+              />
 
               <div className="hl-vs-divider">
-                <span className="hl-vs-text">VS</span>
-                {isTie && <span className="hl-vs-tie">Tie</span>}
+                <LightningBoltSvg className="hl-vs-bolt--top" />
+                <div className="hl-vs-badge">VS</div>
+                <LightningBoltSvg className="hl-vs-bolt--bottom" />
+                {isTie && <span className="hl-vs-tie-label">Tie</span>}
               </div>
 
-              <HostCard
-                padded
-                className={joinClasses(
-                  "hl-card",
-                  "hl-card--right",
-                  winnerSide === "RIGHT" && "hl-card--winner",
-                  winnerSide === "LEFT" && "hl-card--loser"
-                )}
-              >
-                <div className="hl-card-media">
-                  <DatapointArt datapoint={round.right} side="right" />
-                  {winnerSide === "RIGHT" && <span className="hl-card-crown">♛</span>}
-                </div>
-                <div className="hl-card-badges">
-                  <span className="hl-mini-badge">{formatEntityType(round.right.entityType)}</span>
-                  <span className="hl-mini-badge">{formatTimeframeLabel(round.right.timeframe)}</span>
-                  <span className="hl-mini-badge">{formatScopeLabel(round.right.scope)}</span>
-                </div>
-                <h3 className="hl-card-title">{round.right.title}</h3>
-                <p className="hl-card-subtitle">{round.right.subtitle || round.right.ownerLabel || "Stat"}</p>
-                <div className="hl-value">{formatDisplayValue(rightKnownValue)}</div>
-              </HostCard>
+              <ElectricCard
+                datapoint={round.right}
+                side="right"
+                displayValue={rightKnownValue}
+                metric={round.metric}
+                isWinner={winnerSide === "RIGHT"}
+                isLoser={winnerSide === "LEFT"}
+                isRevealing={isRevealing}
+                isCollecting={!!isCollecting}
+                showValue={showRightValue}
+                ownerPlayer={rightPlayer}
+                contributors={rightContributors}
+              />
             </div>
 
-            {round.stageComplete && round.status !== "collecting" && (
+            {/* Summary card (stage complete) */}
+            {round.stageComplete && round.status !== "collecting" && !isTie && winnerDatapoint && (
               <HostCard padded className="hl-summary-card">
-                <div className="hl-summary-label">Final Champion</div>
-                <div className="hl-summary-title">{round.results?.winnerSide === "RIGHT" ? round.right.title : round.left.title}</div>
-                <div className="hl-summary-copy">
-                  {round.results?.winnerSide === "RIGHT" ? round.right.subtitle : round.left.subtitle}
-                </div>
+                {winnerDatapoint.imageUrl && (
+                  <img
+                    src={winnerDatapoint.imageUrl}
+                    alt=""
+                    className="hl-summary-champion-art"
+                  />
+                )}
+                <div className="hl-summary-label">Champion</div>
+                <div className="hl-summary-title">{winnerDatapoint.title}</div>
+                {winnerDatapoint.subtitle && (
+                  <div className="hl-summary-subtitle">{winnerDatapoint.subtitle}</div>
+                )}
                 <div className="hl-summary-value">
-                  {formatDisplayValue(
-                    round.results?.winnerSide === "RIGHT"
-                      ? round.results?.rightDisplayValue ?? round.right.displayValue
-                      : round.results?.leftDisplayValue ?? round.left.displayValue
-                  )}
+                  {formatDisplayValue(winnerValue)}
                   <span>{formatMetricLabel(round.metric)}</span>
                 </div>
               </HostCard>
             )}
 
+            {/* Action buttons */}
             {!round.stageComplete && round.status !== "revealed" && (
               <HostActionRow>
                 <button

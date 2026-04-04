@@ -1,6 +1,7 @@
 import { CSSProperties, FC, useMemo, useState } from "react";
 import { socket } from "socket";
 import { GameState, HigherLowerDatapoint, HigherLowerRoundState, ScoreAward } from "types/game";
+import { PlayerAvatar } from "components/PlayerAvatar";
 
 type Props = {
   roomCode: string;
@@ -38,6 +39,23 @@ function formatScopeLabel(scope?: string | null) {
 function formatDisplayValue(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "?";
   return new Intl.NumberFormat().format(value);
+}
+
+function humanizePlayerId(playerId: string) {
+  const compact = playerId.trim();
+  if (!compact) return "Guest Player";
+  if (compact.length <= 12) return compact;
+  return `${compact.slice(0, 8)}…`;
+}
+
+function buildFallbackPlayer(playerId: string, displayName?: string | null) {
+  const resolvedName = displayName?.trim() || humanizePlayerId(playerId);
+  return {
+    playerId,
+    name: resolvedName,
+    displayName: resolvedName,
+    avatar: null,
+  };
 }
 
 function artFallbackLabel(datapoint?: HigherLowerDatapoint | null) {
@@ -151,22 +169,41 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   }
 
   const isRevealed = round.status === "revealed";
+  const isResultsShown = isRevealed && gameState.revealPhase === "postReveal";
   const winnerSide = round.results?.winnerSide;
   const isTie = winnerSide === "TIE";
   const isCorrect =
-    isRevealed &&
+    isResultsShown &&
     !!myChoice &&
     (winnerSide === "TIE" || myChoice === winnerSide);
-  const leftCorrect = isRevealed && (winnerSide === "LEFT" || winnerSide === "TIE");
-  const rightCorrect = isRevealed && (winnerSide === "RIGHT" || winnerSide === "TIE");
+  const leftCorrect = isResultsShown && (winnerSide === "LEFT" || winnerSide === "TIE");
+  const rightCorrect = isResultsShown && (winnerSide === "RIGHT" || winnerSide === "TIE");
 
   const leftDisplayValue =
-    isRevealed
+    isResultsShown
       ? round.results?.leftDisplayValue ?? round.left.displayValue
       : round.roundNumber > 1
       ? round.left.displayValue
       : null;
-  const rightDisplayValue = isRevealed ? round.results?.rightDisplayValue ?? round.right.displayValue : null;
+  const rightDisplayValue = isResultsShown ? round.results?.rightDisplayValue ?? round.right.displayValue : null;
+
+  function resolvePlayer(playerId: string | null | undefined, displayName?: string | null) {
+    if (!playerId) return null;
+    return gameState.players?.find((p) => p.playerId === playerId) ?? buildFallbackPlayer(playerId, displayName);
+  }
+
+  const leftPlayer = resolvePlayer(round?.left?.ownerPlayerId, round?.left?.ownerLabel);
+  const rightPlayer = resolvePlayer(round?.right?.ownerPlayerId, round?.right?.ownerLabel);
+
+  const MAX_CONTRIBUTOR_AVATARS = 4;
+  function resolveContributors(datapoint: HigherLowerDatapoint | null | undefined) {
+    if (!datapoint?.contributorPlayerIds?.length) return null;
+    return datapoint.contributorPlayerIds
+      .map((id) => resolvePlayer(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p));
+  }
+  const leftContributors = resolveContributors(round?.left);
+  const rightContributors = resolveContributors(round?.right);
 
   const handleVote = (choice: "LEFT" | "RIGHT") => {
     if (!roomCode || isRevealed) return;
@@ -188,6 +225,9 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     if (!isRevealed) {
       if (!myChoice) return `Which has more ${formatMetricLabel(round.metric)}?`;
       return "Answer saved. You can still switch before reveal.";
+    }
+    if (!isResultsShown) {
+      return "Waiting for the results reveal...";
     }
     if (!myChoice) return "Reveal is in.";
     if (isCorrect) return roundPoints > 0 ? `Correct! +${roundPoints}` : "Correct!";
@@ -238,26 +278,35 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
           style={cardStyle({
             selected: myChoice === "LEFT",
             correct: leftCorrect,
-            wrong: isRevealed && myChoice === "LEFT" && !leftCorrect,
+            wrong: isResultsShown && myChoice === "LEFT" && !leftCorrect,
             disabled: voteBusy || isRevealed,
           })}
         >
           <DatapointArt datapoint={round.left} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(148, 163, 184, 0.14)" }}>
-              {round.left.entityType}
-            </span>
-            <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(148, 163, 184, 0.14)" }}>
-              {formatTimeframeLabel(round.left.timeframe)}
-            </span>
-          </div>
+          {leftPlayer ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8' }}>
+              <PlayerAvatar player={leftPlayer} size={20} />
+              {round.left.ownerLabel || formatScopeLabel(round.left.scope)}
+            </div>
+          ) : leftContributors?.length ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#94a3b8' }}>
+              {leftContributors.slice(0, MAX_CONTRIBUTOR_AVATARS).map((p) => (
+                <PlayerAvatar key={p.playerId} player={p} size={20} />
+              ))}
+              {leftContributors.length > MAX_CONTRIBUTOR_AVATARS && (
+                <span>+{leftContributors.length - MAX_CONTRIBUTOR_AVATARS}</span>
+              )}
+              {round.left.scope === "ROOM" && (
+                <span>{round.left.ownerLabel || formatScopeLabel(round.left.scope)}</span>
+              )}
+            </div>
+          ) : null}
           <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.08 }}>{round.left.title}</div>
           <div style={{ fontSize: 13, color: "#cbd5e1" }}>{round.left.subtitle || "Stat"}</div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>{round.left.ownerLabel || formatScopeLabel(round.left.scope)}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1 }}>
-            {formatDisplayValue(leftDisplayValue)}
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1, minHeight: "38px" }}>
+            {isResultsShown || round.roundNumber > 1 ? formatDisplayValue(leftDisplayValue) : "?"}
           </div>
-          {isRevealed && myChoice === "LEFT" && (
+          {isResultsShown && myChoice === "LEFT" && (
             <div style={{ fontSize: 12, fontWeight: 700, color: leftCorrect ? "#86efac" : "#fca5a5" }}>
               {leftCorrect ? "Your pick ✓" : "Your pick ✕"}
             </div>
@@ -297,26 +346,35 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
           style={cardStyle({
             selected: myChoice === "RIGHT",
             correct: rightCorrect,
-            wrong: isRevealed && myChoice === "RIGHT" && !rightCorrect,
+            wrong: isResultsShown && myChoice === "RIGHT" && !rightCorrect,
             disabled: voteBusy || isRevealed,
           })}
         >
           <DatapointArt datapoint={round.right} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(148, 163, 184, 0.14)" }}>
-              {round.right.entityType}
-            </span>
-            <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 999, background: "rgba(148, 163, 184, 0.14)" }}>
-              {formatTimeframeLabel(round.right.timeframe)}
-            </span>
-          </div>
+          {rightPlayer ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8' }}>
+              <PlayerAvatar player={rightPlayer} size={20} />
+              {round.right.ownerLabel || formatScopeLabel(round.right.scope)}
+            </div>
+          ) : rightContributors?.length ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#94a3b8' }}>
+              {rightContributors.slice(0, MAX_CONTRIBUTOR_AVATARS).map((p) => (
+                <PlayerAvatar key={p.playerId} player={p} size={20} />
+              ))}
+              {rightContributors.length > MAX_CONTRIBUTOR_AVATARS && (
+                <span>+{rightContributors.length - MAX_CONTRIBUTOR_AVATARS}</span>
+              )}
+              {round.right.scope === "ROOM" && (
+                <span>{round.right.ownerLabel || formatScopeLabel(round.right.scope)}</span>
+              )}
+            </div>
+          ) : null}
           <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.08 }}>{round.right.title}</div>
           <div style={{ fontSize: 13, color: "#cbd5e1" }}>{round.right.subtitle || "Stat"}</div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>{round.right.ownerLabel || formatScopeLabel(round.right.scope)}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1 }}>
-            {formatDisplayValue(rightDisplayValue)}
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1, minHeight: "38px" }}>
+            {isResultsShown ? formatDisplayValue(rightDisplayValue) : "?"}
           </div>
-          {isRevealed && myChoice === "RIGHT" && (
+          {isResultsShown && myChoice === "RIGHT" && (
             <div style={{ fontSize: 12, fontWeight: 700, color: rightCorrect ? "#86efac" : "#fca5a5" }}>
               {rightCorrect ? "Your pick ✓" : "Your pick ✕"}
             </div>
@@ -324,8 +382,8 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
         </button>
       </div>
 
-      {round.stageComplete && isRevealed && (
-        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+      {round.stageComplete && isResultsShown && (
+        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", minHeight: "18px" }}>
           Stage complete. Waiting for the host to move on.
         </div>
       )}
