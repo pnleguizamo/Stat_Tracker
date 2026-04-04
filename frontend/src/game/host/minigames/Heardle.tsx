@@ -106,6 +106,49 @@ const WAITING_CHIP_TEXTS = [
   'song snooping'
 ];
 
+const EQ_BAR_GROUPS = {
+  left: {
+    levels: [0.6, 0.9, 0.4, 0.8, 0.5, 0.7],
+    baseSpeedMs: 500,
+    speedStepMs: 80,
+    baseMin: 0.15,
+    minStep: 0.04,
+    delayStepMs: -120,
+  },
+  right: {
+    levels: [0.5, 0.8, 0.6, 0.9, 0.4, 0.7],
+    baseSpeedMs: 520,
+    speedStepMs: 90,
+    baseMin: 0.15,
+    minStep: 0.05,
+    delayStepMs: -150,
+  },
+} as const;
+
+type EqBarSide = keyof typeof EQ_BAR_GROUPS;
+
+const EqBars: FC<{ side: EqBarSide; isPlaying: boolean }> = ({ side, isPlaying }) => {
+  const config = EQ_BAR_GROUPS[side];
+
+  return (
+    <div className={`heardle-eq-bars ${isPlaying ? 'heardle-eq-bars--playing' : 'heardle-eq-bars--paused'}`}>
+      {config.levels.map((level, idx) => (
+        <div
+          key={`eq-${side}-${idx}`}
+          className="heardle-eq-bar"
+          style={{
+            '--eq-height': `${level}`,
+            '--eq-speed': `${config.baseSpeedMs + idx * config.speedStepMs}ms`,
+            '--eq-min': `${config.baseMin + idx * config.minStep}`,
+            '--eq-max': `${0.6 + level * 0.4}`,
+            animationDelay: `${idx * config.delayStepMs}ms`,
+          } as CSSProperties}
+        />
+      ))}
+    </div>
+  );
+};
+
 function pickWaitingChipText(seed: string) {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -616,68 +659,74 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance, onRevea
           {round.status !== 'revealed' && maxSnippetMs > 0 && (
             <div className="heardle-playback-section">
               <div className="heardle-playback-title">Playback progress</div>
-              <div
-                className={`heardle-timeline-track${timelineMetrics.isInReplayGap ? ' heardle-timeline-track--gap' : ''}`}
-              >
-                <div
-                  className="heardle-timeline-stage-progress"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, timelineMetrics.stageProgressPct))}%`,
-                  }}
-                />
-                <div
-                  className={`heardle-timeline-playhead${timelineMetrics.isInReplayGap ? ' heardle-timeline-playhead--gap' : ''}`}
-                  style={{
-                    width: `${Math.max(0, Math.min(100, timelineMetrics.playheadPct))}%`,
-                  }}
-                />
-                {snippetPlan.map((ms, idx) => {
-                  const leftPct = (ms / maxSnippetMs) * 100;
-                  return (
+              <div className="heardle-eq-container">
+                <EqBars side="left" isPlaying={!timelineMetrics.isInReplayGap} />
+                <div className="heardle-eq-track-wrapper">
+                  <div
+                    className={`heardle-timeline-track${timelineMetrics.isInReplayGap ? ' heardle-timeline-track--gap' : ''}`}
+                  >
                     <div
-                      key={`marker-${ms}-${idx}`}
-                      className={idx === round.currentSnippetIndex ? 'heardle-timeline-marker--active' : undefined}
+                      className="heardle-timeline-stage-progress"
                       style={{
-                        position: 'absolute',
-                        left: `${leftPct}%`,
-                        top: 0,
-                        bottom: 0,
-                        width: idx === round.currentSnippetIndex ? 3 : 2,
-                        background: idx === round.currentSnippetIndex ? '#ffffff' : '#475569',
+                        width: `${Math.max(0, Math.min(100, timelineMetrics.stageProgressPct))}%`,
                       }}
                     />
-                  );
-                })}
-              </div>
-              <div className="heardle-timeline-label-row">
-                {snippetPlan.map((ms, idx) => {
-                  const hideFirstLabel = round.currentSnippetIndex > 0 && idx === 0;
-                  const hideSecondLabel = round.currentSnippetIndex === 0 && idx === 1;
-                  if (hideFirstLabel || hideSecondLabel) return null;
-
-                  const leftPct = (ms / maxSnippetMs) * 100;
-                  return (
                     <div
-                      key={`marker-label-${ms}-${idx}`}
-                      className={`heardle-timeline-label${
-                        idx === round.currentSnippetIndex
-                          ? ' heardle-timeline-label--active'
-                          : idx < round.currentSnippetIndex
-                          ? ' heardle-timeline-label--passed'
-                          : ''
-                      }`}
+                      className={`heardle-timeline-playhead${timelineMetrics.isInReplayGap ? ' heardle-timeline-playhead--gap' : ''}`}
                       style={{
-                        position: 'absolute',
-                        left: `${leftPct}%`,
-                        transform: 'translateX(-50%)',
-                        fontSize: 13,
-                        whiteSpace: 'nowrap',
+                        width: `${Math.max(0, Math.min(100, timelineMetrics.playheadPct))}%`,
                       }}
-                    >
-                      {formatSnippetSeconds(ms)}
-                    </div>
-                  );
-                })}
+                    />
+                    {snippetPlan.map((ms, idx) => {
+                      const leftPct = (ms / maxSnippetMs) * 100;
+                      return (
+                        <div
+                          key={`marker-${ms}-${idx}`}
+                          className={idx === round.currentSnippetIndex ? 'heardle-timeline-marker--active' : undefined}
+                          style={{
+                            position: 'absolute',
+                            left: `${leftPct}%`,
+                            top: 0,
+                            bottom: 0,
+                            width: idx === round.currentSnippetIndex ? 3 : 2,
+                            background: idx === round.currentSnippetIndex ? '#ffffff' : '#334155',
+                            zIndex: 5,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="heardle-timeline-label-row">
+                    {snippetPlan.map((ms, idx) => {
+                      const hideFirstLabel = round.currentSnippetIndex > 0 && idx === 0;
+                      const hideSecondLabel = round.currentSnippetIndex === 0 && idx === 1;
+                      if (hideFirstLabel || hideSecondLabel) return null;
+
+                      const leftPct = (ms / maxSnippetMs) * 100;
+                      return (
+                        <div
+                          key={`marker-label-${ms}-${idx}`}
+                          className={`heardle-timeline-label${
+                            idx === round.currentSnippetIndex
+                              ? ' heardle-timeline-label--active'
+                              : idx < round.currentSnippetIndex
+                              ? ' heardle-timeline-label--passed'
+                              : ''
+                          }`}
+                          style={{
+                            position: 'absolute',
+                            left: `${leftPct}%`,
+                            transform: 'translateX(-50%)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatSnippetSeconds(ms)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <EqBars side="right" isPlaying={!timelineMetrics.isInReplayGap} />
               </div>
               <div className="heardle-playback-caption">
                 {timelineMetrics.isInReplayGap
@@ -709,10 +758,21 @@ export const HeardleHost: FC<Props> = ({ roomCode, gameState, onAdvance, onRevea
           );
           const chip = outcomeChip(liveRoundOutcome, waitingChipText);
           const playerLabel = player.displayName || player.name || '';
+          const cardGlowClass = liveRoundOutcome
+            ? ` heardle-player-card--${
+                liveRoundOutcome === 'album_match'
+                  ? 'album'
+                  : liveRoundOutcome === 'artist_match'
+                  ? 'artist'
+                  : liveRoundOutcome === 'gave_up'
+                  ? 'gave-up'
+                  : liveRoundOutcome
+              }`
+            : '';
           return (
             <div
               key={player.playerId || player.name}
-              className="heardle-player-card"
+              className={`heardle-player-card${cardGlowClass}`}
             >
               <div className="heardle-player-header">
                 <PlayerAvatar
