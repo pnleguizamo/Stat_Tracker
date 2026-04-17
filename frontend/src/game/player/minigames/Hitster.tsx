@@ -1,4 +1,5 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import api from 'lib/api';
 import { socket } from 'socket';
 import { GameState, HitsterRoundState, HitsterTimelineCard } from 'types/game';
@@ -16,6 +17,20 @@ type TrackOption = {
   artistNames?: string[];
   albumName?: string | null;
   imageUrl?: string | null;
+};
+
+type DragState = {
+  pointerId: number;
+  originGap: number | null;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  sourceX: number;
+  sourceY: number;
+  offsetX: number;
+  offsetY: number;
+  phase: 'dragging' | 'snapback' | 'snaptarget';
 };
 
 export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
@@ -51,8 +66,15 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const [selectedTrack, setSelectedTrack] = useState<TrackOption | null>(null);
   const [guessBusy, setGuessBusy] = useState(false);
   const [guessOutcome, setGuessOutcome] = useState<'correct' | 'wrong' | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [activeDropGap, setActiveDropGap] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchIdRef = useRef(0);
+  const dragStateRef = useRef<DragState | null>(null);
+  const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const dragTimeoutRef = useRef<number | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Reset state on new round
   useEffect(() => {
@@ -64,7 +86,31 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     setSelectedTrack(null);
     setGuessBusy(false);
     setGuessOutcome(null);
+    setDragState(null);
+    setActiveDropGap(null);
   }, [round?.id]);
+
+  useEffect(() => {
+    dragStateRef.current = dragState;
+  }, [dragState]);
+
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        window.clearTimeout(dragTimeoutRef.current);
+        dragTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!dragState?.pointerId || dragState.phase !== 'dragging') return;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.body.style.userSelect = prevUserSelect;
+    };
+  }, [dragState?.pointerId, dragState?.phase]);
 
   // Countdown timer
   useEffect(() => {
@@ -108,6 +154,181 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     debounceRef.current = setTimeout(() => performSearch(query.trim()), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, performSearch]);
+
+  // Array is stored oldest (index 0) to newest (last). Reverse for display.
+  const displayCards = [...myTimeline].reverse();
+  const canPlaceSong = !hasPlaced && !isRevealed && !actionBusy;
+
+  const findDropGap = useCallback((clientX: number, clientY: number): number | null => {
+    const timelineEl = timelineRef.current;
+    if (!timelineEl) return null;
+
+    const timelineRect = timelineEl.getBoundingClientRect();
+    const horizontalSlack = 40;
+    const verticalSlack = 28;
+    if (
+      clientX < timelineRect.left - horizontalSlack ||
+      clientX > timelineRect.right + horizontalSlack ||
+      clientY < timelineRect.top - verticalSlack ||
+      clientY > timelineRect.bottom + verticalSlack
+    ) {
+      return null;
+    }
+
+    if (myTimeline.length === 0) {
+      return 0;
+    }
+
+    for (let displayIdx = 0; displayIdx < displayCards.length; displayIdx += 1) {
+      const card = displayCards[displayIdx];
+      const key = `${card.songId}-${card.addedInRound}`;
+      const el = cardRefs.current[key];
+      if (!el) continue;
+
+      const rect = el.getBoundingClientRect();
+      const centerY = rect.top + rect.height / 2;
+      if (clientY <= centerY) {
+        return myTimeline.length - displayIdx;
+      }
+    }
+
+    return 0;
+  }, [displayCards, myTimeline.length]);
+
+  const finishDrag = useCallback((dropGap: number | null) => {
+    const currentDrag = dragStateRef.current;
+    dragPointerRef.current = null;
+
+    if (!currentDrag) {
+      setActiveDropGap(null);
+      return;
+    }
+
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+
+    if (dropGap !== null) {
+      setSelectedGap(dropGap);
+      setDragState(null);
+      setActiveDropGap(null);
+      return;
+    }
+
+    setActiveDropGap(null);
+    setDragState({
+      ...currentDrag,
+      x: currentDrag.sourceX,
+      y: currentDrag.sourceY,
+      phase: 'snapback',
+    });
+    dragTimeoutRef.current = window.setTimeout(() => {
+      setDragState(null);
+      dragTimeoutRef.current = null;
+    }, 220);
+  }, []);
+
+  const handleDragStart = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!canPlaceSong) return;
+    if (e.pointerType !== 'touch' && e.button !== 0) return;
+
+    e.preventDefault();
+
+    if (dragTimeoutRef.current) {
+      window.clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nextDrag: DragState = {
+      pointerId: e.pointerId,
+      originGap: selectedGap,
+      width: rect.width,
+      height: rect.height,
+      x: rect.left,
+      y: rect.top,
+      sourceX: rect.left,
+      sourceY: rect.top,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      phase: 'dragging',
+    };
+
+    dragPointerRef.current = { x: e.clientX, y: e.clientY };
+    setDragState(nextDrag);
+    setActiveDropGap(findDropGap(e.clientX, e.clientY));
+  };
+
+  useEffect(() => {
+    if (!dragState?.pointerId || dragState.phase !== 'dragging') return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const currentDrag = dragStateRef.current;
+      if (!currentDrag || currentDrag.pointerId !== e.pointerId || currentDrag.phase !== 'dragging') return;
+
+      e.preventDefault();
+      dragPointerRef.current = { x: e.clientX, y: e.clientY };
+      setDragState({
+        ...currentDrag,
+        x: e.clientX - currentDrag.offsetX,
+        y: e.clientY - currentDrag.offsetY,
+      });
+      setActiveDropGap(findDropGap(e.clientX, e.clientY));
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const currentDrag = dragStateRef.current;
+      if (!currentDrag || currentDrag.pointerId !== e.pointerId || currentDrag.phase !== 'dragging') return;
+      finishDrag(findDropGap(e.clientX, e.clientY));
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [dragState?.pointerId, dragState?.phase, findDropGap, finishDrag]);
+
+  useEffect(() => {
+    if (!dragState?.pointerId || dragState.phase !== 'dragging') return;
+
+    let frameId = 0;
+    const autoScroll = () => {
+      const pointer = dragPointerRef.current;
+      const timelineEl = timelineRef.current;
+
+      if (pointer && timelineEl) {
+        const rect = timelineEl.getBoundingClientRect();
+        const threshold = 64;
+        let delta = 0;
+
+        if (pointer.y < rect.top + threshold) {
+          delta = -Math.min(16, Math.ceil((rect.top + threshold - pointer.y) / 6));
+        } else if (pointer.y > rect.bottom - threshold) {
+          delta = Math.min(16, Math.ceil((pointer.y - (rect.bottom - threshold)) / 6));
+        }
+
+        if (delta !== 0) {
+          timelineEl.scrollTop += delta;
+          setActiveDropGap(findDropGap(pointer.x, pointer.y));
+        }
+      }
+
+      frameId = window.requestAnimationFrame(autoScroll);
+    };
+
+    frameId = window.requestAnimationFrame(autoScroll);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [dragState?.pointerId, dragState?.phase, findDropGap]);
+
+  useEffect(() => {
+    if (canPlaceSong || !dragStateRef.current) return;
+    finishDrag(null);
+  }, [canPlaceSong, finishDrag]);
 
   const handlePlace = () => {
     if (selectedGap === null || actionBusy || hasPlaced || isRevealed) return;
@@ -153,31 +374,48 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     );
   }
 
-  // Display timeline reversed (newest at top)
-  // Array is stored oldest (index 0) to newest (last). Reverse for display.
-  const displayCards = [...myTimeline].reverse();
   // Gap indices: in the stored array, gap 0 = before index 0 (oldest), gap N = after last (newest)
   // In display (reversed), gap for "top" = gap N (newest position), gap for "bottom" = gap 0 (oldest position)
 
-  const renderGap = (storageGapIndex: number) => {
-    const isSelected = selectedGap === storageGapIndex;
-    const disabled = hasPlaced || isRevealed || actionBusy;
+  const isDragging = dragState?.phase === 'dragging';
+  const timelinePendingGap = canPlaceSong ? (isDragging ? activeDropGap : selectedGap) : null;
+
+  const renderPendingCard = (storageGapIndex: number) => {
+    if (timelinePendingGap !== storageGapIndex) return null;
+
+    if (isDragging) {
+      return (
+        <div key={`pending-${storageGapIndex}`} className="hitster-timeline-card hitster-timeline-card--pending hitster-timeline-card--preview">
+          <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+          <span className="hitster-timeline-card-info">
+            <span className="hitster-timeline-card-title">Mystery Song</span>
+            <span className="hitster-timeline-card-artist">Release to place it here</span>
+          </span>
+          <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
+        </div>
+      );
+    }
+
     return (
       <button
-        key={`gap-${storageGapIndex}`}
-        className={`hitster-timeline-gap${isSelected ? ' hitster-timeline-gap--selected' : ''}${disabled ? ' hitster-timeline-gap--disabled' : ''}`}
-        onClick={() => !disabled && setSelectedGap(storageGapIndex)}
-        disabled={disabled}
-        aria-label={`Place song at position ${storageGapIndex}`}
+        key={`pending-${storageGapIndex}`}
+        type="button"
+        className="hitster-timeline-card hitster-timeline-card--pending"
+        onPointerDown={handleDragStart}
+        aria-label="Drag the mystery song to a new position"
       >
-        <span className="hitster-timeline-gap-icon">+</span>
+        <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+        <span className="hitster-timeline-card-info">
+          <span className="hitster-timeline-card-title">Mystery Song</span>
+          <span className="hitster-timeline-card-artist">Drag to reposition before you confirm</span>
+        </span>
+        <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
       </button>
     );
   };
 
   const renderCard = (card: HitsterTimelineCard) => (
     <div
-      key={card.songId + '-' + card.addedInRound}
       className={`hitster-timeline-card${card.addedInRound === round.id ? ' hitster-timeline-card--new' : ''}${
         isRevealed && placementResult && !placementResult.correct && card.addedInRound === round.id ? ' hitster-timeline-card--removing' : ''
       }`}
@@ -196,7 +434,7 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const timerText = remainingMs !== null ? `${Math.ceil(remainingMs / 1000)}s` : null;
 
   return (
-    <div className="hitster-player">
+    <div className={`hitster-player${dragState?.phase === 'dragging' ? ' hitster-player--dragging' : ''}`}>
       {/* Round info */}
       <div className="hitster-round-info">
         <span className="hitster-round-number">
@@ -238,17 +476,44 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
         <div className="hitster-placed-banner">Placed! Waiting for reveal...</div>
       )}
 
+      {canPlaceSong && selectedGap === null && (
+        <>
+          <div className="hitster-drag-hint">Drag the mystery song through the stack to choose its year.</div>
+          <button
+            type="button"
+            className={`hitster-drag-source${dragState ? ' hitster-drag-source--hidden' : ''}`}
+            onPointerDown={handleDragStart}
+            aria-label="Drag the mystery song into your timeline"
+          >
+            <span className="hitster-drag-source-icon">♪</span>
+            <span className="hitster-drag-source-copy">
+              <span className="hitster-drag-source-label">Mystery Song</span>
+              <span className="hitster-drag-source-subtitle">Drop it where the year belongs</span>
+            </span>
+            <span className="hitster-drag-source-grab">Drag</span>
+          </button>
+        </>
+      )}
+
       {/* Timeline */}
-      <div className="hitster-timeline">
-        {/* Top gap = newest position = storage gap index myTimeline.length */}
-        {!isRevealed && renderGap(myTimeline.length)}
+      <div className={`hitster-timeline${dragState?.phase === 'dragging' ? ' hitster-timeline--drag-active' : ''}`} ref={timelineRef}>
+        {!isRevealed && renderPendingCard(myTimeline.length)}
         {displayCards.map((card, displayIdx) => {
-          // Storage gap index between this card and the next (older) card
+          const cardKey = `${card.songId}-${card.addedInRound}`;
           const storageGapAfter = myTimeline.length - 1 - displayIdx;
           return (
-            <div key={card.songId + '-' + card.addedInRound}>
-              {renderCard(card)}
-              {!isRevealed && storageGapAfter >= 0 && renderGap(storageGapAfter)}
+            <div key={cardKey} className="hitster-timeline-item">
+              <div
+                ref={(el) => {
+                  cardRefs.current[cardKey] = el;
+                }}
+                className={`hitster-timeline-card-anchor${
+                  isDragging && activeDropGap === myTimeline.length - displayIdx ? ' hitster-timeline-card-anchor--below-drop' : ''
+                }`}
+              >
+                {renderCard(card)}
+              </div>
+              {!isRevealed && storageGapAfter >= 0 && renderPendingCard(storageGapAfter)}
             </div>
           );
         })}
@@ -315,6 +580,28 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       {guessOutcome && (
         <div className={`hitster-guess-outcome hitster-guess-outcome--${guessOutcome}`}>
           {guessOutcome === 'correct' ? 'Correct song guess! +500 bonus' : 'Wrong song guess'}
+        </div>
+      )}
+
+      {dragState && (
+        <div
+          className={`hitster-drag-float${dragState.phase === 'snapback' ? ' is-snapback' : ''}${
+            dragState.phase === 'snaptarget' ? ' is-snaptarget' : ''
+          }`}
+          style={{
+            width: dragState.width,
+            height: dragState.height,
+            transform: `translate3d(${dragState.x}px, ${dragState.y}px, 0)`,
+          }}
+        >
+          <span className="hitster-drag-source-icon">♪</span>
+          <span className="hitster-drag-source-copy">
+            <span className="hitster-drag-source-label">Mystery Song</span>
+            <span className="hitster-drag-source-subtitle">
+              {dragState.originGap === null ? 'Drop it where the year belongs' : 'Move it to a new spot'}
+            </span>
+          </span>
+          <span className="hitster-drag-source-grab">Drag</span>
         </div>
       )}
 
