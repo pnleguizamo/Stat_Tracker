@@ -1,0 +1,592 @@
+/* ═══════════════════════════════════════════════════════════════
+   HITSTER PLAYER — Neon Timeline
+   ═══════════════════════════════════════════════════════════════ */
+
+.hitster-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem 6rem;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.hitster-waiting {
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+  padding: 3rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* ── Round info bar ─────────────────────────────────────────── */
+
+.hitster-round-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.hitster-timer {
+  font-variant-numeric: tabular-nums;
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 13px;
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+}
+
+/* ── Timeline container ─────────────────────────────────────── */
+
+.hitster-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: 0;
+  overflow-y: auto;
+  max-height: 58vh;
+  padding: 8px 0;
+  position: relative;
+  /* Vertical rail glow running down the center */
+  background-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(125, 211, 252, 0.04) 8%,
+    rgba(125, 211, 252, 0.04) 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    black 4%,
+    black 96%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    black 4%,
+    black 96%,
+    transparent 100%
+  );
+}
+
+/* Subtle center rail line */
+.hitster-timeline::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(125, 211, 252, 0.12) 15%,
+    rgba(125, 211, 252, 0.12) 85%,
+    transparent
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Timeline card ──────────────────────────────────────────── */
+
+.hitster-timeline-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(15, 23, 42, 0.88) 0%,
+      rgba(30, 41, 59, 0.72) 100%
+    );
+  border: 1px solid rgba(125, 211, 252, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  position: relative;
+  z-index: 1;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(248, 250, 252, 0.03);
+}
+
+.hitster-timeline-card--new {
+  animation: hitster-card-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-color: rgba(34, 197, 94, 0.5);
+  box-shadow:
+    0 0 16px rgba(34, 197, 94, 0.15),
+    0 0 4px rgba(34, 197, 94, 0.3),
+    inset 0 1px 0 rgba(34, 197, 94, 0.1);
+}
+
+.hitster-timeline-card--removing {
+  animation: hitster-card-out 0.6s ease-in forwards;
+}
+
+@keyframes hitster-card-in {
+  0% { opacity: 0; transform: scale(0.88) translateY(-8px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(0); }
+  100% { transform: scale(1); }
+}
+
+@keyframes hitster-card-out {
+  0% {
+    opacity: 1;
+    border-color: rgba(248, 113, 113, 0.8);
+    box-shadow: 0 0 20px rgba(248, 113, 113, 0.35);
+  }
+  40% {
+    transform: translateX(6px);
+    border-color: rgba(248, 113, 113, 0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateX(-12px);
+    height: 0;
+    padding: 0;
+    margin: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+}
+
+.hitster-timeline-card-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hitster-timeline-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hitster-timeline-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hitster-timeline-card-artist {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hitster-timeline-card-year {
+  font-size: 15px;
+  font-weight: 800;
+  color: #7dd3fc;
+  text-shadow: 0 0 10px rgba(125, 211, 252, 0.25);
+  background: rgba(125, 211, 252, 0.08);
+  border: 1px solid rgba(125, 211, 252, 0.15);
+  border-radius: 8px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Timeline gap (tap target) ──────────────────────────────── */
+
+.hitster-timeline-gap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  margin: 3px 12px;
+  border: 1.5px dashed rgba(96, 165, 250, 0.18);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  color: rgba(96, 165, 250, 0.25);
+  font-size: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.hitster-timeline-gap:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.06);
+  color: rgba(96, 165, 250, 0.7);
+  transform: scaleY(1.15);
+}
+
+.hitster-timeline-gap--selected {
+  border-color: rgba(96, 165, 250, 0.6);
+  border-style: solid;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(96, 165, 250, 0.08),
+      rgba(139, 92, 246, 0.06)
+    );
+  color: #60a5fa;
+  box-shadow:
+    0 0 12px rgba(96, 165, 250, 0.12),
+    inset 0 0 12px rgba(96, 165, 250, 0.05);
+  animation: hitster-gap-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hitster-gap-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(96, 165, 250, 0.12), inset 0 0 12px rgba(96, 165, 250, 0.05); }
+  50% { box-shadow: 0 0 20px rgba(96, 165, 250, 0.2), inset 0 0 16px rgba(96, 165, 250, 0.08); }
+}
+
+.hitster-timeline-gap--disabled {
+  opacity: 0.15;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hitster-timeline-gap-icon {
+  font-weight: 300;
+  line-height: 1;
+}
+
+/* ── Confirm button ─────────────────────────────────────────── */
+
+.hitster-confirm-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 2.5rem);
+  max-width: 380px;
+  z-index: 20;
+  animation: hitster-confirm-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 24px rgba(14, 116, 144, 0.3),
+    0 0 0 1px rgba(56, 189, 248, 0.2);
+}
+
+@keyframes hitster-confirm-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Placed banner ──────────────────────────────────────────── */
+
+.hitster-placed-banner {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(96, 165, 250, 0.08),
+      rgba(139, 92, 246, 0.06)
+    );
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  color: #93c5fd;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  letter-spacing: 0.02em;
+  animation: hitster-placed-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes hitster-placed-pulse {
+  0%, 100% { border-color: rgba(96, 165, 250, 0.25); }
+  50% { border-color: rgba(96, 165, 250, 0.45); }
+}
+
+/* ── Reveal banner ──────────────────────────────────────────── */
+
+.hitster-reveal-banner {
+  width: 100%;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: hitster-reveal-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Sheen sweep on reveal */
+.hitster-reveal-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 60%
+  );
+  animation: hitster-reveal-sheen 1.2s 0.3s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes hitster-reveal-sheen {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(200%); }
+}
+
+@keyframes hitster-reveal-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.hitster-reveal-banner--correct {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(34, 197, 94, 0.12),
+      rgba(16, 185, 129, 0.06)
+    );
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.08);
+}
+
+.hitster-reveal-banner--wrong {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(248, 113, 113, 0.1),
+      rgba(239, 68, 68, 0.05)
+    );
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  box-shadow: 0 0 24px rgba(248, 113, 113, 0.06);
+}
+
+.hitster-reveal-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hitster-reveal-art {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.hitster-reveal-title {
+  font-weight: 700;
+  color: #f1f5f9;
+  font-size: 15px;
+}
+
+.hitster-reveal-artist {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.hitster-reveal-year {
+  font-weight: 800;
+  color: #7dd3fc;
+  font-size: 18px;
+  text-shadow: 0 0 12px rgba(125, 211, 252, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+.hitster-reveal-result {
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hitster-reveal-banner--correct .hitster-reveal-result {
+  color: #4ade80;
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+.hitster-reveal-banner--wrong .hitster-reveal-result {
+  color: #f87171;
+  text-shadow: 0 0 8px rgba(248, 113, 113, 0.3);
+}
+
+.hitster-guess-result {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.hitster-guess-result--correct {
+  color: #c4b5fd;
+  text-shadow: 0 0 6px rgba(167, 139, 250, 0.3);
+}
+
+.hitster-game-winner {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  padding-top: 4px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.3));
+}
+
+/* ── Song guess section ─────────────────────────────────────── */
+
+.hitster-guess-section {
+  width: 100%;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  padding-top: 10px;
+}
+
+.hitster-guess-toggle {
+  background: none;
+  border: none;
+  color: #a78bfa;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: color 0.2s;
+}
+
+.hitster-guess-toggle:hover {
+  color: #c4b5fd;
+}
+
+.hitster-guess-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hitster-guess-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.hitster-guess-input:focus {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.1);
+}
+
+.hitster-guess-input::placeholder {
+  color: #475569;
+}
+
+.hitster-guess-searching {
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hitster-guess-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.hitster-guess-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  color: #e2e8f0;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.hitster-guess-result-item:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.hitster-guess-result-item--selected {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.08);
+}
+
+.hitster-guess-result-art {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.hitster-guess-result-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.hitster-guess-result-artist {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.hitster-guess-submit {
+  align-self: flex-end;
+}
+
+.hitster-guess-outcome {
+  width: 100%;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  animation: hitster-reveal-in 0.4s ease-out;
+}
+
+.hitster-guess-outcome--correct {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+}
+
+.hitster-guess-outcome--wrong {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}
