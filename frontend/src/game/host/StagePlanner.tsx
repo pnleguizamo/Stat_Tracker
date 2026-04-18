@@ -97,7 +97,7 @@ const StagePlanner: React.FC = () => {
     });
   };
 
-  const ACTIVE_IDS: MinigameId[] = ['WHO_LISTENED_MOST', 'GUESS_SPOTIFY_WRAPPED', 'HEARDLE', 'HIGHER_LOWER' ];
+  const ACTIVE_IDS: MinigameId[] = ['WHO_LISTENED_MOST', 'GUESS_SPOTIFY_WRAPPED', 'HEARDLE', 'HIGHER_LOWER', 'HITSTER' ];
   const MINIGAMES = MINIGAME_CATALOG.filter((m) => ACTIVE_IDS.includes(m.id as MinigameId));
 
   function findDropSlot(clientX: number, clientY: number): number | null {

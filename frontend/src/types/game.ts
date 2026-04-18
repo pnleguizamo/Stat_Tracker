@@ -300,6 +300,64 @@ export type TwoTruthsOneLieRoundState = {
   stageComplete?: boolean;
   results?: {
     correctAnswer: number;
+export type HitsterTimelineCard = {
+  songId: string;
+  track_name: string;
+  artist_names: string[];
+  album_name?: string | null;
+  imageUrl?: string | null;
+  releaseDate: string;
+  year: number;
+  addedInRound: string;
+};
+
+export type HitsterSongGuess = {
+  trackId: string;
+  trackName: string;
+  artistNames: string[];
+  outcome: 'correct' | 'wrong';
+  at: number;
+} | null;
+
+export type HitsterPlacement = {
+  gapIndex: number;
+  at: number;
+  confirmedAt?: number | null;
+} | null;
+
+export type HitsterRoundState = {
+  id: string;
+  minigameId: 'HITSTER';
+  status: 'placing' | 'revealed';
+  song: {
+    id: string;
+    track_name?: string | null;
+    artist_names?: string[];
+    album_name?: string | null;
+    imageUrl?: string | null;
+    releaseDate?: string | null;
+    uri?: string | null;
+    previewUrl?: string | null;
+  };
+  year?: number;
+  answers: Record<string, {
+    placement: HitsterPlacement;
+    songGuess: HitsterSongGuess;
+    placementCorrect: boolean | null;
+  }>;
+  myTimeline?: HitsterTimelineCard[];
+  startedAt: number;
+  expiresAt?: number;
+  stageProgress: {
+    roundNumber: number;
+    targetCards: number;
+    leaderboard: Record<string, number>;
+  };
+  results?: {
+    song: { id: string; track_name: string; artist_names: string[]; album_name?: string | null; imageUrl?: string | null; releaseDate: string; uri?: string | null; previewUrl?: string | null };
+    year: number;
+    placements: Record<string, { correct: boolean; gapIndex: number }>;
+    songGuesses: Record<string, { correct: boolean }>;
     winners: string[];
   };
 };
@@ -309,6 +367,7 @@ export type MinigameRoundState =
   | HigherLowerRoundState
   | GuessWrappedRoundState
   | HeardleRoundState
+  | HitsterRoundState
   | TwoTruthsOneLieRoundState;
 
 export type RecapFeaturedPlayer = {

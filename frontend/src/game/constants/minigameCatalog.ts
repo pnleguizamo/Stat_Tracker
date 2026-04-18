@@ -14,6 +14,7 @@ export type MinigameId =
   | 'GUESS_SPOTIFY_WRAPPED'
   | 'HEARDLE'
   | 'HIGHER_LOWER'
+  | 'HITSTER'
   | 'FIRST_PLAY'
   | 'GENRE_GUESS'
   | 'GRAPH_GUESS'
@@ -139,6 +140,34 @@ export const MINIGAME_CATALOG: CatalogEntry[] = [
           { value: 30000, label: '30 s' },
         ],
         default: 20000,
+      },
+    ],
+  },
+    {
+    id: 'HITSTER',
+    name: 'Hitster',
+    description: 'Build a chronological timeline of songs. Place each mystery song in the right spot!',
+    optionSchema: [
+      {
+        key: 'targetCards',
+        label: 'Cards to win',
+        type: 'number',
+        min: 3,
+        max: 15,
+        step: 1,
+        default: 7,
+      },
+      {
+        key: 'roundTimerMs',
+        label: 'Round timer',
+        type: 'select',
+        options: [
+          { value: 20000, label: '20 s' },
+          { value: 30000, label: '30 s' },
+          { value: 45000, label: '45 s' },
+          { value: 60000, label: '60 s' },
+        ],
+        default: 30000,
       },
     ],
   },

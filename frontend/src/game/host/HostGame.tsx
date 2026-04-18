@@ -4,6 +4,7 @@ import { WhoListenedMost } from "./minigames/WhoListenedMost";
 import { HigherLowerHost } from "./minigames/HigherLower";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
+import { HitsterHost } from "./minigames/Hitster";
 import { StageRecap } from "./StageRecap";
 import { FinalRecap } from "./FinalRecap";
 import { useParams } from "react-router-dom";
@@ -30,6 +31,7 @@ const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<H
   GUESS_SPOTIFY_WRAPPED: GuessWrappedHost,
   HEARDLE: HeardleHost,
   HIGHER_LOWER: HigherLowerHost,
+  HITSTER: HitsterHost,
 //   GENRE_GUESS: GenreGuessHostView,
 //   FIRST_PLAY: FirstPlayHostView,
 //   GRAPH_GUESS: GraphGuessHostView,
