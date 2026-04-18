@@ -300,6 +300,9 @@ export type TwoTruthsOneLieRoundState = {
   stageComplete?: boolean;
   results?: {
     correctAnswer: number;
+  }
+};
+
 export type HitsterTimelineCard = {
   songId: string;
   track_name: string;
