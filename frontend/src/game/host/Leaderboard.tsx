@@ -223,21 +223,26 @@ export const Leaderboard: React.FC<Props> = ({
       return;
     }
 
+    const nodesToAnimate: HTMLDivElement[] = [];
     rowRefs.current.forEach((node, playerId) => {
       if (!node) return;
       const prevBox = prevPositionsRef.current.get(playerId);
       const nextBox = nextPositions.get(playerId);
       if (!prevBox || !nextBox) return;
       const deltaY = prevBox.top - nextBox.top;
-      if (!deltaY) return;
-      node.style.willChange = "transform";
-      node.style.transition = "transform 0s";
+      if (Math.abs(deltaY) < 1) return;
+      node.style.transition = "none";
       node.style.transform = `translateY(${deltaY}px)`;
-      requestAnimationFrame(() => {
-        node.style.transition = "transform 1500ms ease";
+      nodesToAnimate.push(node);
+    });
+
+    if (nodesToAnimate.length > 0) {
+      void document.body.offsetHeight;
+      nodesToAnimate.forEach((node) => {
+        node.style.transition = "transform 800ms cubic-bezier(0.25, 0.1, 0.25, 1)";
         node.style.transform = "translateY(0)";
       });
-    });
+    }
 
     prevPositionsRef.current = nextPositions;
   }, [visibleEntries, isVisible]);

@@ -1,12 +1,6 @@
-export type MinigameId =
-  | 'WHO_LISTENED_MOST'
-  | 'GUESS_SPOTIFY_WRAPPED'
-  | 'HEARDLE'
-  | 'HITSTER'
-  | 'FIRST_PLAY'
-  | 'GENRE_GUESS'
-  | 'GRAPH_GUESS'
-  | 'OUTLIER_MODE';
+import type { MinigameId } from '../game/constants/minigameCatalog';
+
+export type { MinigameId };
 
 
   // export type MinigameId =
@@ -32,6 +26,13 @@ export type MinigameId =
 export type StageConfig = {
   index: number;
   minigameId: MinigameId;
+  metric?: 'plays' | 'minutes';
+  options?: {
+    mode?: 'winner_stays' | 'right_advances';
+    metric?: 'plays' | 'minutes';
+    maxRounds?: number;
+    [key: string]: unknown;
+  };
 };
 
 export type Player = {
@@ -86,6 +87,58 @@ export type WhoListenedMostRoundState = {
     topListenerSocketIds: string[] | null;
     listenCounts?: Record<string, number>;
     winners?: string[];
+  };
+};
+
+export type HigherLowerDatapoint = {
+  id: string;
+  metric: string;
+  scope: string;
+  timeframe: string;
+  entityType: string;
+  ownerPlayerId: string | null;
+  ownerLabel: string | null;
+  entityId: string | null;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  previewKind?: 'track' | 'artist' | null;
+  previewTrackName?: string | null;
+  previewArtistName?: string | null;
+  value?: number;
+  displayValue?: number;
+  contributorPlayerIds?: string[] | null;
+};
+
+export type HigherLowerRoundState = {
+  id: string;
+  minigameId: 'HIGHER_LOWER';
+  status: 'collecting' | 'pending' | 'revealed';
+  metric: string;
+  roundNumber: number;
+  maxRounds: number;
+  left: HigherLowerDatapoint;
+  right: HigherLowerDatapoint;
+  answers: Record<
+    string,
+    {
+      answer: { choice: 'LEFT' | 'RIGHT' };
+      at: number;
+    }
+  >;
+  startedAt: number;
+  expiresAt: number;
+  revealedAt?: number;
+  stageComplete?: boolean;
+  results?: {
+    leftValue: number;
+    rightValue: number;
+    leftDisplayValue: number;
+    rightDisplayValue: number;
+    winnerSide: 'LEFT' | 'RIGHT' | 'TIE';
+    winners: string[];
+    tally: { LEFT: number; RIGHT: number };
+    totalVotes: number;
   };
 };
 
@@ -219,6 +272,37 @@ export type HeardleRoundState = {
   };
 };
 
+export type TwoTruthsOneLieStatement = {
+  id: string;
+  text: string;
+  category: 'personal' | 'comparative';
+};
+
+export type TwoTruthsOneLieCandidateStatement = TwoTruthsOneLieStatement & {
+  originalValue: unknown;
+  meta: Record<string, unknown>;
+};
+
+export type TwoTruthsOneLieRoundState = {
+  id: string;
+  minigameId: 'TWO_TRUTHS_ONE_LIE';
+  status: 'crafting' | 'collecting' | 'pending' | 'revealed';
+  featuredPlayerId: string;
+  featuredProfile: { displayName: string; avatar: string | null };
+  statements: [TwoTruthsOneLieStatement, TwoTruthsOneLieStatement, TwoTruthsOneLieStatement] | null;
+  answers: Record<string, { answer: { chosenIndex: number }; at: number }>;
+  lieIndex?: number;
+  roundNumber: number;
+  maxRounds: number;
+  startedAt: number;
+  expiresAt: number;
+  revealedAt?: number;
+  stageComplete?: boolean;
+  results?: {
+    correctAnswer: number;
+  }
+};
+
 export type HitsterTimelineCard = {
   songId: string;
   track_name: string;
@@ -283,10 +367,11 @@ export type HitsterRoundState = {
 
 export type MinigameRoundState =
   | WhoListenedMostRoundState
-  // | HigherLowerRoundState
+  | HigherLowerRoundState
   | GuessWrappedRoundState
   | HeardleRoundState
-  | HitsterRoundState;
+  | HitsterRoundState
+  | TwoTruthsOneLieRoundState;
 
 export type RecapFeaturedPlayer = {
   playerId: string;

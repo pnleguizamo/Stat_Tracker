@@ -6,7 +6,11 @@ const modules = {};
 function loadAll() {
   const dir = __dirname;
   for (const filename of fs.readdirSync(dir)) {
-    if (!filename.endsWith('.js') || filename === 'index.js') continue;
+    if (!filename.endsWith('.js') ||
+      filename === 'index.js' ||
+      filename.endsWith('.test.js') ||
+      filename.endsWith('.spec.js')
+    ) continue;
     const key = path.basename(filename, '.js');
     try {
       modules[key] = require(path.join(dir, filename));

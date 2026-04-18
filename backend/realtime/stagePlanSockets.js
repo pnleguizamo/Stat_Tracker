@@ -1,4 +1,5 @@
 const minigameRegistry = require('./minigames');
+const { preloadStages } = require('./minigames/HIGHER_LOWER');
 const { computeStageRecap } = require('./stageRecap');
 
 // TODOo determine if even necessary
@@ -107,6 +108,7 @@ function registerStagePlanListeners(io, socket, deps) {
       return;
     }
 
+    preloadStages(started);
     await ensureStageState(started);
     broadcastGameState(roomCode);
 

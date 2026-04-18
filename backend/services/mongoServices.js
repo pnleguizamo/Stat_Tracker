@@ -595,42 +595,74 @@ mongoService.searchTracks = async function (query, options = {}) {
     }));
 };
 
-// TODOo make a raw trackCounts collection that uses original trackId for pickCanonicalTrackId to use 
-mongoService.rollupUserCounts = async function (options = {}) {
-    const { startDate, endDate, userIds, batchSize = 500, logger = console } = options;
-    db = await initDb();
-    const streamsCol = db.collection(COLLECTIONS.streams);
-    const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
-    const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
-    const tracksCol = db.collection(COLLECTIONS.tracks);
-    
-    if (!startDate) artistCountsCol.deleteMany({});
-
-    const match = { reasonEnd: "trackdone", canonicalTrackId: { $ne: null } };
+function ensureExactEntityRollupOptions({ startDate, endDate }) {
     if (startDate || endDate) {
-        match.ts = {};
-        if (startDate) match.ts.$gte = startDate;
-        if (endDate) match.ts.$lt = endDate;
+        throw new Error('rollupUserEntityCounts only supports exact full-user rebuilds');
     }
-    if (userIds?.length) {
-        match.userId = { $in: userIds };
-    }
+}
 
-    const msExpr = { $ifNull: ['$msPlayed', '$ms_played'] };
+function buildEntityAggregationKey(userId, entityId) {
+    return `${userId}::${entityId}`;
+}
 
-    const writeBatch = async (col, ops) => {
-        if (!ops.length) return;
-        await col.bulkWrite(ops, { ordered: false });
+function upsertEntityAggregation(map, userId, entityId, payload = {}) {
+    if (!userId || !entityId) return;
+    const key = buildEntityAggregationKey(userId, entityId);
+    const current = map.get(key) || {
+        userId,
+        entityId,
+        plays: 0,
+        msPlayed: 0,
+        lastStreamTs: null,
+        uniqueTrackIds: new Set(),
     };
+    current.plays += payload.plays || 0;
+    current.msPlayed += payload.msPlayed || 0;
+    if (!current.lastStreamTs || (payload.lastStreamTs && payload.lastStreamTs > current.lastStreamTs)) {
+        current.lastStreamTs = payload.lastStreamTs || current.lastStreamTs || null;
+    }
+    if (payload.trackId) current.uniqueTrackIds.add(payload.trackId);
+    map.set(key, current);
+}
 
-    let trackOps = 0;
-    let artistOps = 0;
-    let batch = [];
+async function writeBulkOps(col, ops = []) {
+    if (!ops.length) return;
+    await col.bulkWrite(ops, { ordered: false });
+}
 
-    const flushBatch = async () => {
-        if (!batch.length) return;
-        const trackOpsPayload = batch.map(doc => {
+async function loadTrackRollupMetadata(tracksCol, artistsCol, trackIds = []) {
+    if (!trackIds.length) {
+        return { trackMetaMap: new Map(), artistMetaMap: new Map() };
+    }
+
+    const trackDocs = await tracksCol
+        .find(
+            { _id: { $in: trackIds } },
+            { projection: { artistIds: 1, albumId: 1 } }
+        )
+        .toArray();
+    const trackMetaMap = new Map(trackDocs.map((doc) => [doc._id, doc]));
+
+    const artistIds = Array.from(
+        new Set(
+            trackDocs.flatMap((doc) => (Array.isArray(doc.artistIds) ? doc.artistIds : []).filter(Boolean))
+        )
+    );
+    const artistDocs = artistIds.length
+        ? await artistsCol
+            .find({ _id: { $in: artistIds } }, { projection: { genres: 1 } })
+            .toArray()
+        : [];
+    const artistMetaMap = new Map(artistDocs.map((doc) => [doc._id, doc]));
+
+    return { trackMetaMap, artistMetaMap };
+}
+
+function toTrackCountOps(batch = []) {
+    return batch
+        .map((doc) => {
             const { userId, trackId } = doc._id || {};
+            if (!userId || !trackId) return null;
             return {
                 updateOne: {
                     filter: { userId, trackId },
@@ -644,46 +676,159 @@ mongoService.rollupUserCounts = async function (options = {}) {
                     upsert: true,
                 },
             };
-        });
-        await writeBatch(trackCountsCol, trackOpsPayload);
-        trackOps += trackOpsPayload.length;
+        })
+        .filter(Boolean);
+}
 
-        const trackIds = Array.from(new Set(batch.map(d => d._id?.trackId).filter(Boolean)));
-        const metas = trackIds.length
-            ? await tracksCol
-                .find({ _id: { $in: trackIds } }, { projection: { artistIds: 1 } })
-                .toArray()
-            : [];
-        const metaMap = new Map(metas.map(m => [m._id, m.artistIds || []]));
+function toEntityCountIncOps(map, keyField) {
+    return Array.from(map.values()).map((entry) => ({
+        updateOne: {
+            filter: { userId: entry.userId, [keyField]: entry.entityId },
+            update: {
+                $inc: {
+                    plays: entry.plays || 0,
+                    msPlayed: entry.msPlayed || 0,
+                    uniqueTracks: entry.uniqueTrackIds?.size || 0,
+                },
+                $max: { lastStreamTs: entry.lastStreamTs || null },
+            },
+            upsert: true,
+        },
+    }));
+}
 
-        const artistOpsPayload = [];
-        for (const doc of batch) {
-            const { userId, trackId } = doc._id || {};
-            if (!userId || !trackId) continue;
-            const artistIds = metaMap.get(trackId) || [];
-            const uniqueArtistIds = new Set(artistIds.filter(Boolean));
-            for (const artistId of uniqueArtistIds) {
-                artistOpsPayload.push({
-                    updateOne: {
-                        filter: { userId, artistId },
-                        update: {
-                            $inc: {
-                                plays: doc.plays || 0,
-                                msPlayed: doc.msPlayed || 0,
-                                uniqueTracks: 1,
-                            },
-                            $max: { lastStreamTs: doc.lastStreamTs || null },
-                        },
-                        upsert: true,
-                    },
-                });
+async function resetEntityCountCollections({ userIds, trackCountsCol, artistCountsCol, albumCountsCol, genreCountsCol }) {
+    if (userIds?.length) {
+        const match = { userId: { $in: userIds } };
+        await Promise.all([
+            trackCountsCol.deleteMany(match),
+            artistCountsCol.deleteMany(match),
+            albumCountsCol.deleteMany(match),
+            genreCountsCol.deleteMany(match),
+        ]);
+        return;
+    }
+
+    await Promise.all([
+        trackCountsCol.deleteMany({}),
+        artistCountsCol.deleteMany({}),
+        albumCountsCol.deleteMany({}),
+        genreCountsCol.deleteMany({}),
+    ]);
+}
+
+async function rollupEntityCountBatch(batch, deps) {
+    const {
+        trackCountsCol,
+        artistCountsCol,
+        albumCountsCol,
+        genreCountsCol,
+        tracksCol,
+        artistsCol,
+    } = deps;
+
+    if (!batch.length) return { tracks: 0, artists: 0, albums: 0, genres: 0 };
+
+    const trackOps = toTrackCountOps(batch);
+    await writeBulkOps(trackCountsCol, trackOps);
+
+    const trackIds = Array.from(new Set(batch.map((doc) => doc._id?.trackId).filter(Boolean)));
+    const { trackMetaMap, artistMetaMap } = await loadTrackRollupMetadata(tracksCol, artistsCol, trackIds);
+    const artistAgg = new Map();
+    const albumAgg = new Map();
+    const genreAgg = new Map();
+
+    for (const doc of batch) {
+        const { userId, trackId } = doc._id || {};
+        if (!userId || !trackId) continue;
+        const meta = trackMetaMap.get(trackId) || {};
+        const trackPayload = {
+            trackId,
+            plays: doc.plays || 0,
+            msPlayed: doc.msPlayed || 0,
+            lastStreamTs: doc.lastStreamTs || null,
+        };
+
+        for (const artistId of new Set((meta.artistIds || []).filter(Boolean))) {
+            upsertEntityAggregation(artistAgg, userId, artistId, trackPayload);
+        }
+
+        if (meta.albumId) {
+            upsertEntityAggregation(albumAgg, userId, meta.albumId, trackPayload);
+        }
+
+        for (const artistId of new Set((meta.artistIds || []).filter(Boolean))) {
+            const artistMeta = artistMetaMap.get(artistId) || {};
+            for (const genre of new Set((artistMeta.genres || []).filter(Boolean))) {
+                upsertEntityAggregation(genreAgg, userId, genre, trackPayload);
             }
         }
-        if (artistOpsPayload.length) {
-            await writeBatch(artistCountsCol, artistOpsPayload);
-            artistOps += artistOpsPayload.length;
-        }
+    }
 
+    const artistOps = toEntityCountIncOps(artistAgg, 'artistId');
+    const albumOps = toEntityCountIncOps(albumAgg, 'albumId');
+    const genreOps = toEntityCountIncOps(genreAgg, 'genre');
+
+    await Promise.all([
+        writeBulkOps(artistCountsCol, artistOps),
+        writeBulkOps(albumCountsCol, albumOps),
+        writeBulkOps(genreCountsCol, genreOps),
+    ]);
+
+    return {
+        tracks: trackOps.length,
+        artists: artistOps.length,
+        albums: albumOps.length,
+        genres: genreOps.length,
+    };
+}
+
+// TODOo make a raw trackCounts collection that uses original trackId for pickCanonicalTrackId to use
+mongoService.rollupUserEntityCounts = async function (options = {}) {
+    const { startDate, endDate, userIds, batchSize = 500, logger = console } = options;
+    ensureExactEntityRollupOptions({ startDate, endDate });
+
+    db = await initDb();
+    const streamsCol = db.collection(COLLECTIONS.streams);
+    const trackCountsCol = db.collection(COLLECTIONS.userTrackCounts);
+    const artistCountsCol = db.collection(COLLECTIONS.userArtistCounts);
+    const albumCountsCol = db.collection(COLLECTIONS.userAlbumCounts);
+    const genreCountsCol = db.collection(COLLECTIONS.userGenreCounts);
+    const tracksCol = db.collection(COLLECTIONS.tracks);
+    const artistsCol = db.collection(COLLECTIONS.artists);
+
+    await resetEntityCountCollections({
+        userIds,
+        trackCountsCol,
+        artistCountsCol,
+        albumCountsCol,
+        genreCountsCol,
+    });
+
+    const match = { reasonEnd: "trackdone", canonicalTrackId: { $ne: null } };
+    if (userIds?.length) {
+        match.userId = { $in: userIds };
+    }
+
+    const msExpr = { $ifNull: ['$msPlayed', '$ms_played'] };
+
+    let batch = [];
+    const counts = { tracks: 0, artists: 0, albums: 0, genres: 0 };
+
+    const flushBatch = async () => {
+        if (!batch.length) return;
+        const result = await rollupEntityCountBatch(batch, {
+            trackCountsCol,
+            artistCountsCol,
+            albumCountsCol,
+            genreCountsCol,
+            tracksCol,
+            artistsCol,
+        });
+        counts.tracks += result.tracks;
+        counts.artists += result.artists;
+        counts.albums += result.albums;
+        counts.genres += result.genres;
         batch = [];
     };
 
@@ -698,6 +843,7 @@ mongoService.rollupUserCounts = async function (options = {}) {
             },
         },
     ];
+    
     const trackCursor = streamsCol.aggregate(trackPipeline, { allowDiskUse: true });
     for await (const doc of trackCursor) {
         batch.push(doc);
@@ -707,6 +853,12 @@ mongoService.rollupUserCounts = async function (options = {}) {
     }
     await flushBatch();
 
-    logger.info?.(`rollupUserCounts complete tracks=${trackOps} artists=${artistOps}`);
-    return { tracks: trackOps, artists: artistOps };
+    logger.info?.(
+        `rollupUserEntityCounts complete tracks=${counts.tracks} artists=${counts.artists} albums=${counts.albums} genres=${counts.genres}`
+    );
+    return counts;
+};
+
+mongoService.rollupUserCounts = async function (options = {}) {
+    return mongoService.rollupUserEntityCounts(options);
 };
