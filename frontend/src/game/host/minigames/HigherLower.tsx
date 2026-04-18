@@ -567,6 +567,10 @@ export const HigherLowerHost: FC<Props> = (props) => {
   const leftContributors = resolveContributors(round?.left);
   const rightContributors = resolveContributors(round?.right);
 
+  // Vote count
+  const voteCount = round ? Object.values(round.answers).filter((a) => a.answer?.choice).length : 0;
+  const playerCount = gameState.players.filter((p) => !p.isHost).length;
+
   // Round dots
   const roundDots = useMemo(() => {
     if (!round) return [];
@@ -609,17 +613,28 @@ export const HigherLowerHost: FC<Props> = (props) => {
                 <span className="hl-metric-highlight">{formatMetricLabel(round.metric)}</span>?
               </h2>
               <div className="hl-round-row">
-                <div className="hl-round-dots">
-                  {roundDots.map((state, i) => (
-                    <span
-                      key={i}
-                      className={joinClasses(
-                        "hl-round-dot",
-                        state === "active" && "hl-round-dot--active",
-                        state === "completed" && "hl-round-dot--completed",
-                      )}
-                    />
-                  ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {isCollecting && playerCount > 0 && (<span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#334155" }}>Round</span>)}
+                  <div className="hl-round-dots">
+                    {roundDots.map((state, i) => (
+                      <span
+                        key={i}
+                        className={joinClasses(
+                          "hl-round-dot",
+                          state === "active" && "hl-round-dot--active",
+                          state === "completed" && "hl-round-dot--completed",
+                        )}
+                      />
+                    ))}
+                  </div>
+                  {isCollecting && playerCount > 0 && (
+                    <>
+                      <span style={{ fontSize: 11, color: "#334155" }}>·</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", color: voteCount === playerCount ? "#4ade80" : "#475569", transition: "color 300ms" }}>
+                        {voteCount}/{playerCount} voted
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </HostCard>

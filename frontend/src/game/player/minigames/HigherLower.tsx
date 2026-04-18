@@ -1,209 +1,39 @@
-import { CSSProperties, FC, useMemo, useState } from "react";
+import { CSSProperties, FC, useState } from "react";
 import { socket } from "socket";
-import { GameState, HigherLowerDatapoint, HigherLowerRoundState, ScoreAward } from "types/game";
-import { PlayerAvatar } from "components/PlayerAvatar";
+import { GameState, HigherLowerRoundState } from "types/game";
 
 type Props = {
   roomCode: string;
   gameState: GameState;
 };
 
-const TIMEFRAME_LABELS: Record<string, string> = {
-  last7: "Last 7",
-  last30: "Last 30",
-  last90: "Last 90",
-  last180: "Last 180",
-  ytd: "YTD",
-  allTime: "All Time",
-};
-
-function formatMetricLabel(metric?: string | null) {
-  return metric === "minutes" ? "minutes" : "plays";
-}
-
-function formatMetricTitle(metric?: string | null) {
-  return metric === "minutes" ? "Minutes" : "Plays";
-}
-
-function formatTimeframeLabel(timeframe?: string | null) {
-  if (!timeframe) return "Window";
-  if (TIMEFRAME_LABELS[timeframe]) return TIMEFRAME_LABELS[timeframe];
-  if (/^year\d{4}$/.test(timeframe)) return timeframe.replace("year", "");
-  return timeframe;
-}
-
-function formatScopeLabel(scope?: string | null) {
-  return scope === "ROOM" ? "Whole Room" : "Player";
-}
-
-function formatDisplayValue(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "?";
-  return new Intl.NumberFormat().format(value);
-}
-
-function humanizePlayerId(playerId: string) {
-  const compact = playerId.trim();
-  if (!compact) return "Guest Player";
-  if (compact.length <= 12) return compact;
-  return `${compact.slice(0, 8)}…`;
-}
-
-function buildFallbackPlayer(playerId: string, displayName?: string | null) {
-  const resolvedName = displayName?.trim() || humanizePlayerId(playerId);
-  return {
-    playerId,
-    name: resolvedName,
-    displayName: resolvedName,
-    avatar: null,
-  };
-}
-
-function artFallbackLabel(datapoint?: HigherLowerDatapoint | null) {
-  if (!datapoint?.entityType) return "STAT";
-  if (datapoint.entityType === "TOTAL") return "Σ";
-  return datapoint.entityType.slice(0, 3);
-}
-
-function cardStyle({
-  selected,
-  correct,
-  wrong,
-  disabled,
-}: {
-  selected: boolean;
-  correct: boolean;
-  wrong: boolean;
-  disabled: boolean;
-}): CSSProperties {
-  return {
-    borderRadius: 20,
-    border: correct
-      ? "1px solid rgba(74, 222, 128, 0.65)"
-      : wrong
-      ? "1px solid rgba(248, 113, 113, 0.55)"
-      : selected
-      ? "1px solid rgba(251, 191, 36, 0.75)"
-      : "1px solid rgba(148, 163, 184, 0.18)",
-    background: correct
-      ? "linear-gradient(160deg, rgba(17, 94, 89, 0.92), rgba(6, 78, 59, 0.94))"
-      : wrong
-      ? "linear-gradient(160deg, rgba(127, 29, 29, 0.88), rgba(69, 10, 10, 0.92))"
-      : selected
-      ? "linear-gradient(160deg, rgba(120, 53, 15, 0.84), rgba(68, 28, 7, 0.9))"
-      : "linear-gradient(160deg, rgba(15, 23, 42, 0.96), rgba(8, 15, 32, 0.98))",
-    color: "#f8fafc",
-    padding: "1rem",
-    display: "grid",
-    gap: 10,
-    textAlign: "left",
-    opacity: disabled && !correct && !wrong ? 0.82 : 1,
-    boxShadow: selected
-      ? "0 0 0 1px rgba(251, 191, 36, 0.12), 0 18px 42px rgba(15, 23, 42, 0.28)"
-      : "0 12px 32px rgba(2, 6, 23, 0.24)",
-    transition: "transform 160ms ease, border-color 160ms ease, background 160ms ease",
-  };
-}
-
-const DatapointArt: FC<{ datapoint: HigherLowerDatapoint }> = ({ datapoint }) => {
-  if (datapoint.imageUrl) {
-    return (
-      <img
-        src={datapoint.imageUrl}
-        alt={datapoint.title}
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 16,
-          objectFit: "cover",
-          border: "1px solid rgba(255,255,255,0.08)",
-        }}
-      />
-    );
-  }
-
-  return (
-    <div
-      style={{
-        width: 72,
-        height: 72,
-        borderRadius: 16,
-        display: "grid",
-        placeItems: "center",
-        background: "radial-gradient(circle at 28% 22%, rgba(250, 204, 21, 0.34), rgba(15, 23, 42, 0.96))",
-        border: "1px solid rgba(250, 204, 21, 0.22)",
-        color: "#fde68a",
-        fontWeight: 800,
-        letterSpacing: 1,
-      }}
-    >
-      {artFallbackLabel(datapoint)}
-    </div>
-  );
-};
+const SIDE_ACCENT = {
+  LEFT:  { color: "#22d3ee", dimBg: "rgba(34, 211, 238, 0.08)",  dimBorder: "rgba(34, 211, 238, 0.28)",  selBg: "rgba(6,  78,  90,  0.92)", selBorder: "rgba(34, 211, 238, 0.75)" },
+  RIGHT: { color: "#facc15", dimBg: "rgba(250, 204, 21, 0.08)", dimBorder: "rgba(250, 204, 21, 0.28)", selBg: "rgba(78, 40,  6,   0.92)", selBorder: "rgba(250, 204, 21, 0.75)" },
+} as const;
 
 export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const round =
-    gameState.currentRoundState && gameState.currentRoundState.minigameId === "HIGHER_LOWER"
+    gameState.currentRoundState?.minigameId === "HIGHER_LOWER"
       ? (gameState.currentRoundState as HigherLowerRoundState)
       : null;
+
   const [voteBusy, setVoteBusy] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
 
   const myPlayerId = ((socket as any).playerId || socket.id) as string;
   const myChoice = round?.answers?.[myPlayerId]?.answer?.choice ?? null;
-  const myAwards = useMemo(
-    () => (gameState.scoreboard?.[myPlayerId]?.awards || []) as ScoreAward[],
-    [gameState.scoreboard, myPlayerId]
-  );
-
-  const roundPoints = useMemo(
-    () =>
-      myAwards
-        .filter((award) => award.meta?.roundId === round?.id)
-        .reduce((sum, award) => sum + (award.points || 0), 0),
-    [myAwards, round?.id]
-  );
+  const totalPoints = gameState.scoreboard?.[myPlayerId]?.points ?? 0;
 
   if (!round) {
-    return <div>Waiting for the host to start Higher / Lower…</div>;
+    return <div style={{ color: "#94a3b8", fontSize: 14 }}>Waiting for the host to start Higher / Lower…</div>;
   }
 
   const isRevealed = round.status === "revealed";
   const isResultsShown = isRevealed && gameState.revealPhase === "postReveal";
   const winnerSide = round.results?.winnerSide;
-  const isTie = winnerSide === "TIE";
-  const isCorrect =
-    isResultsShown &&
-    !!myChoice &&
-    (winnerSide === "TIE" || myChoice === winnerSide);
-  const leftCorrect = isResultsShown && (winnerSide === "LEFT" || winnerSide === "TIE");
-  const rightCorrect = isResultsShown && (winnerSide === "RIGHT" || winnerSide === "TIE");
-
-  const leftDisplayValue =
-    isResultsShown
-      ? round.results?.leftDisplayValue ?? round.left.displayValue
-      : round.roundNumber > 1
-      ? round.left.displayValue
-      : null;
-  const rightDisplayValue = isResultsShown ? round.results?.rightDisplayValue ?? round.right.displayValue : null;
-
-  function resolvePlayer(playerId: string | null | undefined, displayName?: string | null) {
-    if (!playerId) return null;
-    return gameState.players?.find((p) => p.playerId === playerId) ?? buildFallbackPlayer(playerId, displayName);
-  }
-
-  const leftPlayer = resolvePlayer(round?.left?.ownerPlayerId, round?.left?.ownerLabel);
-  const rightPlayer = resolvePlayer(round?.right?.ownerPlayerId, round?.right?.ownerLabel);
-
-  const MAX_CONTRIBUTOR_AVATARS = 4;
-  function resolveContributors(datapoint: HigherLowerDatapoint | null | undefined) {
-    if (!datapoint?.contributorPlayerIds?.length) return null;
-    return datapoint.contributorPlayerIds
-      .map((id) => resolvePlayer(id))
-      .filter((p): p is NonNullable<typeof p> => Boolean(p));
-  }
-  const leftContributors = resolveContributors(round?.left);
-  const rightContributors = resolveContributors(round?.right);
+  const isCorrect = isResultsShown && !!myChoice && (winnerSide === "TIE" || myChoice === winnerSide);
+  const isWrong = isResultsShown && !!myChoice && !isCorrect;
 
   const handleVote = (choice: "LEFT" | "RIGHT") => {
     if (!roomCode || isRevealed) return;
@@ -214,181 +44,102 @@ export const HigherLowerPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       { roomCode, answer: { choice } },
       (resp?: { ok: boolean; error?: string }) => {
         setVoteBusy(false);
-        if (!resp?.ok) {
-          setVoteError(resp?.error || "Failed to submit answer");
-        }
+        if (!resp?.ok) setVoteError(resp?.error || "Failed to submit answer");
       }
     );
   };
 
-  const statusText = (() => {
-    if (!isRevealed) {
-      if (!myChoice) return `Which has more ${formatMetricLabel(round.metric)}?`;
-      return "Answer saved. You can still switch before reveal.";
-    }
-    if (!isResultsShown) {
-      return "Waiting for the results reveal...";
-    }
-    if (!myChoice) return "Reveal is in.";
-    if (isCorrect) return roundPoints > 0 ? `Correct! +${roundPoints}` : "Correct!";
-    return "Wrong!";
-  })();
-
-  const containerStyle = {
-    "--card": "rgba(15, 21, 39, 0.92)",
-    "--card-border": "rgba(148, 163, 184, 0.18)",
-    "--accent": "#f59e0b",
-    "--text": "#e2e8f0",
-    "--muted": "#94a3b8",
-    fontFamily: '"Space Grotesk", "IBM Plex Sans", sans-serif',
-    color: "var(--text)",
-    display: "grid",
-    gap: 12,
-  } as CSSProperties;
+  const disabled = voteBusy || isRevealed;
 
   return (
-    <div style={containerStyle}>
-      <section
-        style={{
-          padding: "0.9rem 1rem",
-          borderRadius: 18,
-          background: "linear-gradient(160deg, rgba(15, 23, 42, 0.96), rgba(7, 13, 28, 0.98))",
-          border: "1px solid var(--card-border)",
-        }}
-      >
-        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "var(--muted)" }}>
-          {formatMetricTitle(round.metric)} · Round {round.roundNumber} of {round.maxRounds}
-        </div>
-        <div style={{ marginTop: 4, fontSize: 15, fontWeight: 700 }}>
-          {statusText}
-        </div>
-      </section>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
-          gap: 10,
-          alignItems: "stretch",
-        }}
-      >
-        <button
-          onClick={() => handleVote("LEFT")}
-          disabled={voteBusy || isRevealed}
-          style={cardStyle({
-            selected: myChoice === "LEFT",
-            correct: leftCorrect,
-            wrong: isResultsShown && myChoice === "LEFT" && !leftCorrect,
-            disabled: voteBusy || isRevealed,
-          })}
-        >
-          <DatapointArt datapoint={round.left} />
-          {leftPlayer ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8' }}>
-              <PlayerAvatar player={leftPlayer} size={20} />
-              {round.left.ownerLabel || formatScopeLabel(round.left.scope)}
-            </div>
-          ) : leftContributors?.length ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#94a3b8' }}>
-              {leftContributors.slice(0, MAX_CONTRIBUTOR_AVATARS).map((p) => (
-                <PlayerAvatar key={p.playerId} player={p} size={20} />
-              ))}
-              {leftContributors.length > MAX_CONTRIBUTOR_AVATARS && (
-                <span>+{leftContributors.length - MAX_CONTRIBUTOR_AVATARS}</span>
-              )}
-              {round.left.scope === "ROOM" && (
-                <span>{round.left.ownerLabel || formatScopeLabel(round.left.scope)}</span>
-              )}
-            </div>
-          ) : null}
-          <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.08 }}>{round.left.title}</div>
-          <div style={{ fontSize: 13, color: "#cbd5e1" }}>{round.left.subtitle || "Stat"}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1, minHeight: "38px" }}>
-            {isResultsShown || round.roundNumber > 1 ? formatDisplayValue(leftDisplayValue) : "?"}
-          </div>
-          {isResultsShown && myChoice === "LEFT" && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: leftCorrect ? "#86efac" : "#fca5a5" }}>
-              {leftCorrect ? "Your pick ✓" : "Your pick ✕"}
-            </div>
-          )}
-        </button>
-
-        <div
-          style={{
-            display: "grid",
-            placeItems: "center",
-            alignSelf: "center",
-            color: "#f8fafc",
-            fontWeight: 800,
-            letterSpacing: 1,
-            padding: "0 2px",
-          }}
-        >
-          <div
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              background: "radial-gradient(circle, rgba(250, 204, 21, 0.36), rgba(15, 23, 42, 0.05) 72%)",
-              border: "1px solid rgba(250, 204, 21, 0.2)",
-            }}
-          >
-            VS
-          </div>
-          {isTie && <div style={{ marginTop: 8, fontSize: 11, color: "#fde68a" }}>Tie</div>}
-        </div>
-
-        <button
-          onClick={() => handleVote("RIGHT")}
-          disabled={voteBusy || isRevealed}
-          style={cardStyle({
-            selected: myChoice === "RIGHT",
-            correct: rightCorrect,
-            wrong: isResultsShown && myChoice === "RIGHT" && !rightCorrect,
-            disabled: voteBusy || isRevealed,
-          })}
-        >
-          <DatapointArt datapoint={round.right} />
-          {rightPlayer ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#94a3b8' }}>
-              <PlayerAvatar player={rightPlayer} size={20} />
-              {round.right.ownerLabel || formatScopeLabel(round.right.scope)}
-            </div>
-          ) : rightContributors?.length ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#94a3b8' }}>
-              {rightContributors.slice(0, MAX_CONTRIBUTOR_AVATARS).map((p) => (
-                <PlayerAvatar key={p.playerId} player={p} size={20} />
-              ))}
-              {rightContributors.length > MAX_CONTRIBUTOR_AVATARS && (
-                <span>+{rightContributors.length - MAX_CONTRIBUTOR_AVATARS}</span>
-              )}
-              {round.right.scope === "ROOM" && (
-                <span>{round.right.ownerLabel || formatScopeLabel(round.right.scope)}</span>
-              )}
-            </div>
-          ) : null}
-          <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.08 }}>{round.right.title}</div>
-          <div style={{ fontSize: 13, color: "#cbd5e1" }}>{round.right.subtitle || "Stat"}</div>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -1, minHeight: "38px" }}>
-            {isResultsShown ? formatDisplayValue(rightDisplayValue) : "?"}
-          </div>
-          {isResultsShown && myChoice === "RIGHT" && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: rightCorrect ? "#86efac" : "#fca5a5" }}>
-              {rightCorrect ? "Your pick ✓" : "Your pick ✕"}
-            </div>
-          )}
-        </button>
+    <div style={{ display: "grid", gap: 16, fontFamily: '"Space Grotesk", "IBM Plex Sans", sans-serif', color: "#e2e8f0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: "#475569", padding: "0 2px" }}>
+        <span>Round {round.roundNumber} / {round.maxRounds}</span>
+        <span style={{ fontWeight: 700, color: "#64748b" }}>{totalPoints} pts</span>
       </div>
 
-      {round.stageComplete && isResultsShown && (
-        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", minHeight: "18px" }}>
-          Stage complete. Waiting for the host to move on.
-        </div>
-      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {(["LEFT", "RIGHT"] as const).map((side) => {
+          const isSelected = myChoice === side;
+          const isThisCorrect = isResultsShown && isSelected && isCorrect;
+          const isThisWrong = isResultsShown && isSelected && isWrong;
+          const ac = SIDE_ACCENT[side];
+          return (
+            <button
+              key={side}
+              onClick={() => handleVote(side)}
+              disabled={disabled}
+              style={btnStyle({ side, selected: isSelected, correct: isThisCorrect, wrong: isThisWrong, disabled })}
+            >
+              <span style={{
+                fontSize: 38,
+                lineHeight: 1,
+                color: isThisCorrect ? "#86efac" : isThisWrong ? "#fca5a5" : isSelected ? "#f8fafc" : ac.color,
+                transition: "color 180ms",
+              }}>
+                {isThisCorrect ? "✓" : isThisWrong ? "✕" : side === "LEFT" ? "←" : "→"}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.85 }}>
+                {side === "LEFT" ? "Left" : "Right"}
+              </span>
+              {isSelected && !isResultsShown && (
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: ac.color, opacity: 0.9 }}>
+                  your pick
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {voteError && <div style={{ color: "#fda4af", fontSize: 13 }}>{voteError}</div>}
+      {voteError && <div style={{ color: "#fda4af", fontSize: 13, textAlign: "center" }}>{voteError}</div>}
     </div>
   );
 };
+
+function btnStyle({ side, selected, correct, wrong, disabled }: {
+  side: "LEFT" | "RIGHT";
+  selected: boolean;
+  correct: boolean;
+  wrong: boolean;
+  disabled: boolean;
+}): CSSProperties {
+  const ac = SIDE_ACCENT[side];
+  return {
+    background: correct
+      ? "linear-gradient(160deg, rgba(17,94,89,0.95), rgba(6,60,48,0.97))"
+      : wrong
+      ? "linear-gradient(160deg, rgba(127,29,29,0.92), rgba(69,10,10,0.95))"
+      : selected
+      ? ac.selBg
+      : ac.dimBg,
+    border: correct
+      ? "1.5px solid rgba(74,222,128,0.55)"
+      : wrong
+      ? "1.5px solid rgba(248,113,113,0.45)"
+      : selected
+      ? `1.5px solid ${ac.selBorder}`
+      : `1.5px solid ${ac.dimBorder}`,
+    borderRadius: 24,
+    color: "#f8fafc",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled && !selected && !correct && !wrong ? 0.45 : 1,
+    transition: "all 180ms ease",
+    fontFamily: "inherit",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "0",
+    minHeight: "clamp(140px, 42vw, 200px)",
+    boxShadow: selected && !correct && !wrong
+      ? `0 0 0 1px ${ac.selBorder}, 0 8px 28px rgba(0,0,0,0.35)`
+      : correct
+      ? "0 0 0 1px rgba(74,222,128,0.2), 0 8px 28px rgba(0,0,0,0.35)"
+      : wrong
+      ? "0 0 0 1px rgba(248,113,113,0.2), 0 8px 28px rgba(0,0,0,0.35)"
+      : "0 4px 16px rgba(0,0,0,0.2)",
+    WebkitTapHighlightColor: "transparent",
+  };
+}
