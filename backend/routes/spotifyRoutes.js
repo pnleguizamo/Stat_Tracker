@@ -41,7 +41,23 @@ router.get("/track_preview", authenticate, async (req, res) => {
         }
 
         const resp = await getTrackPreview(trackName, artistName || null, limit);
-        const previewUrl = resp.tracks?.[0]?.previewUrls || null;
+        const tracks = Array.isArray(resp.tracks) ? resp.tracks : [];
+        const firstPreviewUrl = tracks[0]?.previewUrls || null;
+        const selectedTrack = tracks.find((track) => track?.previewUrls) || null;
+        const selectedIndex = selectedTrack
+            ? tracks.findIndex((track) => track?.trackId === selectedTrack.trackId)
+            : -1;
+        const usedFallbackPreview = selectedIndex > 0;
+        console.info('track_preview selection', {
+            trackName,
+            artistName: artistName || null,
+            resultCount: tracks.length,
+            firstResultHasPreview: !!firstPreviewUrl,
+            fallbackPreviewSearchRan: !firstPreviewUrl && tracks.length > 1,
+            selectedIndex,
+            usedFallbackPreview,
+        });
+        const previewUrl = selectedTrack?.previewUrls || null;
         if (!previewUrl) {
             return res.status(404).json({ ok: false, error: 'no_preview' });
         }
@@ -62,7 +78,22 @@ router.get("/artist_preview", async (req, res) => {
         }
 
         const resp = await getArtistPreview(artistName, limit);
-        const previewUrl = resp.tracks?.[0]?.previewUrl || null;
+        const tracks = Array.isArray(resp.tracks) ? resp.tracks : [];
+        const firstPreviewUrl = tracks[0]?.previewUrl || null;
+        const selectedTrack = tracks.find((track) => track?.previewUrl) || null;
+        const selectedIndex = selectedTrack
+            ? tracks.findIndex((track) => track?.trackId === selectedTrack.trackId)
+            : -1;
+        const usedFallbackPreview = selectedIndex > 0;
+        console.info('artist_preview selection', {
+            artistName,
+            resultCount: tracks.length,
+            firstResultHasPreview: !!firstPreviewUrl,
+            fallbackPreviewSearchRan: !firstPreviewUrl && tracks.length > 1,
+            selectedIndex,
+            usedFallbackPreview,
+        });
+        const previewUrl = selectedTrack?.previewUrl || null;
         if (!previewUrl) {
             return res.status(404).json({ ok: false, error: 'no_preview' });
         }

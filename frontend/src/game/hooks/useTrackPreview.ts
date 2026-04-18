@@ -4,6 +4,7 @@ import api from 'lib/api';
 type TrackPreviewOptions = {
   trackName?: string;
   artistName?: string;
+  previewUrl?: string;
   previewKey?: string;
   enabled?: boolean;
   volume?: number;
@@ -19,6 +20,7 @@ type TrackPreviewState = {
 export const useTrackPreview = ({
   trackName,
   artistName,
+  previewUrl,
   previewKey,
   enabled = true,
   volume = 0.5,
@@ -42,18 +44,35 @@ export const useTrackPreview = ({
     setIsPlaying(false);
   }, []);
 
+  const startPlayback = useCallback((url: string) => {
+    const audio = new Audio(url);
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audioRef.current = audio;
+    audio.addEventListener('play', () => {
+      setError(null);
+      setIsPlaying(true);
+    });
+    audio.addEventListener('pause', () => setIsPlaying(false));
+    audio.addEventListener('ended', () => setIsPlaying(false));
+    audio.play().catch((err) => {
+      console.warn('Preview playback failed', err);
+      setError('Unable to play preview');
+      setIsPlaying(false);
+    });
+  }, [volume]);
+
   useEffect(() => {
     let cancelled = false;
     const primaryName = kind === 'artist' ? artistName : trackName;
 
-    if (!enabled || !primaryName) {
+    if (!enabled || (!previewUrl && !primaryName)) {
       stop();
       return () => {
         cancelled = true;
       };
     }
 
-    const key = previewKey || primaryName;
+    const key = previewKey || previewUrl || primaryName || null;
     if (lastPreviewKeyRef.current === key) return () => {
       cancelled = true;
     };
@@ -63,9 +82,16 @@ export const useTrackPreview = ({
     setError(null);
     setIsPlaying(false);
 
+    if (previewUrl) {
+      startPlayback(previewUrl);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const params =
       kind === 'artist'
-        ? new URLSearchParams({ artistName: primaryName })
+        ? new URLSearchParams({ artistName: primaryName || '' })
         : new URLSearchParams({
             trackName: trackName || '',
             artistName: artistName || '',
@@ -77,18 +103,17 @@ export const useTrackPreview = ({
       )
       .then((res: any) => {
         if (cancelled) return;
-        const previewUrl = res?.previewUrl || res?.[0]?.previewUrls || null;
-        if (!previewUrl) return;
-        const audio = new Audio(previewUrl);
-        audio.volume = Math.max(0, Math.min(1, volume));
-        audioRef.current = audio;
-        audio.addEventListener('play', () => setIsPlaying(true));
-        audio.addEventListener('pause', () => setIsPlaying(false));
-        audio.addEventListener('ended', () => setIsPlaying(false));
-        audio.play().catch((err) => {
-          console.warn('Preview playback failed', err);
-          setIsPlaying(false);
-        });
+        const resolvedPreviewUrl =
+          res?.previewUrl ||
+          res?.results?.find((track: any) => track?.previewUrls)?.previewUrls ||
+          res?.[0]?.previewUrls ||
+          null;
+        if (!resolvedPreviewUrl) {
+          console.warn('Preview missing for request', { trackName, artistName, kind });
+          setError('Preview unavailable');
+          return;
+        }
+        startPlayback(resolvedPreviewUrl);
       })
       .catch((err: any) => {
         if (cancelled) return;
@@ -100,7 +125,7 @@ export const useTrackPreview = ({
     return () => {
       cancelled = true;
     };
-  }, [artistName, enabled, kind, previewKey, stop, trackName, volume]);
+  }, [artistName, enabled, kind, previewKey, previewUrl, startPlayback, stop, trackName]);
 
   useEffect(() => stop, [stop]);
 

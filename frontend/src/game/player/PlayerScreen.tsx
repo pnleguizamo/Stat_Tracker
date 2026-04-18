@@ -5,6 +5,7 @@ import { GameState, MinigameId, StreakEntry } from 'types/game';
 import { WhoListenedMostPlayerView } from './minigames/WhoListenedMost';
 import { GuessWrappedPlayerView } from './minigames/GuessWrapped';
 import { HeardlePlayerView } from './minigames/Heardle';
+import { HitsterPlayerView } from './minigames/Hitster';
 import '../../styles/gameShell.css';
 
 type PlayerMinigameProps = {
@@ -16,6 +17,7 @@ const PLAYER_MINIGAME_COMPONENTS: Partial<Record<MinigameId, React.ComponentType
   WHO_LISTENED_MOST: WhoListenedMostPlayerView,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedPlayerView,
   HEARDLE: HeardlePlayerView,
+  HITSTER: HitsterPlayerView,
 };
 
 const EMPTY_STREAK: StreakEntry = { current: 0, best: 0 };

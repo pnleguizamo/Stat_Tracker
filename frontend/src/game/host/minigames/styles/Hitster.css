@@ -121,6 +121,11 @@
   background: linear-gradient(90deg, rgba(125, 211, 252, 0.4), transparent);
 }
 
+.hitster-preview-error {
+  max-width: 340px;
+  text-align: center;
+}
+
 /* ── EQ bars ────────────────────────────────────────────────── */
 
 .hitster-eq-container {

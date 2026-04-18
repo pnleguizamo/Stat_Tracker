@@ -33,6 +33,30 @@ type DragState = {
   phase: 'dragging' | 'snapback' | 'snaptarget';
 };
 
+const findScrollParent = (startEl: HTMLElement | null): HTMLElement | null => {
+  if (!startEl || typeof window === 'undefined') return null;
+
+  const preferredPlayerMain = startEl.closest('.player-main');
+  if (preferredPlayerMain instanceof HTMLElement) {
+    return preferredPlayerMain;
+  }
+
+  let node = startEl.parentElement;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+};
+
 export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const round = gameState.currentRoundState?.minigameId === 'HITSTER'
     ? (gameState.currentRoundState as HitsterRoundState)
@@ -44,16 +68,17 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   }, [round, myPlayerId]);
 
   const myAnswer = round?.answers?.[myPlayerId];
-  const hasPlaced = !!myAnswer?.placement;
+  const myPlacement = myAnswer?.placement;
+  const hasPlaced = !!myPlacement?.confirmedAt;
+  const hasDraftPlacement = !!myPlacement && !myPlacement.confirmedAt;
   const isRevealed = round?.status === 'revealed';
   const placementResult = round?.results?.placements?.[myPlayerId];
   const songGuessResult = round?.results?.songGuesses?.[myPlayerId];
-  const stageProgress = round?.stageProgress;
   const gameWinners = round?.results?.winners || [];
   const isGameWinner = gameWinners.includes(myPlayerId);
 
   const players = gameState.players || [];
-  const myPlayer = players.find(p => p.playerId === myPlayerId);
+  const myPlayer = players.find((p) => p.playerId === myPlayerId);
   const isPrivilegedUser = myPlayer?.userId === 'pnleguizamo';
 
   const [selectedGap, setSelectedGap] = useState<number | null>(null);
@@ -73,10 +98,10 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const dragStateRef = useRef<DragState | null>(null);
   const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const dragTimeoutRef = useRef<number | null>(null);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Reset state on new round
   useEffect(() => {
     setSelectedGap(null);
     setActionBusy(false);
@@ -93,6 +118,10 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   useEffect(() => {
     dragStateRef.current = dragState;
   }, [dragState]);
+
+  useEffect(() => {
+    scrollParentRef.current = findScrollParent(timelineRef.current);
+  }, [round?.id]);
 
   useEffect(() => {
     return () => {
@@ -112,7 +141,6 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     };
   }, [dragState?.pointerId, dragState?.phase]);
 
-  // Countdown timer
   useEffect(() => {
     if (!round?.expiresAt || round.status === 'revealed') {
       setRemainingMs(null);
@@ -127,7 +155,11 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     return () => clearInterval(interval);
   }, [round?.expiresAt, round?.status]);
 
-  // Search
+  useEffect(() => {
+    if (dragStateRef.current?.phase === 'dragging') return;
+    setSelectedGap(myPlacement?.gapIndex ?? null);
+  }, [myPlacement]);
+
   const performSearch = useCallback(async (term: string) => {
     const id = ++searchIdRef.current;
     setSearching(true);
@@ -152,23 +184,44 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       return;
     }
     debounceRef.current = setTimeout(() => performSearch(query.trim()), 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [query, performSearch]);
 
-  // Array is stored oldest (index 0) to newest (last). Reverse for display.
   const displayCards = [...myTimeline].reverse();
   const canPlaceSong = !hasPlaced && !isRevealed && !actionBusy;
+
+  const persistPlacement = useCallback((gapIndex: number, finalize = false) => {
+    if (hasPlaced || isRevealed) return;
+    if (finalize) {
+      setActionBusy(true);
+    }
+    socket.emit('minigame:HITSTER:submitPlacement', {
+      roomCode,
+      gapIndex,
+      finalize,
+    }, (resp: any) => {
+      if (finalize) {
+        setActionBusy(false);
+      }
+      if (!resp?.ok) {
+        console.error('Placement failed:', resp?.error);
+      }
+    });
+  }, [hasPlaced, isRevealed, roomCode]);
 
   const findDropGap = useCallback((clientX: number, clientY: number): number | null => {
     const timelineEl = timelineRef.current;
     if (!timelineEl) return null;
 
     const timelineRect = timelineEl.getBoundingClientRect();
-    const horizontalSlack = 40;
+    const horizontalSlack = 18;
     const verticalSlack = 28;
+    const stackCenterX = timelineRect.left + timelineRect.width / 2;
+    const stackHalfWidth = timelineRect.width / 2;
     if (
-      clientX < timelineRect.left - horizontalSlack ||
-      clientX > timelineRect.right + horizontalSlack ||
+      Math.abs(clientX - stackCenterX) > stackHalfWidth + horizontalSlack ||
       clientY < timelineRect.top - verticalSlack ||
       clientY > timelineRect.bottom + verticalSlack
     ) {
@@ -213,6 +266,7 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       setSelectedGap(dropGap);
       setDragState(null);
       setActiveDropGap(null);
+      persistPlacement(dropGap, false);
       return;
     }
 
@@ -227,7 +281,7 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
       setDragState(null);
       dragTimeoutRef.current = null;
     }, 220);
-  }, []);
+  }, [persistPlacement]);
 
   const handleDragStart = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (!canPlaceSong) return;
@@ -297,25 +351,47 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     if (!dragState?.pointerId || dragState.phase !== 'dragging') return;
 
     let frameId = 0;
+    const getScrollDelta = (pointerCoord: number, start: number, end: number, threshold: number) => {
+      if (pointerCoord < start + threshold) {
+        return -Math.min(18, Math.max(5, Math.ceil((start + threshold - pointerCoord) / 5)));
+      }
+      if (pointerCoord > end - threshold) {
+        return Math.min(18, Math.max(5, Math.ceil((pointerCoord - (end - threshold)) / 5)));
+      }
+      return 0;
+    };
+
     const autoScroll = () => {
       const pointer = dragPointerRef.current;
       const timelineEl = timelineRef.current;
+      const scrollParentEl = scrollParentRef.current;
+      let scrolled = false;
 
       if (pointer && timelineEl) {
         const rect = timelineEl.getBoundingClientRect();
-        const threshold = 64;
-        let delta = 0;
-
-        if (pointer.y < rect.top + threshold) {
-          delta = -Math.min(16, Math.ceil((rect.top + threshold - pointer.y) / 6));
-        } else if (pointer.y > rect.bottom - threshold) {
-          delta = Math.min(16, Math.ceil((pointer.y - (rect.bottom - threshold)) / 6));
+        const timelineCanScroll = timelineEl.scrollHeight > timelineEl.clientHeight + 1;
+        if (timelineCanScroll) {
+          const timelineDelta = getScrollDelta(pointer.y, rect.top, rect.bottom, 76);
+          if (timelineDelta !== 0) {
+            timelineEl.scrollTop += timelineDelta;
+            scrolled = true;
+          }
         }
+      }
 
-        if (delta !== 0) {
-          timelineEl.scrollTop += delta;
+      if (pointer && scrollParentEl) {
+        const rect = scrollParentEl.getBoundingClientRect();
+        const viewportDelta = getScrollDelta(pointer.y, rect.top, rect.bottom, 92);
+        if (viewportDelta !== 0) {
+          scrollParentEl.scrollTop += viewportDelta;
+          scrolled = true;
+        }
+      }
+
+      if (pointer && scrolled) {
+        window.requestAnimationFrame(() => {
           setActiveDropGap(findDropGap(pointer.x, pointer.y));
-        }
+        });
       }
 
       frameId = window.requestAnimationFrame(autoScroll);
@@ -332,29 +408,38 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
 
   const handlePlace = () => {
     if (selectedGap === null || actionBusy || hasPlaced || isRevealed) return;
-    setActionBusy(true);
-    socket.emit('minigame:HITSTER:submitPlacement', { roomCode, gapIndex: selectedGap }, (resp: any) => {
-      setActionBusy(false);
-      if (!resp?.ok) console.error('Placement failed:', resp?.error);
-    });
+    persistPlacement(selectedGap, true);
   };
 
-  const handleSongGuess = () => {
-    if (!selectedTrack || guessBusy || myAnswer?.songGuess || isRevealed) return;
+  const persistSongGuess = (track: TrackOption) => {
+    if (guessBusy || myAnswer?.songGuess || isRevealed) return;
     setGuessBusy(true);
     socket.emit('minigame:HITSTER:submitSongGuess', {
       roomCode,
       guess: {
-        trackId: selectedTrack.id,
-        trackName: selectedTrack.name,
-        artistNames: selectedTrack.artistNames || [],
+        trackId: track.id,
+        trackName: track.name,
+        artistNames: track.artistNames || [],
       },
     }, (resp: any) => {
       setGuessBusy(false);
-      if (resp?.ok) {
-        setGuessOutcome(resp.correct ? 'correct' : 'wrong');
+      if (!resp?.ok) {
+        console.error('Song guess failed:', resp?.error);
+        return;
       }
+      setGuessOutcome(resp.correct ? 'correct' : 'wrong');
     });
+  };
+
+  const handleTrackSelect = (track: TrackOption) => {
+    if (myAnswer?.songGuess || isRevealed) return;
+    setSelectedTrack(track);
+    setGuessOutcome(null);
+  };
+
+  const handleSongGuess = () => {
+    if (!selectedTrack || guessBusy || myAnswer?.songGuess || isRevealed) return;
+    persistSongGuess(selectedTrack);
   };
 
   const handleStartRound = () => {
@@ -363,65 +448,125 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     });
   };
 
+  const describeGap = useCallback((gapIndex: number | null) => {
+    if (gapIndex === null) return 'Hold and drag the mystery record onto the release rail.';
+    if (myTimeline.length === 0) return 'This starts your timeline.';
+
+    const olderCard = gapIndex > 0 ? myTimeline[gapIndex - 1] : null;
+    const newerCard = gapIndex < myTimeline.length ? myTimeline[gapIndex] : null;
+
+    if (!olderCard && newerCard) return `Place before ${newerCard.year}.`;
+    if (olderCard && !newerCard) return `Place after ${olderCard.year}.`;
+    if (olderCard && newerCard) return `Place between ${olderCard.year} and ${newerCard.year}.`;
+    return 'Placement ready.';
+  }, [myTimeline]);
+
   if (!round) {
     return (
       <div className="hitster-player">
-        <div className="hitster-waiting">Waiting for host to start...</div>
-        {isPrivilegedUser && (
-          <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>Start Round</button>
-        )}
+        <div className="hitster-waiting-panel">
+          <div className="hitster-waiting-kicker">Hitster</div>
+          <div className="hitster-waiting">Waiting for host to start...</div>
+          {isPrivilegedUser && (
+            <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>Start Round</button>
+          )}
+        </div>
       </div>
     );
   }
 
-  // Gap indices: in the stored array, gap 0 = before index 0 (oldest), gap N = after last (newest)
-  // In display (reversed), gap for "top" = gap N (newest position), gap for "bottom" = gap 0 (oldest position)
-
   const isDragging = dragState?.phase === 'dragging';
-  const timelinePendingGap = canPlaceSong ? (isDragging ? activeDropGap : selectedGap) : null;
+  const timelinePendingGap = !isRevealed ? (isDragging ? activeDropGap : selectedGap) : null;
+  const timerSeconds = remainingMs !== null ? Math.ceil(remainingMs / 1000) : null;
+  const mysteryPrompt = hasPlaced
+    ? 'Placement submitted'
+    : selectedGap === null
+      ? 'Drop it where the year belongs'
+      : 'Drag again or lock this placement';
+  const showSourceCard = !isRevealed && selectedGap === null;
+
+  const renderMysteryCard = (floating = false) => (
+    <>
+      <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+      <span className="hitster-timeline-card-info">
+        <span className="hitster-timeline-card-title">Mystery Song</span>
+        <span className="hitster-timeline-card-artist">
+          {floating
+            ? dragState?.originGap === null
+              ? 'Drop it where the year belongs'
+              : 'Move it to a new slot'
+            : mysteryPrompt}
+        </span>
+      </span>
+      <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
+    </>
+  );
 
   const renderPendingCard = (storageGapIndex: number) => {
     if (timelinePendingGap !== storageGapIndex) return null;
-
-    if (isDragging) {
-      return (
-        <div key={`pending-${storageGapIndex}`} className="hitster-timeline-card hitster-timeline-card--pending hitster-timeline-card--preview">
-          <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
-          <span className="hitster-timeline-card-info">
-            <span className="hitster-timeline-card-title">Mystery Song</span>
-            <span className="hitster-timeline-card-artist">Release to place it here</span>
-          </span>
-          <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
-        </div>
-      );
-    }
+    const pendingSubtitle = hasPlaced && !isRevealed
+      ? 'Locked in. Waiting for reveal'
+      : hasDraftPlacement && !isRevealed
+        ? 'Saved. Confirm to lock it in'
+      : describeGap(storageGapIndex);
 
     return (
-      <button
+      <div
         key={`pending-${storageGapIndex}`}
-        type="button"
-        className="hitster-timeline-card hitster-timeline-card--pending"
-        onPointerDown={handleDragStart}
-        aria-label="Drag the mystery song to a new position"
+        className="hitster-timeline-slot hitster-timeline-slot--pending"
       >
-        <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
-        <span className="hitster-timeline-card-info">
-          <span className="hitster-timeline-card-title">Mystery Song</span>
-          <span className="hitster-timeline-card-artist">Drag to reposition before you confirm</span>
-        </span>
-        <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
-      </button>
+        <span className="hitster-timeline-node hitster-timeline-node--pending" />
+        {isDragging ? (
+          <div className="hitster-timeline-card hitster-timeline-card--pending hitster-timeline-card--preview">
+            <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+            <span className="hitster-timeline-card-info">
+              <span className="hitster-timeline-card-title">Mystery Song</span>
+              <span className="hitster-timeline-card-artist">{pendingSubtitle}</span>
+            </span>
+            <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
+          </div>
+        ) : !canPlaceSong ? (
+          <div className="hitster-timeline-card hitster-timeline-card--pending hitster-timeline-card--locked">
+            <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+            <span className="hitster-timeline-card-info">
+              <span className="hitster-timeline-card-title">Mystery Song</span>
+              <span className="hitster-timeline-card-artist">{pendingSubtitle}</span>
+            </span>
+            <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="hitster-timeline-card hitster-timeline-card--pending"
+            onPointerDown={handleDragStart}
+            aria-label="Drag the mystery song to a new position"
+          >
+            <span className="hitster-timeline-card-art hitster-timeline-card-art--pending">♪</span>
+            <span className="hitster-timeline-card-info">
+              <span className="hitster-timeline-card-title">Mystery Song</span>
+              <span className="hitster-timeline-card-artist">{pendingSubtitle}</span>
+            </span>
+            <span className="hitster-timeline-card-year hitster-timeline-card-year--pending">?</span>
+          </button>
+        )}
+      </div>
     );
   };
 
   const renderCard = (card: HitsterTimelineCard) => (
     <div
-      className={`hitster-timeline-card${card.addedInRound === round.id ? ' hitster-timeline-card--new' : ''}${
-        isRevealed && placementResult && !placementResult.correct && card.addedInRound === round.id ? ' hitster-timeline-card--removing' : ''
+      className={`hitster-timeline-card hitster-timeline-card--settled${
+        card.addedInRound === round.id ? ' hitster-timeline-card--new' : ''
+      }${
+        isRevealed && placementResult && !placementResult.correct && card.addedInRound === round.id
+          ? ' hitster-timeline-card--removing'
+          : ''
       }`}
     >
-      {card.imageUrl && (
+      {card.imageUrl ? (
         <img src={card.imageUrl} alt="" className="hitster-timeline-card-art" />
+      ) : (
+        <span className="hitster-timeline-card-art hitster-timeline-card-art--fallback">♪</span>
       )}
       <div className="hitster-timeline-card-info">
         <span className="hitster-timeline-card-title">{card.track_name}</span>
@@ -431,157 +576,182 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
     </div>
   );
 
-  const timerText = remainingMs !== null ? `${Math.ceil(remainingMs / 1000)}s` : null;
-
   return (
     <div className={`hitster-player${dragState?.phase === 'dragging' ? ' hitster-player--dragging' : ''}`}>
-      {/* Round info */}
-      <div className="hitster-round-info">
-        <span className="hitster-round-number">
-          Round {stageProgress?.roundNumber || '?'} &middot; Target: {stageProgress?.targetCards || 7} cards
-        </span>
-        {timerText && <span className="hitster-timer">{timerText}</span>}
-      </div>
-
-      {/* Status messages */}
-      {isRevealed && round.results && (
-        <div className={`hitster-reveal-banner ${placementResult?.correct ? 'hitster-reveal-banner--correct' : 'hitster-reveal-banner--wrong'}`}>
-          <div className="hitster-reveal-song">
-            {round.results.song.imageUrl && (
-              <img src={round.results.song.imageUrl} alt="" className="hitster-reveal-art" />
-            )}
-            <div>
-              <div className="hitster-reveal-title">{round.results.song.track_name}</div>
-              <div className="hitster-reveal-artist">{(round.results.song.artist_names || []).join(', ')}</div>
-              <div className="hitster-reveal-year">{round.results.year}</div>
-            </div>
-          </div>
-          <div className="hitster-reveal-result">
-            {placementResult?.correct ? '\u2713 Correct placement' : placementResult ? '\u2717 Wrong placement' : 'No placement'}
-          </div>
-          {songGuessResult && (
-            <div className={`hitster-guess-result ${songGuessResult.correct ? 'hitster-guess-result--correct' : ''}`}>
-              Song guess: {songGuessResult.correct ? '\u2713 +500 bonus' : '\u2717 Wrong'}
-            </div>
-          )}
-          {gameWinners.length > 0 && (
-            <div className="hitster-game-winner">
-              {isGameWinner ? 'You win!' : 'Game over!'}
-            </div>
-          )}
-        </div>
-      )}
-
-      {hasPlaced && !isRevealed && (
-        <div className="hitster-placed-banner">Placed! Waiting for reveal...</div>
-      )}
-
-      {canPlaceSong && selectedGap === null && (
-        <>
-          <div className="hitster-drag-hint">Drag the mystery song through the stack to choose its year.</div>
-          <button
-            type="button"
-            className={`hitster-drag-source${dragState ? ' hitster-drag-source--hidden' : ''}`}
-            onPointerDown={handleDragStart}
-            aria-label="Drag the mystery song into your timeline"
-          >
-            <span className="hitster-drag-source-icon">♪</span>
-            <span className="hitster-drag-source-copy">
-              <span className="hitster-drag-source-label">Mystery Song</span>
-              <span className="hitster-drag-source-subtitle">Drop it where the year belongs</span>
-            </span>
-            <span className="hitster-drag-source-grab">Drag</span>
-          </button>
-        </>
-      )}
-
-      {/* Timeline */}
-      <div className={`hitster-timeline${dragState?.phase === 'dragging' ? ' hitster-timeline--drag-active' : ''}`} ref={timelineRef}>
-        {!isRevealed && renderPendingCard(myTimeline.length)}
-        {displayCards.map((card, displayIdx) => {
-          const cardKey = `${card.songId}-${card.addedInRound}`;
-          const storageGapAfter = myTimeline.length - 1 - displayIdx;
-          return (
-            <div key={cardKey} className="hitster-timeline-item">
-              <div
-                ref={(el) => {
-                  cardRefs.current[cardKey] = el;
-                }}
-                className={`hitster-timeline-card-anchor${
-                  isDragging && activeDropGap === myTimeline.length - displayIdx ? ' hitster-timeline-card-anchor--below-drop' : ''
-                }`}
-              >
-                {renderCard(card)}
-              </div>
-              {!isRevealed && storageGapAfter >= 0 && renderPendingCard(storageGapAfter)}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Confirm button */}
-      {selectedGap !== null && !hasPlaced && !isRevealed && (
-        <button
-          className="hitster-confirm-btn gs-btn gs-btn--primary"
-          onClick={handlePlace}
-          disabled={actionBusy}
-        >
-          {actionBusy ? 'Placing...' : 'Confirm Placement'}
-        </button>
-      )}
-
-      {/* Song guess section */}
-      {round.status === 'placing' && !myAnswer?.songGuess && (
-        <div className="hitster-guess-section">
-          <button
-            className="hitster-guess-toggle"
-            onClick={() => setGuessExpanded(!guessExpanded)}
-          >
-            {guessExpanded ? '\u25BE' : '\u25B8'} Bonus: Guess the song name
-          </button>
-          {guessExpanded && (
-            <div className="hitster-guess-body">
-              <input
-                type="text"
-                className="hitster-guess-input"
-                placeholder="Search for a song..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              {searching && <div className="hitster-guess-searching">Searching...</div>}
-              <div className="hitster-guess-results">
-                {searchResults.map((track) => (
-                  <button
-                    key={track.id}
-                    className={`hitster-guess-result-item${selectedTrack?.id === track.id ? ' hitster-guess-result-item--selected' : ''}`}
-                    onClick={() => setSelectedTrack(track)}
-                  >
-                    {track.imageUrl && <img src={track.imageUrl} alt="" className="hitster-guess-result-art" />}
-                    <div>
-                      <div className="hitster-guess-result-name">{track.name}</div>
-                      <div className="hitster-guess-result-artist">{(track.artistNames || []).join(', ')}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {selectedTrack && (
-                <button
-                  className="hitster-guess-submit gs-btn gs-btn--accent"
-                  onClick={handleSongGuess}
-                  disabled={guessBusy}
-                >
-                  {guessBusy ? 'Guessing...' : 'Submit Guess'}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
       {guessOutcome && (
         <div className={`hitster-guess-outcome hitster-guess-outcome--${guessOutcome}`}>
           {guessOutcome === 'correct' ? 'Correct song guess! +500 bonus' : 'Wrong song guess'}
         </div>
       )}
+
+      <section className={`hitster-mystery-stage${isRevealed ? ' hitster-mystery-stage--revealed' : ''}${!isRevealed && selectedGap !== null ? ' hitster-mystery-stage--compact' : ''}`}>
+        <div className="hitster-stage-vinyl" aria-hidden="true" />
+        {timerSeconds !== null && (
+          <span className="hitster-timer-badge">{timerSeconds}s</span>
+        )}
+
+        {showSourceCard ? (
+          <div className="hitster-drag-source-wrapper">
+            <button
+              type="button"
+              className={`hitster-drag-source${dragState ? ' hitster-drag-source--hidden' : ''}`}
+              onPointerDown={handleDragStart}
+              aria-label="Drag the mystery song into your timeline"
+            >
+              {renderMysteryCard()}
+            </button>
+          </div>
+        ) : !isRevealed ? (
+          <div className={`hitster-stage-placed${hasPlaced ? ' hitster-stage-placed--locked' : ''}`}>
+            <span className="hitster-stage-placed-icon" aria-hidden="true">♪</span>
+            <span className="hitster-stage-placed-text">
+              {hasPlaced
+                ? 'Song locked in · waiting for reveal'
+                : hasDraftPlacement
+                  ? 'Placement saved · timer will count this'
+                  : 'Song placed ↓'}
+            </span>
+          </div>
+        ) : null}
+
+        {isRevealed && round.results && (
+          <div className={`hitster-reveal-banner ${placementResult?.correct ? 'hitster-reveal-banner--correct' : 'hitster-reveal-banner--wrong'}`}>
+            <div className="hitster-reveal-song">
+              {round.results.song.imageUrl ? (
+                <img src={round.results.song.imageUrl} alt="" className="hitster-reveal-art" />
+              ) : (
+                <div className="hitster-reveal-art hitster-reveal-art--fallback">♪</div>
+              )}
+              <div>
+                <div className="hitster-reveal-title">{round.results.song.track_name}</div>
+                <div className="hitster-reveal-artist">{(round.results.song.artist_names || []).join(', ')}</div>
+                <div className="hitster-reveal-year">{round.results.year}</div>
+              </div>
+            </div>
+            <div className="hitster-reveal-result">
+              {placementResult?.correct ? '✓ Correct placement' : placementResult ? '✗ Wrong placement' : 'No placement'}
+            </div>
+            {songGuessResult && (
+              <div className={`hitster-guess-result ${songGuessResult.correct ? 'hitster-guess-result--correct' : ''}`}>
+                Song guess: {songGuessResult.correct ? '✓ +500 bonus' : '✗ Wrong'}
+              </div>
+            )}
+            {gameWinners.length > 0 && (
+              <div className="hitster-game-winner">
+                {isGameWinner ? 'You win!' : 'Game over!'}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {!isRevealed && round.status === 'placing' && (!hasPlaced || !myAnswer?.songGuess) && (
+        <div className="hitster-bottom-tray">
+          {selectedGap !== null && !hasPlaced && (
+            <button
+              className="hitster-tray-confirm gs-btn gs-btn--primary"
+              onClick={handlePlace}
+              disabled={actionBusy}
+            >
+              {actionBusy ? 'Locking...' : 'Confirm Placement'}
+            </button>
+          )}
+          {!myAnswer?.songGuess && (
+            <div className={`hitster-guess-section${guessExpanded ? ' hitster-guess-section--expanded' : ''}`}>
+              <button
+                type="button"
+                className="hitster-guess-toggle"
+                onClick={() => setGuessExpanded(!guessExpanded)}
+              >
+                <span className="hitster-guess-toggle-copy">
+                  <span className="hitster-guess-toggle-kicker">Bonus</span>
+                  <span className="hitster-guess-toggle-label">Guess the song name</span>
+                </span>
+                <span className={`hitster-guess-toggle-icon${guessExpanded ? ' is-open' : ''}`}>⌄</span>
+              </button>
+              {guessExpanded && (
+                <div className="hitster-guess-body">
+                  <input
+                    type="text"
+                    className="hitster-guess-input"
+                    placeholder="Search for a song..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  {searching && <div className="hitster-guess-searching">Searching...</div>}
+                  <div className="hitster-guess-results">
+                    {searchResults.map((track) => (
+                      <button
+                        type="button"
+                        key={track.id}
+                        className={`hitster-guess-result-item${selectedTrack?.id === track.id ? ' hitster-guess-result-item--selected' : ''}`}
+                        onClick={() => handleTrackSelect(track)}
+                      >
+                        {track.imageUrl ? (
+                          <img src={track.imageUrl} alt="" className="hitster-guess-result-art" />
+                        ) : (
+                          <span className="hitster-guess-result-art hitster-guess-result-art--fallback">♪</span>
+                        )}
+                        <div>
+                          <div className="hitster-guess-result-name">{track.name}</div>
+                          <div className="hitster-guess-result-artist">{(track.artistNames || []).join(', ')}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedTrack && (
+                    <button
+                      type="button"
+                      className="hitster-guess-submit gs-btn gs-btn--accent"
+                      onClick={handleSongGuess}
+                      disabled={guessBusy}
+                    >
+                      {guessBusy ? 'Guessing...' : 'Submit Guess'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <section className={`hitster-timeline-shell${dragState?.phase === 'dragging' ? ' hitster-timeline-shell--dragging' : ''}`}>
+        <div className="hitster-timeline-shell__label">Your Timeline</div>
+        <div className={`hitster-timeline${dragState?.phase === 'dragging' ? ' hitster-timeline--drag-active' : ''}`} ref={timelineRef}>
+          {!displayCards.length && timelinePendingGap === null && (
+            <div className="hitster-timeline-empty">
+              Drag the mystery record onto the glowing rail to start your timeline.
+            </div>
+          )}
+
+          {!isRevealed && renderPendingCard(myTimeline.length)}
+
+          {displayCards.map((card, displayIdx) => {
+            const cardKey = `${card.songId}-${card.addedInRound}`;
+            const storageGapAfter = myTimeline.length - 1 - displayIdx;
+
+            return (
+              <div key={cardKey} className="hitster-timeline-item">
+                <div className="hitster-timeline-slot">
+                  <span className="hitster-timeline-node" />
+                  <div
+                    ref={(el) => {
+                      cardRefs.current[cardKey] = el;
+                    }}
+                    className={`hitster-timeline-card-anchor${
+                      isDragging && activeDropGap === myTimeline.length - displayIdx ? ' hitster-timeline-card-anchor--below-drop' : ''
+                    }`}
+                  >
+                    {renderCard(card)}
+                  </div>
+                </div>
+                {!isRevealed && storageGapAfter >= 0 && renderPendingCard(storageGapAfter)}
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {dragState && (
         <div
@@ -594,20 +764,12 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
             transform: `translate3d(${dragState.x}px, ${dragState.y}px, 0)`,
           }}
         >
-          <span className="hitster-drag-source-icon">♪</span>
-          <span className="hitster-drag-source-copy">
-            <span className="hitster-drag-source-label">Mystery Song</span>
-            <span className="hitster-drag-source-subtitle">
-              {dragState.originGap === null ? 'Drop it where the year belongs' : 'Move it to a new spot'}
-            </span>
-          </span>
-          <span className="hitster-drag-source-grab">Drag</span>
+          {renderMysteryCard(true)}
         </div>
       )}
 
-      {/* Privileged: start next round */}
       {isRevealed && isPrivilegedUser && gameWinners.length === 0 && (
-        <button className="gs-btn gs-btn--primary" onClick={handleStartRound} style={{ marginTop: 12 }}>
+        <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>
           Next Round
         </button>
       )}

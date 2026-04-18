@@ -7,6 +7,7 @@ import {
   HostCard,
   HostActionRow,
   HostChip,
+  HostStateMessage,
 } from './components/HostMinigamePrimitives';
 import './styles/Hitster.css';
 
@@ -38,9 +39,10 @@ export const HitsterHost: FC<HostMinigameProps> = ({
   const [revealAnim, setRevealAnim] = useState(false);
 
   // Play preview on host
-  useTrackPreview({
+  const { error: previewError } = useTrackPreview({
     trackName: round?.song?.track_name || undefined,
     artistName: (round?.song?.artist_names || [])[0] || undefined,
+    previewUrl: round?.song?.previewUrl || undefined,
     previewKey: round?.id || undefined,
     enabled: !!round?.song?.track_name,
     volume: isRevealed ? 0.15 : 0.45,
@@ -102,7 +104,7 @@ export const HitsterHost: FC<HostMinigameProps> = ({
   }
 
   const nonHostPlayers = players.filter(p => !p.isHost);
-  const placedCount = Object.values(round.answers || {}).filter(a => a?.placement).length;
+  const placedCount = Object.values(round.answers || {}).filter(a => a?.placement?.confirmedAt).length;
 
   return (
     <HostMinigameStack className="hitster-host-stack">
@@ -126,6 +128,11 @@ export const HitsterHost: FC<HostMinigameProps> = ({
               </div>
             </div>
             <div className="hitster-mystery-label">Mystery Song</div>
+            {previewError && (
+              <HostStateMessage error className="hitster-preview-error">
+                {previewError}
+              </HostStateMessage>
+            )}
             {remainingMs !== null && (
               <div className="hitster-host-timer">{Math.ceil(remainingMs / 1000)}s</div>
             )}
@@ -152,7 +159,7 @@ export const HitsterHost: FC<HostMinigameProps> = ({
             const cardCount = stageProgress?.leaderboard?.[playerId] || 0;
             const target = stageProgress?.targetCards || 7;
             const answer = round.answers?.[playerId];
-            const hasPlaced = !!answer?.placement;
+            const hasPlaced = !!answer?.placement?.confirmedAt;
             const placementResult = results?.placements?.[playerId];
 
             let status = 'waiting';

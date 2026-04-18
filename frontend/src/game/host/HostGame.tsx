@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { WhoListenedMost } from "./minigames/WhoListenedMost";
 import { GuessWrappedHost } from "./minigames/GuessWrapped";
 import { HeardleHost } from "./minigames/Heardle";
+import { HitsterHost } from "./minigames/Hitster";
 import { StageRecap } from "./StageRecap";
 import { FinalRecap } from "./FinalRecap";
 import { useParams } from "react-router-dom";
@@ -28,6 +29,7 @@ const MINIGAME_HOST_COMPONENTS: Partial<Record<MinigameId, React.ComponentType<H
   WHO_LISTENED_MOST: WhoListenedMost,
   GUESS_SPOTIFY_WRAPPED: GuessWrappedHost,
   HEARDLE: HeardleHost,
+  HITSTER: HitsterHost,
 //   GENRE_GUESS: GenreGuessHostView,
 //   FIRST_PLAY: FirstPlayHostView,
 //   GRAPH_GUESS: GraphGuessHostView,
