@@ -149,6 +149,15 @@ export const MINIGAME_CATALOG: CatalogEntry[] = [
     description: 'Build a chronological timeline of songs. Place each mystery song in the right spot!',
     optionSchema: [
       {
+        key: 'racesPerStage',
+        label: 'Races',
+        type: 'number',
+        min: 1,
+        max: 5,
+        step: 1,
+        default: 3,
+      },
+      {
         key: 'targetCards',
         label: 'Cards to win',
         type: 'number',

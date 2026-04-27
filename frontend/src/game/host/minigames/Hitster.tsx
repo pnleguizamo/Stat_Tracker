@@ -35,6 +35,7 @@ export const HitsterHost: FC<HostMinigameProps> = ({
   const stageProgress = round?.stageProgress;
   const results = round?.results;
   const gameWinners = results?.winners || [];
+  const stageComplete = !!stageProgress?.stageComplete;
 
   const [revealAnim, setRevealAnim] = useState(false);
 
@@ -92,10 +93,10 @@ export const HitsterHost: FC<HostMinigameProps> = ({
           </div>
         </HostCard>
         <HostActionRow>
-          <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>
+          <button className="game-shell-button" onClick={handleStartRound}>
             Start Hitster
           </button>
-          <button className="gs-btn gs-btn--ghost" onClick={onAdvance}>
+          <button className="game-shell-button" onClick={onAdvance}>
             Next Stage
           </button>
         </HostActionRow>
@@ -112,6 +113,9 @@ export const HitsterHost: FC<HostMinigameProps> = ({
       <HostCard className={`hitster-mystery-card${isRevealed ? ' hitster-mystery-card--revealed' : ''}`}>
         <div className="hitster-mystery-header">
           <HostChip>Round {stageProgress?.roundNumber || '?'}</HostChip>
+          {stageProgress?.raceNumber && stageProgress?.racesPerStage && (
+            <HostChip>Race {stageProgress.raceNumber} / {stageProgress.racesPerStage}</HostChip>
+          )}
           <HostChip>{isRevealed ? 'Revealed' : 'Listening'}</HostChip>
           {stageProgress && (
             <HostChip>Target: {stageProgress.targetCards}</HostChip>
@@ -201,7 +205,7 @@ export const HitsterHost: FC<HostMinigameProps> = ({
             {gameWinners.map(id => {
               const p = players.find(pl => pl.playerId === id);
               return p?.displayName || p?.name || id;
-            }).join(', ')} wins!
+            }).join(', ')} {stageComplete ? 'won the final race!' : 'won this race!'}
           </div>
         </HostCard>
       )}
@@ -209,16 +213,21 @@ export const HitsterHost: FC<HostMinigameProps> = ({
       {/* Actions */}
       <HostActionRow>
         {!isRevealed && (
-          <button className="gs-btn gs-btn--accent" onClick={handleForceReveal}>
+          <button className="game-shell-button" onClick={handleForceReveal}>
             Reveal
           </button>
         )}
         {isRevealed && gameWinners.length === 0 && (
-          <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>
+          <button className="game-shell-button" onClick={handleStartRound}>
             Next Round
           </button>
         )}
-        <button className="gs-btn gs-btn--ghost" onClick={onAdvance}>
+        {isRevealed && gameWinners.length > 0 && !stageComplete && (
+          <button className="game-shell-button" onClick={handleStartRound}>
+            Next Race
+          </button>
+        )}
+        <button className="game-shell-button" onClick={onAdvance}>
           Next Stage
         </button>
       </HostActionRow>

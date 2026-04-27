@@ -353,6 +353,9 @@ export type HitsterRoundState = {
   expiresAt?: number;
   stageProgress: {
     roundNumber: number;
+    raceNumber?: number;
+    racesPerStage?: number;
+    stageComplete?: boolean;
     targetCards: number;
     leaderboard: Record<string, number>;
   };

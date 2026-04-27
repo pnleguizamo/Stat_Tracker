@@ -5,8 +5,9 @@ const { appendRoundHistory, updateStreaks, computeTimeScore, applyAwards } = req
 
 const DEFAULT_TARGET_CARDS = 7;
 const DEFAULT_ROUND_TIMER_MS = 30000;
+const DEFAULT_RACES_PER_STAGE = 3;
 
-const CORRECT_PLACEMENT_MAX_POINTS = 800;
+const CORRECT_PLACEMENT_MAX_POINTS = 1000;
 const SONG_GUESS_BONUS = 500;
 const SAMPLE_SIZE = 200;
 const TARGET_POOL_SIZE = 60;
@@ -32,6 +33,32 @@ function resolveStageOptions(room, stageIndex, params = {}) {
   return { ...(config.options || {}), ...params };
 }
 
+function resolvePositiveInteger(value, fallback) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+function resolveTargetCards(stageOpts = {}) {
+  return resolvePositiveInteger(stageOpts.targetCards, DEFAULT_TARGET_CARDS);
+}
+
+function resolveRoundTimerMs(stageOpts = {}) {
+  return resolvePositiveInteger(stageOpts.roundTimerMs, DEFAULT_ROUND_TIMER_MS);
+}
+
+function resolveRacesPerStage(stageOpts = {}) {
+  return resolvePositiveInteger(stageOpts.racesPerStage, DEFAULT_RACES_PER_STAGE);
+}
+
+function normalizeRaceState(stageState) {
+  stageState.raceNumber = resolvePositiveInteger(stageState.raceNumber, 1);
+  stageState.racesCompleted = Math.max(0, resolvePositiveInteger(stageState.racesCompleted, 0));
+  stageState.roundsStartedInRace = Math.max(0, resolvePositiveInteger(stageState.roundsStartedInRace, 0));
+  stageState.raceComplete = !!stageState.raceComplete;
+  stageState.stageComplete = !!stageState.stageComplete;
+  return stageState;
+}
+
 function getStageState(room, stageIndex) {
   room.hitsterStages = room.hitsterStages || {};
   if (!room.hitsterStages[stageIndex]) {
@@ -40,13 +67,61 @@ function getStageState(room, stageIndex) {
       pointer: 0,
       usedSongIds: new Set(),
       roundsStarted: 0,
+      roundsStartedInRace: 0,
       roundsCompleted: 0,
+      raceNumber: 1,
+      racesCompleted: 0,
+      raceComplete: false,
+      stageComplete: false,
       anchorCard: null,
       timelines: {},
       previewUrlsBySongId: {},
     };
   }
-  return room.hitsterStages[stageIndex];
+  return normalizeRaceState(room.hitsterStages[stageIndex]);
+}
+
+function resetRaceState(stageState) {
+  stageState.anchorCard = null;
+  stageState.anchorPlaced = false;
+  stageState.timelines = {};
+  stageState.roundsStartedInRace = 0;
+  stageState.raceComplete = false;
+  stageState.raceNumber = resolvePositiveInteger(stageState.raceNumber, 1) + 1;
+  return stageState;
+}
+
+function prepareRaceForStart(stageState, racesPerStage) {
+  normalizeRaceState(stageState);
+  if (stageState.stageComplete) return { ok: false, error: 'STAGE_COMPLETE' };
+
+  if (stageState.raceComplete) {
+    if (stageState.raceNumber >= racesPerStage) {
+      stageState.stageComplete = true;
+      return { ok: false, error: 'STAGE_COMPLETE' };
+    }
+    resetRaceState(stageState);
+  }
+
+  return { ok: true };
+}
+
+function markRaceCompletion(stageState, winners, racesPerStage, raceNumber) {
+  normalizeRaceState(stageState);
+  const raceComplete = Array.isArray(winners) && winners.length > 0;
+  if (!raceComplete) {
+    return { raceComplete: false, stageComplete: stageState.stageComplete };
+  }
+
+  stageState.raceComplete = true;
+  const completedRaceNumber = resolvePositiveInteger(raceNumber, stageState.raceNumber);
+  stageState.racesCompleted = Math.max(stageState.racesCompleted || 0, completedRaceNumber);
+  stageState.stageComplete = stageState.racesCompleted >= racesPerStage;
+
+  return {
+    raceComplete: true,
+    stageComplete: stageState.stageComplete,
+  };
 }
 
 function getConnectedPlayerIds(room) {
@@ -281,16 +356,14 @@ async function createRoundState(room, params = {}) {
   const stageIndex = getStageIndex(room);
   room.roundState = room.roundState || {};
   const stageOpts = resolveStageOptions(room, stageIndex, params);
-  const targetCards =
-    typeof stageOpts.targetCards === 'number' && stageOpts.targetCards > 0
-      ? stageOpts.targetCards
-      : DEFAULT_TARGET_CARDS;
-  const roundTimerMs =
-    typeof stageOpts.roundTimerMs === 'number' && stageOpts.roundTimerMs > 0
-      ? stageOpts.roundTimerMs
-      : DEFAULT_ROUND_TIMER_MS;
+  const targetCards = resolveTargetCards(stageOpts);
+  const roundTimerMs = resolveRoundTimerMs(stageOpts);
+  const racesPerStage = resolveRacesPerStage(stageOpts);
 
   const stageState = getStageState(room, stageIndex);
+  const raceStart = prepareRaceForStart(stageState, racesPerStage);
+  if (!raceStart.ok) throw new Error(raceStart.error);
+
   await ensureSongPool(room, stageIndex);
 
   // Initialize timelines with anchor on first round
@@ -326,13 +399,17 @@ async function createRoundState(room, params = {}) {
     startedAt: now,
     roundTimerMs,
     stageProgress: {
-      roundNumber: (stageState.roundsStarted || 0) + 1,
+      roundNumber: (stageState.roundsStartedInRace || 0) + 1,
+      raceNumber: stageState.raceNumber,
+      racesPerStage,
+      stageComplete: false,
       targetCards,
       leaderboard: buildLeaderboard(room, stageIndex),
     },
   };
 
   stageState.roundsStarted = (stageState.roundsStarted || 0) + 1;
+  stageState.roundsStartedInRace = (stageState.roundsStartedInRace || 0) + 1;
   room.roundState[stageIndex] = roundState;
   return roundState;
 }
@@ -361,10 +438,8 @@ function registerHitster(io, socket, deps = {}) {
 
     const stageState = getStageState(room, idx);
     const stageOpts = resolveStageOptions(room, idx);
-    const targetCards =
-      typeof stageOpts.targetCards === 'number' && stageOpts.targetCards > 0
-        ? stageOpts.targetCards
-        : DEFAULT_TARGET_CARDS;
+    const targetCards = resolveTargetCards(stageOpts);
+    const racesPerStage = resolveRacesPerStage(stageOpts);
 
     const placements = {};
     const songGuesses = {};
@@ -399,7 +474,7 @@ function registerHitster(io, socket, deps = {}) {
           const points = computeTimeScore(
             { startedAt: round.startedAt, answers: { [playerId]: { at: placement.at } } },
             playerId,
-            { maxPoints: CORRECT_PLACEMENT_MAX_POINTS, decayPerSecond: 0.02, minPoints: 50 }
+            { maxPoints: CORRECT_PLACEMENT_MAX_POINTS }
           );
           awards.push({
             socketId: playerId,
@@ -442,6 +517,12 @@ function registerHitster(io, socket, deps = {}) {
       const cardCount = stageState.timelines[playerId]?.cards?.length || 0;
       if (cardCount >= targetCards) gameWinners.push(playerId);
     }
+    const raceProgress = markRaceCompletion(
+      stageState,
+      gameWinners,
+      racesPerStage,
+      round.stageProgress?.raceNumber || stageState.raceNumber
+    );
 
     round.results = {
       song: round.song,
@@ -452,6 +533,9 @@ function registerHitster(io, socket, deps = {}) {
     };
     round.status = 'revealed';
     round.revealedAt = Date.now();
+    round.stageProgress.raceNumber = round.stageProgress.raceNumber || stageState.raceNumber;
+    round.stageProgress.racesPerStage = racesPerStage;
+    round.stageProgress.stageComplete = raceProgress.stageComplete;
     round.stageProgress.leaderboard = buildLeaderboard(room, idx);
 
     clearRoundTimer?.(room, idx);
@@ -508,6 +592,7 @@ function registerHitster(io, socket, deps = {}) {
       cb?.({ ok: true, roundState });
     } catch (err) {
       if (err.message === 'ROOM_NOT_FOUND') return cb?.({ ok: false, error: 'ROOM_NOT_FOUND' });
+      if (err.message === 'STAGE_COMPLETE') return cb?.({ ok: false, error: 'STAGE_COMPLETE' });
       logger.error('HITSTER startRound error', err);
       cb?.({ ok: false, error: err.message || 'server_error' });
     }
@@ -611,4 +696,14 @@ function registerHitster(io, socket, deps = {}) {
   });
 }
 
-module.exports = { register: registerHitster, createRoundState };
+module.exports = {
+  register: registerHitster,
+  createRoundState,
+  helpers: {
+    DEFAULT_RACES_PER_STAGE,
+    resolveRacesPerStage,
+    prepareRaceForStart,
+    resetRaceState,
+    markRaceCompletion,
+  },
+};

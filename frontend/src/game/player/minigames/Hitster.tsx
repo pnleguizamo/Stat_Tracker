@@ -75,7 +75,8 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
   const placementResult = round?.results?.placements?.[myPlayerId];
   const songGuessResult = round?.results?.songGuesses?.[myPlayerId];
   const gameWinners = round?.results?.winners || [];
-  const isGameWinner = gameWinners.includes(myPlayerId);
+  const isRaceWinner = gameWinners.includes(myPlayerId);
+  const stageComplete = !!round?.stageProgress?.stageComplete;
 
   const players = gameState.players || [];
   const myPlayer = players.find((p) => p.playerId === myPlayerId);
@@ -638,7 +639,7 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
             )}
             {gameWinners.length > 0 && (
               <div className="hitster-game-winner">
-                {isGameWinner ? 'You win!' : 'Game over!'}
+                {isRaceWinner ? 'You won this race!' : stageComplete ? 'Stage complete' : 'Race complete'}
               </div>
             )}
           </div>
@@ -768,9 +769,9 @@ export const HitsterPlayerView: FC<Props> = ({ roomCode, gameState }) => {
         </div>
       )}
 
-      {isRevealed && isPrivilegedUser && gameWinners.length === 0 && (
+      {isRevealed && isPrivilegedUser && (gameWinners.length === 0 || !stageComplete) && (
         <button className="gs-btn gs-btn--primary" onClick={handleStartRound}>
-          Next Round
+          {gameWinners.length > 0 ? 'Next Race' : 'Next Round'}
         </button>
       )}
     </div>
