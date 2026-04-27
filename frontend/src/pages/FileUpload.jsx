@@ -1,12 +1,64 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import '../styles/fileUpload.css';
 import api from '../lib/api.js';
 import { useQuery } from '@tanstack/react-query';
 
-function FileUpload() { 
+const MAX_BATCH_BYTES = 35 * 1024 * 1024;
+const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'abandoned']);
+
+function chunkFilesBySize(files) {
+  const batches = [];
+  let currentBatch = [];
+  let currentSize = 0;
+
+  for (const file of files) {
+    if (currentBatch.length > 0 && currentSize + file.size > MAX_BATCH_BYTES) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentSize = 0;
+    }
+    currentBatch.push(file);
+    currentSize += file.size;
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
+function createUploadId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function activeUploadKey(userId) {
+  return `activeUpload:${userId}`;
+}
+
+function formatStatus(status) {
+  if (!status) return '';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function buildSummaryFromJob(job) {
+  if (!job) return null;
+  return {
+    ...(job.summary || {}),
+    files: job.files || [],
+  };
+}
+
+function FileUpload() {
   const [files, setFiles] = useState([]);
   const [response, setResponse] = useState(null);
+  const [uploadJob, setUploadJob] = useState(null);
+  const [activeUploadId, setActiveUploadId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const [progress, setProgress] = useState({ currentBatch: 0, totalBatches: 0, percent: 0 });
   const { data: authStatusResp, isLoading: authLoading } = useQuery({
     queryKey: ['auth', 'status'],
@@ -15,59 +67,98 @@ function FileUpload() {
     staleTime: 30_000,
   });
   const authStatus = authStatusResp?.spotifyUser || null;
+  const userId = authStatus?.id || null;
 
   const handleFileChange = (event) => {
     setFiles(Array.from(event.target.files));
     setResponse(null);
+    setUploadJob(null);
   };
 
-  const MAX_BATCH_BYTES = 35 * 1024 * 1024; // 40 MB limit because Cloudflare has a 100mb limit :(
+  useEffect(() => {
+    if (!userId || activeUploadId) return;
+    const storedUploadId = window.localStorage.getItem(activeUploadKey(userId));
+    if (storedUploadId) {
+      setActiveUploadId(storedUploadId);
+      setUploadJob({ uploadId: storedUploadId, status: 'queued' });
+    }
+  }, [activeUploadId, userId]);
 
-  function chunkFilesBySize(files) {
-    const batches = [];
-    let currentBatch = [];
-    let currentSize = 0;
+  useEffect(() => {
+    if (!userId || !activeUploadId) return undefined;
 
-    for (const file of files) {
-      if (currentBatch.length > 0 && currentSize + file.size > MAX_BATCH_BYTES) {
-        batches.push(currentBatch);
-        currentBatch = [];
-        currentSize = 0;
+    let cancelled = false;
+    let timeoutId = null;
+    let pollCount = 0;
+
+    async function poll() {
+      setIsPolling(true);
+      try {
+        const job = await api.get(`/api/upload/status/${encodeURIComponent(activeUploadId)}`, {
+          timeout: 15000,
+        });
+        if (cancelled) return;
+
+        setUploadJob(job);
+        if (TERMINAL_STATUSES.has(job.status)) {
+          window.localStorage.removeItem(activeUploadKey(userId));
+          setActiveUploadId(null);
+          setIsPolling(false);
+          if (job.status === 'succeeded') {
+            setResponse(buildSummaryFromJob(job));
+          }
+          return;
+        }
+
+        pollCount += 1;
+        timeoutId = window.setTimeout(poll, pollCount < 15 ? 2000 : 5000);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Error polling upload status:', err);
+        if (err.status === 404) {
+          window.localStorage.removeItem(activeUploadKey(userId));
+          setActiveUploadId(null);
+          setIsPolling(false);
+          setUploadJob({
+            uploadId: activeUploadId,
+            status: 'failed',
+            error: 'Upload status was not found.',
+          });
+          return;
+        }
+        pollCount += 1;
+        timeoutId = window.setTimeout(poll, 5000);
       }
-      currentBatch.push(file);
-      currentSize += file.size;
     }
 
-    if (currentBatch.length > 0) {
-      batches.push(currentBatch);
-    }
+    poll();
 
-    return batches;
-  }
-
+    return () => {
+      cancelled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [activeUploadId, userId]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const userId = authStatus?.id || null;
 
     if (!files || files.length === 0) {
       alert('Please select files to upload');
       return;
     }
 
-    const merged = {
-      userId,
-      totalFilesReceived: 0,
-      totalFilesProcessed: 0,
-      totalRows: 0,
-      totalInserted: 0,
-      totalDuplicatesOrExisting: 0,
-      totalInvalidRows: 0,
-      files: []
-    };
+    if (!userId) {
+      alert('Please sign in before uploading files.');
+      return;
+    }
+
+    const uploadId = createUploadId();
 
     try {
+      setResponse(null);
+      setUploadJob({ uploadId, status: 'uploading' });
       setIsUploading(true);
+
       const batches = chunkFilesBySize(files);
       setProgress({ currentBatch: 0, totalBatches: batches.length, percent: 0 });
 
@@ -80,6 +171,10 @@ function FileUpload() {
           method: 'POST',
           body: formData,
           credentials: 'include',
+          headers: {
+            'X-Upload-Id': uploadId,
+            ...(i === batches.length - 1 ? { 'X-Last-Batch': 'true' } : {}),
+          },
         });
 
         if (!res.ok) {
@@ -87,23 +182,21 @@ function FileUpload() {
         }
 
         const responseData = await res.json();
-
-        merged.totalFilesReceived += responseData.totalFilesReceived || 0;
-        merged.totalFilesProcessed += responseData.totalFilesProcessed || 0;
-        merged.totalRows += responseData.totalRows || 0;
-        merged.totalInserted += responseData.totalInserted || 0;
-        merged.totalDuplicatesOrExisting += responseData.totalDuplicatesOrExisting || 0;
-        merged.totalInvalidRows += responseData.totalInvalidRows || 0;
-        merged.files = merged.files.concat(responseData.files || []);
+        setUploadJob(responseData);
+        if (i === 0) {
+          setActiveUploadId(uploadId);
+          window.localStorage.setItem(activeUploadKey(userId), uploadId);
+        }
 
         const currentBatch = i + 1;
         const percent = batches.length ? Math.round((currentBatch / batches.length) * 100) : 100;
         setProgress({ currentBatch, totalBatches: batches.length, percent });
       }
-
-      setResponse(merged);
     } catch (error) {
       console.error('Error uploading files:', error);
+      setActiveUploadId(null);
+      window.localStorage.removeItem(activeUploadKey(userId));
+      setUploadJob({ uploadId, status: 'failed', error: error.message });
       alert(error.message || 'Error uploading files. Please try again.');
     } finally {
       setIsUploading(false);
@@ -122,7 +215,10 @@ function FileUpload() {
       </div>
     );
   }
-  
+
+  const busy = isUploading || (isPolling && uploadJob && !TERMINAL_STATUSES.has(uploadJob.status));
+  const showJobStatus = uploadJob && uploadJob.status && uploadJob.status !== 'uploading';
+
   return (
     <div className="file-upload-container">
       <h2>Upload Spotify Extended Streaming History</h2>
@@ -146,6 +242,7 @@ function FileUpload() {
           multiple
           accept=".json"
           onChange={handleFileChange}
+          disabled={busy}
         />
         {files.length > 0 && (
           <ul className="selected-files-list">
@@ -154,8 +251,8 @@ function FileUpload() {
             ))}
           </ul>
         )}
-        <button type="submit" disabled={isUploading}>
-          {isUploading ? 'Uploading…' : 'Upload'}
+        <button type="submit" disabled={busy}>
+          {isUploading ? 'Uploading...' : busy ? 'Processing...' : 'Upload'}
         </button>
         </form>
       )}
@@ -174,11 +271,31 @@ function FileUpload() {
             </div>
             <div style={{ marginTop: 8, fontSize: 14 }}>
               {isUploading
-                ? `Uploading batch ${progress.currentBatch} of ${progress.totalBatches} — ${progress.percent}%`
-                : `Last upload: ${progress.currentBatch} of ${progress.totalBatches} — ${progress.percent}%`}
+                ? `Uploading batch ${progress.currentBatch} of ${progress.totalBatches} - ${progress.percent}%`
+                : `Last upload: ${progress.currentBatch} of ${progress.totalBatches} - ${progress.percent}%`}
             </div>
           </div>
         )}
+
+      {showJobStatus && (
+        <div className="response-container">
+          <h3>Upload Status</h3>
+          <p>Status: {formatStatus(uploadJob.status)}</p>
+          <p>Files accepted: {uploadJob.filesAccepted ?? uploadJob.files?.length ?? 0}</p>
+          {uploadJob.summary && (
+            <>
+              <p>Total files processed: {uploadJob.summary.totalFilesProcessed || 0}</p>
+              <p>Total rows in files: {uploadJob.summary.totalRows || 0}</p>
+              <p>New rows inserted: {uploadJob.summary.totalInserted || 0}</p>
+              <p>Existing/duplicate rows: {uploadJob.summary.totalDuplicatesOrExisting || 0}</p>
+              <p>Invalid rows skipped: {uploadJob.summary.totalInvalidRows || 0}</p>
+            </>
+          )}
+          {(uploadJob.status === 'failed' || uploadJob.status === 'abandoned') && (
+            <p>Error: {uploadJob.error || 'Upload did not complete.'}</p>
+          )}
+        </div>
+      )}
 
       {response && (
         <div className="response-container">
@@ -190,15 +307,17 @@ function FileUpload() {
           <p>New rows inserted: {response.totalInserted}</p>
           <p>Existing/duplicate rows: {response.totalDuplicatesOrExisting}</p>
           <p>Invalid rows skipped: {response.totalInvalidRows}</p>
+          <p>Normalized rows: {response.totalNormalized || 0}</p>
+          <p>New normalized rows inserted: {response.totalNormalizedInserted || 0}</p>
 
           <h4>Per-file details</h4>
           <ul>
-            {response.files.map((file) => (
-              <li key={file.originalName}>
-                <strong>{file.originalName}</strong> –{' '}
+            {(response.files || []).map((file) => (
+              <li key={file.fileId || file.originalName}>
+                <strong>{file.originalName}</strong> -{' '}
                 {file.processed
                   ? `${file.inserted} inserted, ${file.duplicatesOrExisting} existing, ${file.invalidRows} invalid`
-                  : `Skipped (${file.reasonSkipped || file.error})`}
+                  : `Skipped (${file.reasonSkipped || file.error || 'not processed'})`}
               </li>
             ))}
           </ul>

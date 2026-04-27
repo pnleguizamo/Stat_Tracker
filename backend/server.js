@@ -7,6 +7,7 @@ const http = require('http');
 const { initDb } = require('./mongo.js');
 const { initSocket } = require('./realtime/socketServer');
 const { startMetadataCacheWorker } = require('./services/metadataCacheWorker.js');
+const { startUploadIngestionWorker } = require('./services/uploadIngestionWorker.js');
 const { startRollupWorker } = require('./scripts/rollupWorker.js');
 
 const spotifyRoutes = require('./routes/spotifyRoutes.js');
@@ -54,6 +55,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 (async () => {
   await initDb();
+  startUploadIngestionWorker();
   if (process.env.NODE_ENV === 'production') {
     require('./services/pollingService.js');
     startMetadataCacheWorker();

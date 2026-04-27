@@ -1,170 +1,243 @@
-const multer = require('multer');
-const { initDb, client, COLLECTIONS } = require('../mongo.js');
+const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
+
 const express = require('express');
-const router = express.Router();
+const multer = require('multer');
+
+const { initDb, COLLECTIONS } = require('../mongo.js');
 const { authenticate } = require('../middleware/authMiddleware.js');
-const { ingestNormalizedStreamEvents } = require('../services/streamNormalizationService.js');
+const { createEmptyUploadSummary } = require('../services/uploadProcessor.js');
 
-const collectionName = COLLECTIONS.rawStreams;
+const router = express.Router();
 
-// const upload = multer({ dest: 'uploads/' });
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 } // 15MB max per file
+const UPLOAD_ID_PATTERN = /^[a-zA-Z0-9_-]{8,100}$/;
+const STAGING_ROOT = process.env.UPLOAD_STAGING_DIR
+  || path.resolve(__dirname, '..', 'uploads', 'spotify-history');
+
+function sanitizePathSegment(value, fallback = 'unknown') {
+  const sanitized = String(value || fallback)
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return sanitized || fallback;
+}
+
+function sanitizeFileName(value) {
+  const basename = path.basename(String(value || 'upload.json'));
+  return basename
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 180) || 'upload.json';
+}
+
+function getUploadId(req) {
+  return String(req.get('X-Upload-Id') || '').trim();
+}
+
+function isLastBatch(req) {
+  return String(req.get('X-Last-Batch') || '').toLowerCase() === 'true';
+}
+
+function publicJob(job) {
+  const files = (job.files || []).map(({ stagedPath, ...file }) => file);
+  return {
+    uploadId: job.uploadId,
+    status: job.status,
+    filesAccepted: files.length,
+    summary: job.summary || createEmptyUploadSummary(job.userId),
+    files,
+    attempts: job.attempts || 0,
+    error: job.error || null,
+    createdAt: job.createdAt || null,
+    updatedAt: job.updatedAt || null,
+    completedAt: job.completedAt || null,
+  };
+}
+
+async function ensureUploadJob(req, res, next) {
+  try {
+    const userId = req.accountId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (req.authPayload?.guest) {
+      return res.status(403).json({ error: 'Guest sessions are not allowed to upload files' });
+    }
+
+    const uploadId = getUploadId(req);
+    if (!UPLOAD_ID_PATTERN.test(uploadId)) {
+      return res.status(400).json({ error: 'X-Upload-Id is required and must be a stable upload id.' });
+    }
+
+    const db = await initDb();
+    const jobs = db.collection(COLLECTIONS.uploadJobs);
+    const now = new Date();
+    const stagingDir = path.join(
+      STAGING_ROOT,
+      sanitizePathSegment(userId, 'user'),
+      sanitizePathSegment(uploadId, 'upload')
+    );
+
+    let job = await jobs.findOne({ userId, uploadId });
+    if (!job) {
+      const doc = {
+        uploadId,
+        userId,
+        status: 'staging',
+        files: [],
+        summary: createEmptyUploadSummary(userId),
+        attempts: 0,
+        lockedAt: null,
+        lockedBy: null,
+        error: null,
+        stagingDir,
+        retained: true,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null,
+      };
+
+      try {
+        await jobs.insertOne(doc);
+        job = doc;
+      } catch (err) {
+        if (err?.code !== 11000) throw err;
+        job = await jobs.findOne({ userId, uploadId });
+      }
+    }
+
+    if (!job || job.status !== 'staging') {
+      return res.status(409).json({
+        error: `Upload ${uploadId} is already ${job?.status || 'unavailable'}.`,
+      });
+    }
+
+    req.uploadJob = job;
+    req.uploadId = uploadId;
+    req.uploadDir = job.stagingDir || stagingDir;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+const storage = multer.diskStorage({
+  destination(req, file, cb) {
+    fs.mkdir(req.uploadDir, { recursive: true }, (err) => cb(err, req.uploadDir));
+  },
+  filename(req, file, cb) {
+    const fileId = crypto.randomBytes(8).toString('hex');
+    const stagedName = `${Date.now()}-${fileId}-${sanitizeFileName(file.originalname)}`;
+    file.fileId = fileId;
+    file.stagedName = stagedName;
+    cb(null, stagedName);
+  },
 });
 
-router.post('/api/upload', authenticate, upload.array('files'), async (req, res) => {
+const upload = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+function uploadFiles(req, res, next) {
+  upload.array('files')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Failed to stage upload files.' });
+    }
+    next();
+  });
+}
+
+router.get('/api/upload/status/:uploadId', authenticate, async (req, res, next) => {
+  try {
+    const uploadId = String(req.params.uploadId || '').trim();
+    if (!UPLOAD_ID_PATTERN.test(uploadId)) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    const db = await initDb();
+    const job = await db.collection(COLLECTIONS.uploadJobs).findOne({
+      userId: req.accountId,
+      uploadId,
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    return res.json(publicJob(job));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/api/upload', authenticate, ensureUploadJob, uploadFiles, async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded.' });
     }
 
     const userId = req.accountId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
+    const uploadId = req.uploadId;
+    const now = new Date();
+    const stagedFiles = req.files.map((file) => ({
+      fileId: file.fileId || crypto.randomBytes(8).toString('hex'),
+      originalName: file.originalname,
+      stagedName: file.filename,
+      stagedPath: file.path,
+      size: file.size,
+      mimetype: file.mimetype,
+      processed: false,
+      inserted: 0,
+      duplicatesOrExisting: 0,
+      invalidRows: 0,
+      normalized: null,
+      error: null,
+      uploadedAt: now,
+    }));
 
-    if (req.authPayload && req.authPayload.guest) {
-      return res.status(403).json({ error: 'Guest sessions are not allowed to upload files' });
+    const setFields = {
+      updatedAt: now,
+      error: null,
+    };
+    if (isLastBatch(req)) {
+      setFields.status = 'queued';
+      setFields.queuedAt = now;
     }
 
     const db = await initDb();
-    const collection = db.collection(collectionName);
+    const result = await db.collection(COLLECTIONS.uploadJobs).findOneAndUpdate(
+      { userId, uploadId, status: 'staging' },
+      {
+        $set: setFields,
+        $push: { files: { $each: stagedFiles } },
+        $inc: { 'summary.totalFilesReceived': stagedFiles.length },
+      },
+      { returnDocument: 'after' }
+    );
 
-    const summary = {
-      userId,
-      totalFilesReceived: req.files.length,
-      totalFilesProcessed: 0,
-      totalRows: 0,
-      totalInserted: 0,
-      totalDuplicatesOrExisting: 0,
-      totalInvalidRows: 0,
-      totalNormalized: 0,
-      totalNormalizedInserted: 0,
-      totalTrackStubsCreated: 0,
-      files: []
-    };
-
-    for (const file of req.files) {
-      const fileReport = {
-        originalName: file.originalname,
-        processed: false,
-        reasonSkipped: null,
-        totalRows: 0,
-        inserted: 0,
-        duplicatesOrExisting: 0,
-        invalidRows: 0,
-        error: null
-      };
-
-      try {
-        if (!file.originalname.startsWith('Streaming_History_Audio') || !file.originalname.endsWith('.json')) {
-          fileReport.reasonSkipped = 'Filename does not look like a Spotify extended history file (Streaming_History_Audio_*.json).';
-          summary.files.push(fileReport);
-          continue;
-        }
-
-        const text = file.buffer.toString('utf8');
-        const json = JSON.parse(text);
-
-        if (!Array.isArray(json)) {
-          fileReport.reasonSkipped = 'File JSON is not an array.';
-          summary.files.push(fileReport);
-          continue;
-        }
-
-        fileReport.totalRows = json.length;
-        summary.totalRows += json.length;
-
-        const operations = [];
-        const normalizedRows = [];
-        let invalidRows = 0;
-        const perFileSeen = new Set(); 
-
-        for (const row of json) {
-          if (!row.ts || !row.ms_played || !row.spotify_track_uri) {
-            invalidRows++;
-            continue;
-          }
-
-          const dedupeKey = `${row.ts}|${row.spotify_track_uri}`;
-          if (perFileSeen.has(dedupeKey)) continue;
-          perFileSeen.add(dedupeKey);
-
-          operations.push({
-            updateOne: {
-              filter: {
-                userId,
-                ts : row.ts,
-                spotify_track_uri : row.spotify_track_uri
-              },
-              update: {
-                $setOnInsert: {
-                  ...row,
-                  userId 
-                }
-              },
-              upsert: true
-            }
-          });
-
-          normalizedRows.push({
-            ts: row.ts,
-            ms_played: row.ms_played,
-            spotify_track_uri: row.spotify_track_uri,
-            reason_end: row.reason_end,
-          });
-        }
-
-        fileReport.invalidRows = invalidRows;
-        summary.totalInvalidRows += invalidRows;
-
-        if (operations.length > 0) {
-          const bulkResult = await collection.bulkWrite(operations, { ordered: false });
-
-          const inserted = bulkResult.upsertedCount || 0;
-          const totalCandidates = operations.length;
-          const duplicatesOrExisting = totalCandidates - inserted; // upserts that found existing docs
-
-          fileReport.inserted = inserted;
-          fileReport.duplicatesOrExisting = duplicatesOrExisting;
-
-          summary.totalInserted += inserted;
-          summary.totalDuplicatesOrExisting += duplicatesOrExisting;
-        }
-
-        if (normalizedRows.length) {
-          const normalizedStats = await ingestNormalizedStreamEvents(
-            normalizedRows,
-            userId,
-            { source: 'bulk-json-upload' }
-          );
-          fileReport.normalized = normalizedStats;
-          summary.totalNormalized += normalizedStats.normalized;
-          summary.totalNormalizedInserted += normalizedStats.inserted;
-          summary.totalTrackStubsCreated += normalizedStats.trackStubsCreated;
-        }
-
-        fileReport.processed = true;
-        summary.totalFilesProcessed++;
-
-      } catch (err) {
-        console.error(`Error processing file ${file.originalname}:`, err);
-        fileReport.error = err.message;
-      }
-
-      summary.files.push(fileReport);
+    if (!result) {
+      return res.status(409).json({ error: `Upload ${uploadId} is no longer accepting files.` });
     }
-    console.log(summary);
-    return res.status(200).json(summary);
 
-  } catch (error) {
-    console.error('Error processing upload:', error);
-    return res.status(500).json({ error: 'Error processing upload' });
+    return res.status(202).json({
+      uploadId,
+      jobId: String(result._id),
+      status: result.status,
+      filesAccepted: stagedFiles.length,
+      totalFilesAccepted: result.files?.length || stagedFiles.length,
+    });
+  } catch (err) {
+    next(err);
   }
 });
 
-
+router.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error('Error handling upload route:', err);
+  return res.status(500).json({ error: 'Error handling upload request' });
+});
 
 module.exports = router;

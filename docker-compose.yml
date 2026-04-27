@@ -19,6 +19,13 @@ services:
       - NODE_ENV=production
       - MONGO_URI=${MONGO_URI}
       - PORT=8081
+      - UPLOAD_STAGING_DIR=/var/lib/stat-tracker/uploads
+      - UPLOAD_WORKER_ENABLED=true
+      - UPLOAD_WORKER_INTERVAL_MS=3000
+      - UPLOAD_JOB_STALE_MS=600000
+      - UPLOAD_JOB_MAX_ATTEMPTS=3
+    volumes:
+      - upload_staging:/var/lib/stat-tracker/uploads
     expose:
       - "8081"
     depends_on:
@@ -62,5 +69,6 @@ services:
 
 volumes:
   mongo_data:
+  upload_staging:
   caddy_data:
   caddy_config:

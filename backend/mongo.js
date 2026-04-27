@@ -36,6 +36,7 @@ const COLLECTIONS = {
   userTrackDaily: process.env.USER_TRACK_DAILY_COLLECTION,
   userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION,
   userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION,
+  uploadJobs: process.env.MONGO_UPLOAD_JOBS_COLL || 'upload_jobs',
 };
 
 async function ensureIndexes(dbInstance) {
@@ -70,6 +71,8 @@ async function ensureIndexes(dbInstance) {
     { collection: COLLECTIONS.userStatsDaily, keys: { userId: 1, day: 1 }, options: { unique: true, name: "usd_user_day" } },
     { collection: COLLECTIONS.userSnapshots, keys: { userId: 1 }, options: { unique: true, name: "user_snapshots_user" } },
     { collection: COLLECTIONS.trackAliases, keys: { canonicalKey: 1 }, options: { name: "track_aliases_canonical_key" } },
+    { collection: COLLECTIONS.uploadJobs, keys: { userId: 1, uploadId: 1 }, options: { unique: true, name: "upload_jobs_user_upload" } },
+    { collection: COLLECTIONS.uploadJobs, keys: { status: 1, lockedAt: 1, createdAt: 1 }, options: { name: "upload_jobs_worker_claim" } },
   ];
 
   await Promise.all(
