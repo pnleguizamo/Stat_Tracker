@@ -444,6 +444,25 @@ function registerHeardle(io, socket, deps = {}) {
 
     appendRoundHistory(room, idx, {
       id: round.id,
+      minigameId: 'HEARDLE',
+      startedAt: round.startedAt,
+      revealedAt: round.revealedAt,
+      prompt: {
+        song: {
+          id: round.song?.id || null,
+          track_name: round.song?.track_name,
+          artist_names: round.song?.artist_names,
+          album_name: round.song?.album_name || null,
+          imageUrl: round.song?.imageUrl || null,
+          releaseDate: round.song?.releaseDate || null,
+          uri: round.song?.uri || null,
+        },
+        snippetPlan: round.snippetPlan,
+        snippetReplayGapPlanMs: round.snippetReplayGapPlanMs,
+        snippetHistory: round.snippetHistory || [],
+        stageProgress: round.stageProgress,
+      },
+      answers: round.answers || {},
       song: { track_name: round.song?.track_name, artist_names: round.song?.artist_names },
       results: round.results,
     });

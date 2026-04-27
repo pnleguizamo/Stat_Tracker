@@ -242,7 +242,9 @@ function registerWHO_LISTENED_MOST(io, socket, deps = {}) {
     }
     appendRoundHistory(room, idx, {
       id: round.id,
+      minigameId: 'WHO_LISTENED_MOST',
       startedAt: round.startedAt,
+      revealedAt: round.revealedAt,
       answers: round.answers || {},
       prompt: {
         type: round.prompt?.type,

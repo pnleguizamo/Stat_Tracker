@@ -1,6 +1,36 @@
 const minigameRegistry = require('./minigames');
 const { preloadStages } = require('./minigames/HIGHER_LOWER');
 const { computeStageRecap } = require('./stageRecap');
+const {
+  buildCompletedGameSession,
+  persistGameSessionDocument,
+} = require('../services/gameSessionService');
+
+function scheduleCompletedGamePersist(room, roomCode) {
+  let sessionSnapshot;
+  try {
+    sessionSnapshot = buildCompletedGameSession(room, { roomCode });
+  } catch (err) {
+    console.error('Failed to build completed game session snapshot', {
+      roomCode,
+      sessionId: room?.sessionId || null,
+      error: err?.message || err,
+    });
+    return;
+  }
+
+  setImmediate(async () => {
+    try {
+      await persistGameSessionDocument(sessionSnapshot);
+    } catch (err) {
+      console.error('Failed to persist completed game session', {
+        roomCode,
+        sessionId: sessionSnapshot.sessionId,
+        error: err?.message || err,
+      });
+    }
+  });
+}
 
 // TODOo determine if even necessary
 const ensureStageState = async (room) => {
@@ -179,9 +209,11 @@ function registerStagePlanListeners(io, socket, deps) {
     if (nextIndex === null || nextIndex === undefined) {
       const stages = (room.stagePlan || []).map((_, idx) => computeStageRecap(room, idx, 5)).filter(Boolean);
       room.finalRecap = { stages };
+      room.completedAt = new Date();
       room.phase = 'finalRecap';
       broadcastGameState(roomCode);
       cb?.({ ok: true, finalRecap: true });
+      scheduleCompletedGamePersist(room, roomCode);
       return;
     }
 

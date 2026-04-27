@@ -4,6 +4,11 @@ function ensureScoreboard(room) {
   return room.scoreboard;
 }
 
+function clonePlain(value) {
+  if (value === undefined || value === null) return value;
+  return JSON.parse(JSON.stringify(value));
+}
+
 function computeTimeScore(round, socketId, opts = {}) {
   const { maxPoints = 1000, decayPerSecond = 0.025, minPoints = 10 } = opts;
   if (!round || !round.startedAt) return minPoints;
@@ -24,6 +29,14 @@ function applyAwards(room, awards = []) {
   for (const award of awards) {
     if (!award || !award.socketId || typeof award.points !== 'number') continue;
 
+    const awardSnapshot = {
+      socketId: award.socketId,
+      points: award.points,
+      reason: award.reason || 'award',
+      meta: clonePlain(award.meta || null),
+      at: now,
+    };
+
     const entry = board[award.socketId] || { points: 0, stats: {}, awards: [] };
     entry.points += award.points;
 
@@ -35,14 +48,17 @@ function applyAwards(room, awards = []) {
 
     entry.awards = Array.isArray(entry.awards) ? entry.awards : [];
     entry.awards.push({
-      points: award.points,
-      reason: award.reason || 'award',
-      meta: award.meta || null,
-      at: now,
+      points: awardSnapshot.points,
+      reason: awardSnapshot.reason,
+      meta: awardSnapshot.meta,
+      at: awardSnapshot.at,
     });
     if (entry.awards.length > 50) {
       entry.awards = entry.awards.slice(entry.awards.length - 50);
     }
+
+    room.awardHistory = Array.isArray(room.awardHistory) ? room.awardHistory : [];
+    room.awardHistory.push(awardSnapshot);
 
     board[award.socketId] = entry;
   }
@@ -106,7 +122,7 @@ function appendRoundHistory(room, stageIndex, snapshot) {
   if (!room || typeof stageIndex !== 'number') return;
   room.stageRoundHistory = room.stageRoundHistory || {};
   room.stageRoundHistory[stageIndex] = room.stageRoundHistory[stageIndex] || [];
-  room.stageRoundHistory[stageIndex].push(snapshot);
+  room.stageRoundHistory[stageIndex].push(clonePlain(snapshot));
 }
 
 module.exports = {
@@ -116,4 +132,5 @@ module.exports = {
   appendRoundHistory,
   updateStreaks,
   getStreakMap,
+  clonePlain,
 };

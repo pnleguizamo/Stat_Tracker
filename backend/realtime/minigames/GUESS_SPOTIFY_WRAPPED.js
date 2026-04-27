@@ -117,7 +117,9 @@ module.exports.register = function registerGuessSpotifyWrapped(io, socket, deps 
     }
     appendRoundHistory(room, idx, {
       id: round.id,
+      minigameId: 'GUESS_SPOTIFY_WRAPPED',
       startedAt: round.startedAt,
+      revealedAt: round.revealedAt,
       answers: round.answers || {},
       ownerPlayerId: round.ownerPlayerId,
       ownerProfile: round.ownerProfile,

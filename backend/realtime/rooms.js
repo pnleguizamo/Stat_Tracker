@@ -1,4 +1,5 @@
 const rooms = new Map();
+const crypto = require('crypto');
 const { getStreakMap } = require('./scoring');
 
 const DEFAULT_DISCONNECT_GRACE_MS = 300_000;
@@ -10,6 +11,12 @@ function generateRoomCode() {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
+}
+
+function generateSessionId() {
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : `game-session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function getRoom(roomCode) {
@@ -149,6 +156,7 @@ function createRoom(hostSocketId, hostPlayerId, profile = {}, displayName, userI
   const chosenName = displayName || profile.displayName || 'Anonymous';
 
   const room = {
+    roomCode,
     players: new Map(),
     socketToPlayerId: new Map(),
     playerGraceTimers: new Map(),
@@ -161,7 +169,11 @@ function createRoom(hostSocketId, hostPlayerId, profile = {}, displayName, userI
     hostName: chosenName,
     hostUserId: userId || null,
     phase: 'lobby',
+    sessionId: null,
+    startedAt: null,
+    completedAt: null,
     scoreboard: {},
+    awardHistory: [],
     revealState: null,
     roundState: {},
     stageRoundHistory: {},
@@ -237,10 +249,19 @@ function startGame(roomCode) {
   if (!room.stagePlan || room.stagePlan.length !== 3) return null;
 
   room.phase = 'inGame';
+  room.sessionId = generateSessionId();
+  room.startedAt = new Date();
+  room.completedAt = null;
   room.currentStageIndex = 0;
   room.scoreboard = {};
+  room.awardHistory = [];
   room.roundTimers = {};
   room.revealState = null;
+  room.roundState = {};
+  room.stageRoundHistory = {};
+  room.stageRecap = null;
+  room.finalRecap = null;
+  room.pendingStageAdvance = null;
   room.higherLowerStages = {};
   room._hlPreloads = new Map();
 

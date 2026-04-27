@@ -37,6 +37,7 @@ const COLLECTIONS = {
   userStatsDaily: process.env.USER_STATS_DAILY_COLLECTION,
   userSnapshots: process.env.USER_SNAPSHOTS_COLLECTION,
   uploadJobs: process.env.MONGO_UPLOAD_JOBS_COLL || 'upload_jobs',
+  gameSessions: process.env.GAME_SESSIONS_COLLECTION || 'game_sessions',
 };
 
 async function ensureIndexes(dbInstance) {
@@ -78,6 +79,9 @@ async function ensureIndexes(dbInstance) {
     { collection: COLLECTIONS.trackAliases, keys: { canonicalKey: 1 }, options: { name: "track_aliases_canonical_key" } },
     { collection: COLLECTIONS.uploadJobs, keys: { userId: 1, uploadId: 1 }, options: { unique: true, name: "upload_jobs_user_upload" } },
     { collection: COLLECTIONS.uploadJobs, keys: { status: 1, lockedAt: 1, createdAt: 1 }, options: { name: "upload_jobs_worker_claim" } },
+    { collection: COLLECTIONS.gameSessions, keys: { sessionId: 1 }, options: { unique: true, name: "game_sessions_session" } },
+    { collection: COLLECTIONS.gameSessions, keys: { hostUserId: 1, createdAt: -1 }, options: { name: "game_sessions_host_created" } },
+    { collection: COLLECTIONS.gameSessions, keys: { roomCode: 1, createdAt: -1 }, options: { name: "game_sessions_room_created" } },
   ];
 
   await Promise.all(

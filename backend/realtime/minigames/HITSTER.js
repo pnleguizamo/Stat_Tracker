@@ -544,13 +544,25 @@ function registerHitster(io, socket, deps = {}) {
 
     stageState.roundsCompleted = (stageState.roundsCompleted || 0) + 1;
 
+    attachTimelines(room, round);
+
     appendRoundHistory(room, idx, {
       id: round.id,
+      minigameId: 'HITSTER',
+      startedAt: round.startedAt,
+      revealedAt: round.revealedAt,
+      prompt: {
+        song: round.song,
+        year: round.year,
+        stageProgress: round.stageProgress,
+      },
+      answers: round.answers || {},
       song: { track_name: round.song?.track_name, artist_names: round.song?.artist_names },
+      timelines: round.timelines || {},
+      stageProgress: round.stageProgress,
       results: round.results,
     });
 
-    attachTimelines(room, round);
     broadcastGameState?.(roomCode);
     cb?.({ ok: true, results: round.results });
     return { ok: true, results: round.results };

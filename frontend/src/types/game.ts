@@ -247,7 +247,7 @@ export type HeardleRoundState = {
     index?: number;
     startedAt?: number | null;
     endedAt?: number | null;
-    durationMs?: number | null;
+  durationMs?: number | null;
   }>;
   currentSnippetIndex: number;
   guessWindowMs?: number;
