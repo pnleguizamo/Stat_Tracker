@@ -15,6 +15,20 @@ const UPLOAD_ID_PATTERN = /^[a-zA-Z0-9_-]{8,100}$/;
 const STAGING_ROOT = process.env.UPLOAD_STAGING_DIR
   || path.resolve(__dirname, '..', 'uploads', 'spotify-history');
 
+async function cleanupStagedRequestFiles(files) {
+  const stagedFiles = files || [];
+  await Promise.all(stagedFiles.map(async (file) => {
+    if (!file?.path) return;
+    try {
+      await fs.promises.unlink(file.path);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') {
+        console.warn(`Failed to remove orphaned staged upload file ${file.path}:`, err);
+      }
+    }
+  }));
+}
+
 function sanitizePathSegment(value, fallback = 'unknown') {
   const sanitized = String(value || fallback)
     .replace(/[^a-zA-Z0-9_-]/g, '-')
@@ -117,6 +131,9 @@ async function ensureUploadJob(req, res, next) {
     req.uploadJob = job;
     req.uploadId = uploadId;
     req.uploadDir = job.stagingDir || stagingDir;
+    if (job.stagingDir && job.stagingDir !== stagingDir) {
+      console.warn(`Upload ${uploadId} is using stored stagingDir ${job.stagingDir}; current root would resolve to ${stagingDir}`);
+    }
     next();
   } catch (err) {
     next(err);
@@ -144,7 +161,10 @@ const upload = multer({
 function uploadFiles(req, res, next) {
   upload.array('files')(req, res, (err) => {
     if (err) {
-      return res.status(400).json({ error: err.message || 'Failed to stage upload files.' });
+      cleanupStagedRequestFiles(req.files).finally(() => {
+        res.status(400).json({ error: err.message || 'Failed to stage upload files.' });
+      });
+      return;
     }
     next();
   });
@@ -174,8 +194,11 @@ router.get('/api/upload/status/:uploadId', authenticate, async (req, res, next) 
 });
 
 router.post('/api/upload', authenticate, ensureUploadJob, uploadFiles, async (req, res, next) => {
+  let requestFilesPersisted = false;
+
   try {
     if (!req.files || req.files.length === 0) {
+      await cleanupStagedRequestFiles(req.files);
       return res.status(400).json({ error: 'No files uploaded.' });
     }
 
@@ -219,9 +242,11 @@ router.post('/api/upload', authenticate, ensureUploadJob, uploadFiles, async (re
     );
 
     if (!result) {
+      await cleanupStagedRequestFiles(req.files);
       return res.status(409).json({ error: `Upload ${uploadId} is no longer accepting files.` });
     }
 
+    requestFilesPersisted = true;
     return res.status(202).json({
       uploadId,
       jobId: String(result._id),
@@ -230,6 +255,9 @@ router.post('/api/upload', authenticate, ensureUploadJob, uploadFiles, async (re
       totalFilesAccepted: result.files?.length || stagedFiles.length,
     });
   } catch (err) {
+    if (!requestFilesPersisted) {
+      await cleanupStagedRequestFiles(req.files);
+    }
     next(err);
   }
 });

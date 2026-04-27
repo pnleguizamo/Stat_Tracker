@@ -1,12 +1,14 @@
 const { initDb, COLLECTIONS } = require('../mongo.js');
 const {
-  addFileReportToSummary,
-  createEmptyUploadSummary,
+  buildUploadSummary,
+  createFileReport,
   processStagedUploadFile,
 } = require('./uploadProcessor.js');
 
 const WORKER_INTERVAL_MS = Number(process.env.UPLOAD_WORKER_INTERVAL_MS || 3000);
 const JOB_STALE_MS = Number(process.env.UPLOAD_JOB_STALE_MS || 10 * 60 * 1000);
+const DEFAULT_HEARTBEAT_MS = Math.max(1000, Math.min(30000, Math.floor(JOB_STALE_MS / 3)));
+const HEARTBEAT_INTERVAL_MS = Number(process.env.UPLOAD_JOB_HEARTBEAT_MS || DEFAULT_HEARTBEAT_MS);
 const STAGING_TIMEOUT_MS = Number(process.env.UPLOAD_STAGING_TIMEOUT_MS || 30 * 60 * 1000);
 const MAX_ATTEMPTS = Number(process.env.UPLOAD_JOB_MAX_ATTEMPTS || 3);
 
@@ -18,6 +20,27 @@ function sleep(ms) {
 
 function nowMinus(ms) {
   return new Date(Date.now() - ms);
+}
+
+class LostJobLockError extends Error {
+  constructor(uploadId) {
+    super(`Upload ${uploadId} is no longer owned by this worker.`);
+    this.name = 'LostJobLockError';
+  }
+}
+
+function isLostJobLockError(err) {
+  return err instanceof LostJobLockError;
+}
+
+function createFailedFileReport(file, err) {
+  return {
+    ...file,
+    ...createFileReport(file),
+    processed: false,
+    reasonSkipped: null,
+    error: err?.message || 'Failed to process file.',
+  };
 }
 
 class UploadIngestionWorker {
@@ -130,7 +153,6 @@ class UploadIngestionWorker {
           updatedAt: now,
           error: null,
         },
-        $inc: { attempts: 1 },
       },
       { sort: { createdAt: 1 }, returnDocument: 'after' }
     );
@@ -138,61 +160,131 @@ class UploadIngestionWorker {
     return job || null;
   }
 
+  async refreshJobLease(jobs, job) {
+    const now = new Date();
+    const res = await jobs.updateOne(
+      { _id: job._id, lockedBy: this.workerId },
+      {
+        $set: {
+          lockedAt: now,
+          updatedAt: now,
+        },
+      }
+    );
+
+    if (res.matchedCount === 0) {
+      throw new LostJobLockError(job.uploadId);
+    }
+  }
+
+  async persistFileProgress(jobs, job, index, fileReport, reports) {
+    const now = new Date();
+    const summary = buildUploadSummary(job.userId, reports);
+    const res = await jobs.updateOne(
+      { _id: job._id, lockedBy: this.workerId },
+      {
+        $set: {
+          [`files.${index}`]: fileReport,
+          summary,
+          lockedAt: now,
+          updatedAt: now,
+        },
+      }
+    );
+
+    if (res.matchedCount === 0) {
+      throw new LostJobLockError(job.uploadId);
+    }
+
+    return summary;
+  }
+
   async processJob(job) {
     const db = await initDb();
     const jobs = db.collection(COLLECTIONS.uploadJobs);
     const files = job.files || [];
-    const summary = createEmptyUploadSummary(job.userId);
-    const reports = [];
+    const reports = files.map((file) => ({ ...file }));
+    let leaseLost = false;
+    let heartbeatError = null;
+    let summary = buildUploadSummary(job.userId, reports);
+    const heartbeat = setInterval(() => {
+      this.refreshJobLease(jobs, job).catch((err) => {
+        if (isLostJobLockError(err)) {
+          leaseLost = true;
+          return;
+        }
+        heartbeatError = err;
+        console.error(`[UploadWorker] Heartbeat failed for upload ${job.uploadId}:`, err);
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref?.();
 
     try {
-      for (const file of files) {
-        const report = await processStagedUploadFile({ db, file, userId: job.userId });
-        reports.push({ ...file, ...report });
-        addFileReportToSummary(summary, report);
+      await this.refreshJobLease(jobs, job);
 
-        const updatedFiles = files.map((existing, index) =>
-          index < reports.length ? reports[index] : existing
-        );
+      for (let index = 0; index < files.length; index++) {
+        if (leaseLost) return;
+        if (heartbeatError) throw heartbeatError;
 
-        await jobs.updateOne(
-          { _id: job._id, lockedBy: this.workerId },
-          {
-            $set: {
-              files: updatedFiles,
-              summary,
-              updatedAt: new Date(),
-            },
-          }
-        );
+        const file = reports[index] || files[index];
+        if (file.processed === true) {
+          summary = buildUploadSummary(job.userId, reports);
+          continue;
+        }
+
+        let report;
+        try {
+          report = await processStagedUploadFile({ db, file, userId: job.userId });
+        } catch (err) {
+          report = createFailedFileReport(file, err);
+          console.error(
+            `[UploadWorker] Upload ${job.uploadId} file ${file.originalName || file.stagedName || index} failed:`,
+            err
+          );
+        }
+
+        reports[index] = { ...file, ...report };
+        summary = await this.persistFileProgress(jobs, job, index, reports[index], reports);
       }
 
-      await jobs.updateOne(
+      const now = new Date();
+      summary = buildUploadSummary(job.userId, reports);
+      const finalUpdate = await jobs.updateOne(
         { _id: job._id, lockedBy: this.workerId },
         {
           $set: {
             status: 'succeeded',
             files: reports,
             summary,
+            // Staged files are retained intentionally on the server for local forensics.
             lockedAt: null,
             lockedBy: null,
             error: null,
-            updatedAt: new Date(),
-            completedAt: new Date(),
+            updatedAt: now,
+            completedAt: now,
           },
         }
       );
 
+      if (finalUpdate.matchedCount === 0) {
+        return;
+      }
+
       console.log(`[UploadWorker] Upload ${job.uploadId} succeeded for user ${job.userId}`);
     } catch (err) {
+      if (isLostJobLockError(err)) {
+        return;
+      }
       await this.handleJobError(job, err);
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 
   async handleJobError(job, err) {
     const db = await initDb();
     const now = new Date();
-    const attempts = job.attempts || 1;
+    const attempts = (job.attempts || 0) + 1;
     const terminal = attempts >= MAX_ATTEMPTS;
     const update = terminal
       ? {
@@ -211,10 +303,17 @@ class UploadIngestionWorker {
           updatedAt: now,
         };
 
-    await db.collection(COLLECTIONS.uploadJobs).updateOne(
+    const res = await db.collection(COLLECTIONS.uploadJobs).updateOne(
       { _id: job._id, lockedBy: this.workerId },
-      { $set: update }
+      {
+        $set: update,
+        $inc: { attempts: 1 },
+      }
     );
+
+    if (res.matchedCount === 0) {
+      return;
+    }
 
     console.error(
       `[UploadWorker] Upload ${job.uploadId} ${terminal ? 'failed' : 'will retry'}:`,

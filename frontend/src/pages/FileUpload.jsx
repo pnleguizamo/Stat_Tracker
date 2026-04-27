@@ -4,6 +4,7 @@ import api from '../lib/api.js';
 import { useQuery } from '@tanstack/react-query';
 
 const MAX_BATCH_BYTES = 35 * 1024 * 1024;
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'abandoned']);
 
 function chunkFilesBySize(files) {
@@ -50,6 +51,10 @@ function buildSummaryFromJob(job) {
     ...(job.summary || {}),
     files: job.files || [],
   };
+}
+
+function formatFileSize(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function FileUpload() {
@@ -149,6 +154,15 @@ function FileUpload() {
 
     if (!userId) {
       alert('Please sign in before uploading files.');
+      return;
+    }
+
+    const oversizedFiles = files.filter((file) => file.size > MAX_FILE_BYTES);
+    if (oversizedFiles.length > 0) {
+      const fileList = oversizedFiles
+        .map((file) => `${file.name} (${formatFileSize(file.size)})`)
+        .join('\n');
+      alert(`Each file must be ${formatFileSize(MAX_FILE_BYTES)} or smaller:\n${fileList}`);
       return;
     }
 
