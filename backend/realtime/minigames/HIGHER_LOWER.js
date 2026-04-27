@@ -60,6 +60,9 @@ function cloneDatapoint(datapoint) {
   return {
     ...datapoint,
     contributorPlayerIds: datapoint.contributorPlayerIds ? [...datapoint.contributorPlayerIds] : null,
+    previewCandidates: datapoint.previewCandidates
+      ? datapoint.previewCandidates.map((candidate) => ({ ...candidate }))
+      : null,
   };
 }
 

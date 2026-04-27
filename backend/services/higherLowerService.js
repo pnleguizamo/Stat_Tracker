@@ -226,6 +226,298 @@ function displayMetricValue(metric, value) {
   return Math.round(Number(value) || 0);
 }
 
+function normalizePreviewText(value) {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+}
+
+function normalizePreviewKind(value) {
+  return value === 'artist' ? 'artist' : value === 'track' ? 'track' : null;
+}
+
+function buildPreviewCandidateKey({
+  kind = null,
+  trackName = null,
+  artistName = null,
+  key = null,
+} = {}) {
+  const normalizedKey = normalizePreviewText(key);
+  if (normalizedKey) return normalizedKey;
+  const normalizedKind = normalizePreviewKind(kind);
+  if (!normalizedKind) return null;
+  return [
+    normalizedKind,
+    normalizePreviewText(trackName) || 'none',
+    normalizePreviewText(artistName) || 'none',
+  ].join('::');
+}
+
+function createPreviewCandidate({
+  kind = null,
+  trackName = null,
+  artistName = null,
+  key = null,
+  reason = null,
+} = {}) {
+  const normalizedKind = normalizePreviewKind(kind);
+  if (!normalizedKind) return null;
+
+  const normalizedTrackName = normalizePreviewText(trackName);
+  const normalizedArtistName = normalizePreviewText(artistName);
+  if (normalizedKind === 'track' && !normalizedTrackName) return null;
+  if (normalizedKind === 'artist' && !normalizedArtistName) return null;
+
+  return {
+    kind: normalizedKind,
+    trackName: normalizedTrackName,
+    artistName: normalizedArtistName,
+    key: buildPreviewCandidateKey({
+      kind: normalizedKind,
+      trackName: normalizedTrackName,
+      artistName: normalizedArtistName,
+      key,
+    }),
+    reason: normalizePreviewText(reason),
+  };
+}
+
+function dedupePreviewCandidates(candidates = []) {
+  const result = [];
+  const seenKeys = new Set();
+
+  for (const candidate of candidates || []) {
+    const normalizedCandidate = createPreviewCandidate(candidate);
+    if (!normalizedCandidate?.key) continue;
+    if (seenKeys.has(normalizedCandidate.key)) continue;
+    seenKeys.add(normalizedCandidate.key);
+    result.push(normalizedCandidate);
+  }
+
+  return result;
+}
+
+function buildTrackPreviewCandidate({
+  trackName = null,
+  artistName = null,
+  key = null,
+  reason = null,
+} = {}) {
+  return createPreviewCandidate({
+    kind: 'track',
+    trackName,
+    artistName,
+    key,
+    reason,
+  });
+}
+
+function buildArtistPreviewCandidate({
+  artistName = null,
+  key = null,
+  reason = null,
+} = {}) {
+  return createPreviewCandidate({
+    kind: 'artist',
+    artistName,
+    key,
+    reason,
+  });
+}
+
+function createTrackPreviewSource({
+  trackId = null,
+  trackName = null,
+  artistIds = [],
+  artistNames = [],
+  albumId = null,
+} = {}) {
+  return {
+    trackId: normalizePreviewText(trackId),
+    trackName: normalizePreviewText(trackName),
+    artistIds: Array.from(new Set((artistIds || []).filter(Boolean).map(String))),
+    artistNames: Array.from(new Set((artistNames || []).map(normalizePreviewText).filter(Boolean))),
+    albumId: normalizePreviewText(albumId),
+  };
+}
+
+function createArtistPreviewSource({
+  artistId = null,
+  name = null,
+  genres = [],
+} = {}) {
+  return {
+    artistId: normalizePreviewText(artistId),
+    name: normalizePreviewText(name),
+    genres: Array.from(new Set((genres || []).map(normalizePreviewText).filter(Boolean))),
+  };
+}
+
+function trackPreviewSourceFromSnapshot(track = {}) {
+  return createTrackPreviewSource({
+    trackId: track.trackId || track._id || null,
+    trackName: track.trackName || track.name || null,
+    artistIds: track.artistIds || [],
+    artistNames: track.artistNames || [],
+    albumId: track.albumId || null,
+  });
+}
+
+function trackPreviewSourceFromCountDoc(doc = {}, trackMetadata = new Map()) {
+  const trackId = doc.trackId || doc._id || null;
+  const meta = trackMetadata.get(trackId) || {};
+  return createTrackPreviewSource({
+    trackId,
+    trackName: meta.name || doc.trackName || null,
+    artistIds: meta.artistIds || [],
+    artistNames: meta.artistNames || [],
+    albumId: meta.albumId || doc.albumId || null,
+  });
+}
+
+function artistPreviewSourceFromSnapshot(artist = {}) {
+  return createArtistPreviewSource({
+    artistId: artist.artistId || artist._id || null,
+    name: artist.name || null,
+    genres: artist.genres || [],
+  });
+}
+
+function artistPreviewSourceFromCountDoc(doc = {}, artistMetadata = new Map()) {
+  const artistId = doc.artistId || doc._id || null;
+  const meta = artistMetadata.get(artistId) || {};
+  return createArtistPreviewSource({
+    artistId,
+    name: meta.name || doc.name || null,
+    genres: meta.genres || [],
+  });
+}
+
+function normalizeGenreName(value) {
+  return normalizePreviewText(value)?.toLowerCase() || null;
+}
+
+function buildArtistGenreLookup(artists = []) {
+  const lookup = new Map();
+  for (const artist of artists || []) {
+    if (!artist?.artistId) continue;
+    lookup.set(
+      artist.artistId,
+      new Set((artist.genres || []).map(normalizeGenreName).filter(Boolean))
+    );
+  }
+  return lookup;
+}
+
+function trackHasGenre(track = {}, genreName = null, genresByArtistId = new Map()) {
+  const normalizedGenreName = normalizeGenreName(genreName);
+  if (!normalizedGenreName) return false;
+  return (track.artistIds || []).some((artistId) =>
+    genresByArtistId.get(artistId)?.has(normalizedGenreName)
+  );
+}
+
+function selectRepresentativeAlbumTrack(trackSources = [], albumId = null) {
+  const normalizedAlbumId = normalizePreviewText(albumId);
+  if (!normalizedAlbumId) return null;
+  return (
+    (trackSources || []).find(
+      (track) => track?.albumId === normalizedAlbumId && track?.trackName
+    ) || null
+  );
+}
+
+function selectRepresentativeGenreTrack(trackSources = [], genreName = null, genresByArtistId = new Map()) {
+  return (
+    (trackSources || []).find((track) => trackHasGenre(track, genreName, genresByArtistId) && track?.trackName) ||
+    null
+  );
+}
+
+function selectRepresentativeGenreArtist(artistSources = [], genreName = null) {
+  const normalizedGenreName = normalizeGenreName(genreName);
+  if (!normalizedGenreName) return null;
+  return (
+    (artistSources || []).find((artist) =>
+      (artist?.genres || []).some((genre) => normalizeGenreName(genre) === normalizedGenreName)
+    ) || null
+  );
+}
+
+function buildAlbumPreviewCandidates({
+  albumId = null,
+  artistNames = [],
+  trackSources = [],
+} = {}) {
+  const candidates = [];
+  const representativeTrack = selectRepresentativeAlbumTrack(trackSources, albumId);
+  if (representativeTrack?.trackName) {
+    candidates.push(buildTrackPreviewCandidate({
+      trackName: representativeTrack.trackName,
+      artistName: representativeTrack.artistNames?.join(', ') || null,
+      key: representativeTrack.trackId
+        ? `track::${representativeTrack.trackId}`
+        : null,
+      reason: 'album_track',
+    }));
+  }
+
+  const leadArtistName =
+    representativeTrack?.artistNames?.find(Boolean) ||
+    (artistNames || []).find(Boolean) ||
+    null;
+  if (leadArtistName) {
+    candidates.push(buildArtistPreviewCandidate({
+      artistName: leadArtistName,
+      key: `artist::${leadArtistName.toLowerCase()}`,
+      reason: 'album_artist_fallback',
+    }));
+  }
+
+  return dedupePreviewCandidates(candidates);
+}
+
+function buildGenrePreviewCandidates({
+  genreName = null,
+  trackSources = [],
+  artistSources = [],
+} = {}) {
+  const candidates = [];
+  const genresByArtistId = buildArtistGenreLookup(artistSources);
+  const representativeTrack = selectRepresentativeGenreTrack(trackSources, genreName, genresByArtistId);
+
+  if (representativeTrack?.trackName) {
+    candidates.push(buildTrackPreviewCandidate({
+      trackName: representativeTrack.trackName,
+      artistName: representativeTrack.artistNames?.join(', ') || null,
+      key: representativeTrack.trackId
+        ? `track::${representativeTrack.trackId}`
+        : null,
+      reason: 'genre_track',
+    }));
+  }
+
+  let matchingArtist = null;
+  if (representativeTrack) {
+    for (const artistId of representativeTrack.artistIds || []) {
+      if (genresByArtistId.get(artistId)?.has(normalizeGenreName(genreName))) {
+        matchingArtist = (artistSources || []).find((artist) => artist.artistId === artistId) || null;
+        if (matchingArtist) break;
+      }
+    }
+  }
+
+  matchingArtist = matchingArtist || selectRepresentativeGenreArtist(artistSources, genreName);
+  if (matchingArtist?.name) {
+    candidates.push(buildArtistPreviewCandidate({
+      artistName: matchingArtist.name,
+      key: matchingArtist.artistId ? `artist::${matchingArtist.artistId}` : null,
+      reason: 'genre_artist_fallback',
+    }));
+  }
+
+  return dedupePreviewCandidates(candidates);
+}
+
 function titleCase(value = '') {
   return String(value)
     .split(/[_\s]+/)
@@ -252,6 +544,75 @@ function buildDatapointId(parts = []) {
   return parts
     .map((part) => (part === null || part === undefined || part === '' ? 'none' : String(part)))
     .join('::');
+}
+
+function sortByMetric(metric, docs = []) {
+  return [...docs].sort((a, b) => {
+    const metricDelta = metricValueFromDoc(metric, b) - metricValueFromDoc(metric, a);
+    if (metricDelta !== 0) return metricDelta;
+    return String(a._id || '').localeCompare(String(b._id || ''));
+  });
+}
+
+function buildTargetedSnapshotPreviewMaps({
+  userTrackDocs = [],
+  metadata = {},
+  metric = 'plays',
+} = {}) {
+  const tracksByUserId = new Map();
+  const trackMetadata = metadata.tracks || new Map();
+  const artistMetadata = metadata.artists || new Map();
+
+  for (const doc of userTrackDocs || []) {
+    const userId = doc.userId || doc._id?.userId || null;
+    const trackId = doc.trackId || doc._id?.trackId || (typeof doc._id === 'string' ? doc._id : null);
+    if (!userId || !trackId) continue;
+    if (!tracksByUserId.has(userId)) tracksByUserId.set(userId, []);
+    tracksByUserId.get(userId).push({ ...doc, userId, trackId, _id: trackId });
+  }
+
+  const albumTrackByUser = new Map();
+  const genreTrackByUser = new Map();
+  const genreArtistByUser = new Map();
+
+  for (const [userId, docs] of tracksByUserId.entries()) {
+    const albumTracks = new Map();
+    const genreTracks = new Map();
+    const genreArtists = new Map();
+
+    for (const doc of sortByMetric(metric, docs)) {
+      const trackSource = trackPreviewSourceFromCountDoc(doc, trackMetadata);
+      if (trackSource.albumId && !albumTracks.has(trackSource.albumId)) {
+        albumTracks.set(trackSource.albumId, trackSource);
+      }
+
+      for (const artistId of trackSource.artistIds || []) {
+        const artistMeta = artistMetadata.get(artistId) || {};
+        const artistSource = createArtistPreviewSource({
+          artistId,
+          name: artistMeta.name || null,
+          genres: artistMeta.genres || [],
+        });
+
+        for (const genre of artistSource.genres || []) {
+          const genreKey = normalizeGenreName(genre);
+          if (!genreKey) continue;
+          if (!genreTracks.has(genreKey)) genreTracks.set(genreKey, trackSource);
+          if (!genreArtists.has(genreKey)) genreArtists.set(genreKey, artistSource);
+        }
+      }
+    }
+
+    albumTrackByUser.set(userId, albumTracks);
+    genreTrackByUser.set(userId, genreTracks);
+    genreArtistByUser.set(userId, genreArtists);
+  }
+
+  return {
+    albumTrackByUser,
+    genreTrackByUser,
+    genreArtistByUser,
+  };
 }
 
 function compareDatapointsByValueAsc(left, right) {
@@ -452,12 +813,7 @@ async function loadMetadataMaps(db, idsByType = {}, context = 'unknown', metadat
 }
 
 function sortAndLimitByMetric(metric, docs = [], limit = DEFAULT_MAX_PER_BUCKET) {
-  return [...docs]
-    .sort((a, b) => {
-      const metricDelta = metricValueFromDoc(metric, b) - metricValueFromDoc(metric, a);
-      if (metricDelta !== 0) return metricDelta;
-      return String(a._id || '').localeCompare(String(b._id || ''));
-    })
+  return sortByMetric(metric, docs)
     .slice(0, limit);
 }
 
@@ -475,10 +831,13 @@ function createDatapoint({
   previewKind = null,
   previewTrackName = null,
   previewArtistName = null,
+  previewCandidates = null,
   value,
   contributorPlayerIds = null,
 }) {
   const displayValue = displayMetricValue(metric, value);
+  const resolvedPreviewCandidates = dedupePreviewCandidates(previewCandidates);
+  const primaryPreviewCandidate = resolvedPreviewCandidates[0] || null;
   return {
     id: buildDatapointId([metric, scope, timeframe, entityType, ownerPlayerId, entityId, title]),
     metric,
@@ -491,9 +850,15 @@ function createDatapoint({
     title,
     subtitle,
     imageUrl,
-    previewKind,
-    previewTrackName,
-    previewArtistName,
+    previewKind: previewKind || primaryPreviewCandidate?.kind || null,
+    previewTrackName:
+      previewTrackName ||
+      (primaryPreviewCandidate?.kind === 'track' ? primaryPreviewCandidate.trackName : null),
+    previewArtistName:
+      previewArtistName ||
+      primaryPreviewCandidate?.artistName ||
+      null,
+    previewCandidates: resolvedPreviewCandidates.length ? resolvedPreviewCandidates : null,
     value,
     displayValue,
     contributorPlayerIds,
@@ -508,11 +873,19 @@ function pushPlayerSnapshotDatapoints({
   timeframe,
   includeAllTimeTotals = true,
   maxPerBucket = DEFAULT_MAX_PER_BUCKET,
+  albumTrackByUser = new Map(),
+  genreTrackByUser = new Map(),
+  genreArtistByUser = new Map(),
 }) {
   const window = snapshotDoc?.windows?.[timeframe];
   if (!window) return;
 
   const timeframeLabel = formatTimeframeLabel(timeframe);
+  const snapshotTrackSources = (window.topTracks || []).map(trackPreviewSourceFromSnapshot);
+  const snapshotArtistSources = (window.topArtists || []).map(artistPreviewSourceFromSnapshot);
+  const targetedAlbumTracks = albumTrackByUser.get(player.userId) || new Map();
+  const targetedGenreTracks = genreTrackByUser.get(player.userId) || new Map();
+  const targetedGenreArtists = genreArtistByUser.get(player.userId) || new Map();
 
   if (window.totals && (timeframe !== 'allTime' || includeAllTimeTotals)) {
     const totalValue = metric === 'minutes'
@@ -552,6 +925,14 @@ function pushPlayerSnapshotDatapoints({
       previewKind: 'track',
       previewTrackName: track.trackName || 'Unknown Track',
       previewArtistName: (track.artistNames || []).join(', ') || null,
+      previewCandidates: [
+        buildTrackPreviewCandidate({
+          trackName: track.trackName || 'Unknown Track',
+          artistName: (track.artistNames || []).join(', ') || null,
+          key: track.trackId ? `track::${track.trackId}` : null,
+          reason: 'track_primary',
+        }),
+      ],
       value,
     }));
   }
@@ -572,6 +953,13 @@ function pushPlayerSnapshotDatapoints({
       imageUrl: artist.images?.[0]?.url || null,
       previewKind: 'artist',
       previewArtistName: artist.name || 'Unknown Artist',
+      previewCandidates: [
+        buildArtistPreviewCandidate({
+          artistName: artist.name || 'Unknown Artist',
+          key: artist.artistId ? `artist::${artist.artistId}` : null,
+          reason: 'artist_primary',
+        }),
+      ],
       value,
     }));
   }
@@ -579,6 +967,7 @@ function pushPlayerSnapshotDatapoints({
   for (const album of (window.topAlbums || []).slice(0, maxPerBucket)) {
     const value = metric === 'minutes' ? album.msPlayed || 0 : album.plays || 0;
     if (value <= 0) continue;
+    const targetedAlbumTrack = targetedAlbumTracks.get(normalizePreviewText(album.albumId)) || null;
     datapoints.push(createDatapoint({
       metric,
       scope: 'PLAYER',
@@ -590,6 +979,11 @@ function pushPlayerSnapshotDatapoints({
       title: album.name || 'Unknown Album',
       subtitle: [player.displayName, formatTimeframeLabel(timeframe), ...(album.artistNames || [])].filter(Boolean).join(' · '),
       imageUrl: album.images?.[0]?.url || null,
+      previewCandidates: buildAlbumPreviewCandidates({
+        albumId: album.albumId || null,
+        artistNames: album.artistNames || [],
+        trackSources: [...snapshotTrackSources, targetedAlbumTrack].filter(Boolean),
+      }),
       value,
     }));
   }
@@ -597,6 +991,9 @@ function pushPlayerSnapshotDatapoints({
   for (const genre of (window.topGenres || []).slice(0, maxPerBucket)) {
     const value = metric === 'minutes' ? genre.msPlayed || 0 : genre.plays || 0;
     if (value <= 0) continue;
+    const normalizedGenre = normalizeGenreName(genre.genre);
+    const targetedGenreTrack = targetedGenreTracks.get(normalizedGenre) || null;
+    const targetedGenreArtist = targetedGenreArtists.get(normalizedGenre) || null;
     datapoints.push(createDatapoint({
       metric,
       scope: 'PLAYER',
@@ -607,6 +1004,11 @@ function pushPlayerSnapshotDatapoints({
       entityId: genre.genre || null,
       title: genre.genre || 'Unknown Genre',
       subtitle: [player.displayName, formatTimeframeLabel(timeframe)].join(' · '),
+      previewCandidates: buildGenrePreviewCandidates({
+        genreName: genre.genre || null,
+        trackSources: [...snapshotTrackSources, targetedGenreTrack].filter(Boolean),
+        artistSources: [...snapshotArtistSources, targetedGenreArtist].filter(Boolean),
+      }),
       value,
     }));
   }
@@ -713,11 +1115,16 @@ async function buildAllTimeDatapoints({
       maxPerBucket,
     });
 
+    const playerTrackDocsForUser = playerTrackDocs
+      .filter((doc) => doc.userId === player.userId)
+      .map((doc) => ({ ...doc, _id: doc.trackId }));
     const playerTracks = sortAndLimitByMetric(
       metric,
-      playerTrackDocs.filter((doc) => doc.userId === player.userId).map((doc) => ({ ...doc, _id: doc.trackId })),
+      playerTrackDocsForUser,
       maxPerBucket
     );
+    const playerTrackSources = sortByMetric(metric, playerTrackDocsForUser)
+      .map((doc) => trackPreviewSourceFromCountDoc(doc, metadata.tracks));
     for (const doc of playerTracks) {
       const meta = metadata.tracks.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
@@ -736,15 +1143,28 @@ async function buildAllTimeDatapoints({
         previewKind: 'track',
         previewTrackName: meta.name || 'Unknown Track',
         previewArtistName: (meta.artistNames || []).join(', ') || null,
+        previewCandidates: [
+          buildTrackPreviewCandidate({
+            trackName: meta.name || 'Unknown Track',
+            artistName: (meta.artistNames || []).join(', ') || null,
+            key: doc._id ? `track::${doc._id}` : null,
+            reason: 'track_primary',
+          }),
+        ],
         value,
       }));
     }
 
+    const playerArtistDocsForUser = playerArtistDocs
+      .filter((doc) => doc.userId === player.userId)
+      .map((doc) => ({ ...doc, _id: doc.artistId }));
     const playerArtists = sortAndLimitByMetric(
       metric,
-      playerArtistDocs.filter((doc) => doc.userId === player.userId).map((doc) => ({ ...doc, _id: doc.artistId })),
+      playerArtistDocsForUser,
       maxPerBucket
     );
+    const playerArtistSources = sortByMetric(metric, playerArtistDocsForUser)
+      .map((doc) => artistPreviewSourceFromCountDoc(doc, metadata.artists));
     for (const doc of playerArtists) {
       const meta = metadata.artists.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
@@ -762,6 +1182,13 @@ async function buildAllTimeDatapoints({
         imageUrl: meta.images?.[0]?.url || null,
         previewKind: 'artist',
         previewArtistName: meta.name || 'Unknown Artist',
+        previewCandidates: [
+          buildArtistPreviewCandidate({
+            artistName: meta.name || 'Unknown Artist',
+            key: doc._id ? `artist::${doc._id}` : null,
+            reason: 'artist_primary',
+          }),
+        ],
         value,
       }));
     }
@@ -786,6 +1213,11 @@ async function buildAllTimeDatapoints({
         title: meta.name || 'Unknown Album',
         subtitle: [player.displayName, 'All Time', ...(meta.artistNames || [])].filter(Boolean).join(' · '),
         imageUrl: meta.images?.[0]?.url || null,
+        previewCandidates: buildAlbumPreviewCandidates({
+          albumId: doc._id,
+          artistNames: meta.artistNames || [],
+          trackSources: playerTrackSources,
+        }),
         value,
       }));
     }
@@ -808,6 +1240,11 @@ async function buildAllTimeDatapoints({
         entityId: doc._id,
         title: doc._id || 'Unknown Genre',
         subtitle: `${player.displayName} · All Time`,
+        previewCandidates: buildGenrePreviewCandidates({
+          genreName: doc._id,
+          trackSources: playerTrackSources,
+          artistSources: playerArtistSources,
+        }),
         value,
       }));
     }
@@ -846,7 +1283,10 @@ async function buildAllTimeDatapoints({
     }));
   }
 
-  for (const doc of sortAndLimitByMetric(metric, roomTrackDocs, maxPerBucket)) {
+  const sortedRoomTracks = sortAndLimitByMetric(metric, roomTrackDocs, maxPerBucket);
+  const roomTrackSources = sortByMetric(metric, roomTrackDocs)
+    .map((doc) => trackPreviewSourceFromCountDoc(doc, metadata.tracks));
+  for (const doc of sortedRoomTracks) {
     const meta = metadata.tracks.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
@@ -863,12 +1303,23 @@ async function buildAllTimeDatapoints({
       previewKind: 'track',
       previewTrackName: meta.name || 'Unknown Track',
       previewArtistName: (meta.artistNames || []).join(', ') || null,
+      previewCandidates: [
+        buildTrackPreviewCandidate({
+          trackName: meta.name || 'Unknown Track',
+          artistName: (meta.artistNames || []).join(', ') || null,
+          key: doc._id ? `track::${doc._id}` : null,
+          reason: 'track_primary',
+        }),
+      ],
       value,
       contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
-  for (const doc of sortAndLimitByMetric(metric, roomArtistDocs, maxPerBucket)) {
+  const sortedRoomArtists = sortAndLimitByMetric(metric, roomArtistDocs, maxPerBucket);
+  const roomArtistSources = sortByMetric(metric, roomArtistDocs)
+    .map((doc) => artistPreviewSourceFromCountDoc(doc, metadata.artists));
+  for (const doc of sortedRoomArtists) {
     const meta = metadata.artists.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
@@ -884,12 +1335,20 @@ async function buildAllTimeDatapoints({
       imageUrl: meta.images?.[0]?.url || null,
       previewKind: 'artist',
       previewArtistName: meta.name || 'Unknown Artist',
+      previewCandidates: [
+        buildArtistPreviewCandidate({
+          artistName: meta.name || 'Unknown Artist',
+          key: doc._id ? `artist::${doc._id}` : null,
+          reason: 'artist_primary',
+        }),
+      ],
       value,
       contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
-  for (const doc of sortAndLimitByMetric(metric, roomAlbumDocs, maxPerBucket)) {
+  const sortedRoomAlbums = sortAndLimitByMetric(metric, roomAlbumDocs, maxPerBucket);
+  for (const doc of sortedRoomAlbums) {
     const meta = metadata.albums.get(doc._id) || {};
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
@@ -903,12 +1362,18 @@ async function buildAllTimeDatapoints({
       title: meta.name || 'Unknown Album',
       subtitle: ['Whole Room', 'All Time', ...(meta.artistNames || [])].filter(Boolean).join(' · '),
       imageUrl: meta.images?.[0]?.url || null,
+      previewCandidates: buildAlbumPreviewCandidates({
+        albumId: doc._id,
+        artistNames: meta.artistNames || [],
+        trackSources: roomTrackSources,
+      }),
       value,
       contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
   }
 
-  for (const doc of sortAndLimitByMetric(metric, roomGenreDocs, maxPerBucket)) {
+  const sortedRoomGenres = sortAndLimitByMetric(metric, roomGenreDocs, maxPerBucket);
+  for (const doc of sortedRoomGenres) {
     const value = metricValueFromDoc(metric, doc);
     if (value <= 0) continue;
     const contributors = genreContributors.get(doc._id);
@@ -920,6 +1385,11 @@ async function buildAllTimeDatapoints({
       entityId: doc._id,
       title: doc._id || 'Unknown Genre',
       subtitle: 'Whole Room · All Time',
+      previewCandidates: buildGenrePreviewCandidates({
+        genreName: doc._id,
+        trackSources: roomTrackSources,
+        artistSources: roomArtistSources,
+      }),
       value,
       contributorPlayerIds: contributors ? Array.from(contributors) : null,
     }));
@@ -982,19 +1452,6 @@ async function buildTimeframedDatapoints({
     const timeframeTimer = startPerfTimer();
     const datapointCountBefore = datapoints.length;
 
-    for (const player of players) {
-      const snapshot = snapshotsByUserId.get(player.userId) || null;
-      pushPlayerSnapshotDatapoints({
-        datapoints,
-        snapshotDoc: snapshot,
-        player,
-        metric,
-        timeframe,
-        includeAllTimeTotals: false,
-        maxPerBucket,
-      });
-    }
-
     const def = defsByKey.get(timeframe);
     if (!def) continue;
     const bounds = buildWindowBounds(new Date(), def);
@@ -1006,7 +1463,7 @@ async function buildTimeframedDatapoints({
     }
 
     const queryTimer = startPerfTimer();
-    const [roomTotals, roomTracks] = await Promise.all([
+    const [roomTotals, roomTracks, userTimeframedTracks] = await Promise.all([
       statsCol.aggregate([
         { $match: match },
         {
@@ -1029,11 +1486,51 @@ async function buildTimeframedDatapoints({
           },
         },
       ]).toArray(),
+      trackDailyCol.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: { userId: '$userId', trackId: '$trackId' },
+            plays: { $sum: '$plays' },
+            msPlayed: { $sum: '$msPlayed' },
+          },
+        },
+      ]).toArray(),
     ]);
+
     const queryMs = roundPerfMs(queryTimer);
 
-    const trackIds = new Set(roomTracks.map((doc) => doc._id).filter(Boolean));
+    const trackIds = new Set([
+      ...roomTracks.map((doc) => doc._id).filter(Boolean),
+      ...userTimeframedTracks.map((doc) => doc._id?.trackId).filter(Boolean),
+    ]);
     const metadata = await loadMetadataMaps(db, { trackIds }, `timeframe:${timeframe}`, metadataCache);
+    const {
+      albumTrackByUser,
+      genreTrackByUser,
+      genreArtistByUser,
+    } = buildTargetedSnapshotPreviewMaps({
+      userTrackDocs: userTimeframedTracks,
+      metadata,
+      metric,
+    });
+
+    for (const player of players) {
+      const snapshot = snapshotsByUserId.get(player.userId) || null;
+      pushPlayerSnapshotDatapoints({
+        datapoints,
+        snapshotDoc: snapshot,
+        player,
+        metric,
+        timeframe,
+        includeAllTimeTotals: false,
+        maxPerBucket,
+        albumTrackByUser,
+        genreTrackByUser,
+        genreArtistByUser,
+      });
+    }
+
     const roomArtists = new Map();
     const roomAlbums = new Map();
     const roomGenres = new Map();
@@ -1088,7 +1585,10 @@ async function buildTimeframedDatapoints({
       }));
     }
 
-    for (const doc of sortAndLimitByMetric(metric, roomTracks, maxPerBucket)) {
+    const sortedRoomTracks = sortAndLimitByMetric(metric, roomTracks, maxPerBucket);
+    const roomTrackSources = sortByMetric(metric, roomTracks)
+      .map((doc) => trackPreviewSourceFromCountDoc(doc, metadata.tracks));
+    for (const doc of sortedRoomTracks) {
       const meta = metadata.tracks.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
@@ -1105,12 +1605,24 @@ async function buildTimeframedDatapoints({
         previewKind: 'track',
         previewTrackName: meta.name || 'Unknown Track',
         previewArtistName: (meta.artistNames || []).join(', ') || null,
+        previewCandidates: [
+          buildTrackPreviewCandidate({
+            trackName: meta.name || 'Unknown Track',
+            artistName: (meta.artistNames || []).join(', ') || null,
+            key: doc._id ? `track::${doc._id}` : null,
+            reason: 'track_primary',
+          }),
+        ],
         value,
         contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
-    for (const doc of sortAndLimitByMetric(metric, Array.from(roomArtists.entries()).map(([id, counts]) => ({ _id: id, ...counts })), maxPerBucket)) {
+    const roomArtistDocsFromTracks = Array.from(roomArtists.entries()).map(([id, counts]) => ({ _id: id, ...counts }));
+    const sortedRoomArtists = sortAndLimitByMetric(metric, roomArtistDocsFromTracks, maxPerBucket);
+    const roomArtistSources = sortByMetric(metric, roomArtistDocsFromTracks)
+      .map((doc) => artistPreviewSourceFromCountDoc(doc, metadata.artists));
+    for (const doc of sortedRoomArtists) {
       const meta = metadata.artists.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
@@ -1126,12 +1638,21 @@ async function buildTimeframedDatapoints({
         imageUrl: meta.images?.[0]?.url || null,
         previewKind: 'artist',
         previewArtistName: meta.name || 'Unknown Artist',
+        previewCandidates: [
+          buildArtistPreviewCandidate({
+            artistName: meta.name || 'Unknown Artist',
+            key: doc._id ? `artist::${doc._id}` : null,
+            reason: 'artist_primary',
+          }),
+        ],
         value,
         contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
-    for (const doc of sortAndLimitByMetric(metric, Array.from(roomAlbums.entries()).map(([id, counts]) => ({ _id: id, ...counts })), maxPerBucket)) {
+    const roomAlbumDocsFromTracks = Array.from(roomAlbums.entries()).map(([id, counts]) => ({ _id: id, ...counts }));
+    const sortedRoomAlbums = sortAndLimitByMetric(metric, roomAlbumDocsFromTracks, maxPerBucket);
+    for (const doc of sortedRoomAlbums) {
       const meta = metadata.albums.get(doc._id) || {};
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
@@ -1145,12 +1666,19 @@ async function buildTimeframedDatapoints({
         title: meta.name || 'Unknown Album',
         subtitle: ['Whole Room', formatTimeframeLabel(timeframe), ...(meta.artistNames || [])].filter(Boolean).join(' · '),
         imageUrl: meta.images?.[0]?.url || null,
+        previewCandidates: buildAlbumPreviewCandidates({
+          albumId: doc._id,
+          artistNames: meta.artistNames || [],
+          trackSources: roomTrackSources,
+        }),
         value,
         contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
     }
 
-    for (const doc of sortAndLimitByMetric(metric, Array.from(roomGenres.entries()).map(([id, counts]) => ({ _id: id, ...counts })), maxPerBucket)) {
+    const roomGenreDocsFromTracks = Array.from(roomGenres.entries()).map(([id, counts]) => ({ _id: id, ...counts }));
+    const sortedRoomGenres = sortAndLimitByMetric(metric, roomGenreDocsFromTracks, maxPerBucket);
+    for (const doc of sortedRoomGenres) {
       const value = metricValueFromDoc(metric, doc);
       if (value <= 0) continue;
       const contributors = genreContributors.get(doc._id);
@@ -1162,6 +1690,11 @@ async function buildTimeframedDatapoints({
         entityId: doc._id,
         title: doc._id || 'Unknown Genre',
         subtitle: `Whole Room · ${formatTimeframeLabel(timeframe)}`,
+        previewCandidates: buildGenrePreviewCandidates({
+          genreName: doc._id,
+          trackSources: roomTrackSources,
+          artistSources: roomArtistSources,
+        }),
         value,
         contributorPlayerIds: contributors ? Array.from(contributors) : null,
       }));
@@ -1176,6 +1709,7 @@ async function buildTimeframedDatapoints({
       counts: {
         roomTotals: roomTotals.length,
         roomTracks: roomTracks.length,
+        userTimeframedTracks: userTimeframedTracks.length,
         trackIds: trackIds.size,
         roomArtists: roomArtists.size,
         roomAlbums: roomAlbums.size,
@@ -1933,8 +2467,15 @@ module.exports = {
   pickChallenger,
   helpers: {
     appendRecentPromptTraitValues,
+    buildAlbumPreviewCandidates,
+    buildArtistPreviewCandidate,
+    buildGenrePreviewCandidates,
+    buildPreviewCandidateKey,
+    buildTargetedSnapshotPreviewMaps,
     buildContributorMap,
     buildSeenOwnerList,
+    buildTrackPreviewCandidate,
+    dedupePreviewCandidates,
     displayMetricValue,
     formatTimeframeLabel,
     getEligiblePlayers,

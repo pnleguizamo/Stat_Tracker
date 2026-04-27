@@ -1,9 +1,9 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAutoFitScale } from "game/hooks/useAutoFitScale";
-import { useTrackPreview } from "game/hooks/useTrackPreview";
+import { getPreviewSourceKey, useTrackPreview } from "game/hooks/useTrackPreview";
 import { socket } from "socket";
 import { PlayerAvatar } from "components/PlayerAvatar";
-import { GameState, HigherLowerDatapoint, HigherLowerRoundState, Player } from "types/game";
+import { GameState, HigherLowerDatapoint, HigherLowerRoundState, Player, PreviewCandidate } from "types/game";
 import {
   HostActionRow,
   HostCard,
@@ -111,6 +111,52 @@ function artFallbackLabel(datapoint?: HigherLowerDatapoint | null) {
   if (!datapoint?.entityType) return "STAT";
   if (datapoint.entityType === "TOTAL") return "TOTAL";
   return datapoint.entityType.slice(0, 10);
+}
+
+function buildDatapointPreviewSources(datapoint?: HigherLowerDatapoint | null): PreviewCandidate[] {
+  if (!datapoint) return [];
+  if (datapoint.previewCandidates?.length) return datapoint.previewCandidates;
+
+  if (datapoint.previewKind === "artist" && datapoint.previewArtistName) {
+    return [{
+      kind: "artist",
+      artistName: datapoint.previewArtistName,
+      key: datapoint.id || datapoint.previewArtistName,
+      reason: "legacy_artist",
+    }];
+  }
+
+  if (datapoint.previewKind === "track" && datapoint.previewTrackName) {
+    return [{
+      kind: "track",
+      trackName: datapoint.previewTrackName,
+      artistName: datapoint.previewArtistName ?? undefined,
+      key: datapoint.id || datapoint.previewTrackName,
+      reason: "legacy_track",
+    }];
+  }
+
+  return [];
+}
+
+function buildRoundPreviewSources(round?: HigherLowerRoundState | null): PreviewCandidate[] {
+  // Prefer the challenger preview first so each round introduces the new/right card before
+  // falling back to the left anchor when the challenger has no playable preview.
+  const orderedSources = [
+    ...buildDatapointPreviewSources(round?.right),
+    ...buildDatapointPreviewSources(round?.left),
+  ];
+  const dedupedSources: PreviewCandidate[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const source of orderedSources) {
+    const sourceKey = getPreviewSourceKey(source);
+    if (!sourceKey || seenKeys.has(sourceKey)) continue;
+    seenKeys.add(sourceKey);
+    dedupedSources.push(source);
+  }
+
+  return dedupedSources;
 }
 
 /* ── SVG entity icons ── */
@@ -374,17 +420,15 @@ export const HigherLowerHost: FC<Props> = (props) => {
     };
   }, []);
 
-  const activeDatapoint = round?.right || round?.left;
-  const previewKind = activeDatapoint?.previewKind ?? null;
-  const previewEnabled = previewKind === "track" || previewKind === "artist";
+  const previewSources = useMemo(
+    () => buildRoundPreviewSources(round),
+    [round?.id, round?.left?.id, round?.right?.id]
+  );
 
   useTrackPreview({
-    trackName: activeDatapoint?.previewTrackName ?? undefined,
-    artistName: activeDatapoint?.previewArtistName ?? undefined,
-    previewKey: previewEnabled ? activeDatapoint?.id ?? undefined : undefined,
-    enabled: previewEnabled,
+    sources: previewSources,
+    enabled: previewSources.length > 0,
     volume: round?.status === "revealed" ? 0.1 : 0.3,
-    kind: previewKind === "artist" ? "artist" : "track",
   });
 
   const handleStartRound = useCallback(() => {
