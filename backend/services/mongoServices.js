@@ -230,6 +230,7 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
                             spotify_track_uri: track.trackUri,
                             ms_played: track.duration, // This is the full duration since we can't know if it was fully played
                             reason_end: "trackdone", // Assuming completed since it's in recent history
+                            source: "recent-playback",
                         }
                     },
                     upsert: true

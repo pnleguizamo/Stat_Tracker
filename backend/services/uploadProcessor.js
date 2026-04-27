@@ -4,6 +4,16 @@ const { COLLECTIONS } = require('../mongo.js');
 const { ingestNormalizedStreamEvents } = require('./streamNormalizationService.js');
 
 const RAW_STREAM_SOURCE = 'bulk-json-upload';
+const RAW_BULK_BATCH_SIZE = Number(process.env.UPLOAD_RAW_BULK_BATCH_SIZE || 500);
+
+class UploadFileProcessingError extends Error {
+  constructor(message, cause, report) {
+    super(message);
+    this.name = 'UploadFileProcessingError';
+    this.cause = cause;
+    this.report = report;
+  }
+}
 
 function createEmptyUploadSummary(userId) {
   return {
@@ -58,8 +68,15 @@ function buildUploadSummary(userId, reports) {
   return summary;
 }
 
+async function executeRawBulk(collection, operations) {
+  if (!operations.length) return 0;
+  const bulkResult = await collection.bulkWrite(operations, { ordered: false });
+  return bulkResult.upsertedCount || 0;
+}
+
 async function processStagedUploadFile({ db, file, userId }) {
   const report = createFileReport(file);
+  const previousInserted = Number(file.inserted || 0);
 
   if (!report.originalName.startsWith('Streaming_History_Audio') || !report.originalName.endsWith('.json')) {
     report.reasonSkipped = 'Filename does not look like a Spotify extended history file (Streaming_History_Audio_*.json).';
@@ -77,55 +94,72 @@ async function processStagedUploadFile({ db, file, userId }) {
   report.totalRows = json.length;
 
   const collection = db.collection(COLLECTIONS.rawStreams);
-  const operations = [];
   const normalizedRows = [];
   let invalidRows = 0;
+  let inserted = previousInserted;
+  let totalCandidates = 0;
+  let operations = [];
   const perFileSeen = new Set();
 
-  for (const row of json) {
-    if (!row.ts || !row.ms_played || !row.spotify_track_uri) {
-      invalidRows++;
-      continue;
+  try {
+    for (const row of json) {
+      if (!row.ts || !row.ms_played || !row.spotify_track_uri) {
+        invalidRows++;
+        continue;
+      }
+
+      const dedupeKey = `${row.ts}|${row.spotify_track_uri}`;
+      if (perFileSeen.has(dedupeKey)) continue;
+      perFileSeen.add(dedupeKey);
+
+      totalCandidates++;
+      operations.push({
+        updateOne: {
+          filter: {
+            userId,
+            ts: row.ts,
+            spotify_track_uri: row.spotify_track_uri,
+          },
+          update: {
+            $setOnInsert: {
+              ...row,
+              userId,
+              source: RAW_STREAM_SOURCE,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      normalizedRows.push({
+        ts: row.ts,
+        ms_played: row.ms_played,
+        spotify_track_uri: row.spotify_track_uri,
+        reason_end: row.reason_end,
+      });
+
+      if (operations.length >= RAW_BULK_BATCH_SIZE) {
+        inserted += await executeRawBulk(collection, operations);
+        operations = [];
+      }
     }
 
-    const dedupeKey = `${row.ts}|${row.spotify_track_uri}`;
-    if (perFileSeen.has(dedupeKey)) continue;
-    perFileSeen.add(dedupeKey);
+    report.invalidRows = invalidRows;
 
-    operations.push({
-      updateOne: {
-        filter: {
-          userId,
-          ts: row.ts,
-          spotify_track_uri: row.spotify_track_uri,
-        },
-        update: {
-          $setOnInsert: {
-            ...row,
-            userId,
-          },
-        },
-        upsert: true,
-      },
-    });
-
-    normalizedRows.push({
-      ts: row.ts,
-      ms_played: row.ms_played,
-      spotify_track_uri: row.spotify_track_uri,
-      reason_end: row.reason_end,
-    });
+    if (operations.length > 0) {
+      inserted += await executeRawBulk(collection, operations);
+    }
+  } catch (err) {
+    report.invalidRows = invalidRows;
+    report.inserted = inserted;
+    report.duplicatesOrExisting = Math.max(0, totalCandidates - inserted);
+    report.error = err?.message || 'Failed to process file.';
+    throw new UploadFileProcessingError(report.error, err, report);
   }
 
-  report.invalidRows = invalidRows;
-
-  if (operations.length > 0) {
-    const bulkResult = await collection.bulkWrite(operations, { ordered: false });
-    const inserted = bulkResult.upsertedCount || 0;
-    const totalCandidates = operations.length;
-
+  if (totalCandidates > 0) {
     report.inserted = inserted;
-    report.duplicatesOrExisting = totalCandidates - inserted;
+    report.duplicatesOrExisting = Math.max(0, totalCandidates - inserted);
   }
 
   if (normalizedRows.length) {
@@ -146,4 +180,5 @@ module.exports = {
   addFileReportToSummary,
   buildUploadSummary,
   processStagedUploadFile,
+  UploadFileProcessingError,
 };

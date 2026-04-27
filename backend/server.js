@@ -57,7 +57,11 @@ if (process.env.NODE_ENV !== 'production') {
   await initDb();
   startUploadIngestionWorker();
   if (process.env.NODE_ENV === 'production') {
-    require('./services/pollingService.js');
+    if (process.env.POLLING_ENABLED !== 'false') {
+      require('./services/pollingService.js');
+    } else {
+      console.log('Spotify recent playback polling disabled by POLLING_ENABLED=false');
+    }
     startMetadataCacheWorker();
     startRollupWorker({ reason: 'server-start', registerSignals: false });
   }

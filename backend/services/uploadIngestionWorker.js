@@ -34,13 +34,81 @@ function isLostJobLockError(err) {
 }
 
 function createFailedFileReport(file, err) {
+  if (err?.report) {
+    return {
+      ...file,
+      ...err.report,
+      processed: false,
+      error: err.report.error || err.message || 'Failed to process file.',
+    };
+  }
+
   return {
-    ...file,
     ...createFileReport(file),
+    ...file,
     processed: false,
     reasonSkipped: null,
     error: err?.message || 'Failed to process file.',
   };
+}
+
+function isAudioHistoryFile(file) {
+  const name = String(file?.originalName || file?.originalname || '');
+  return name.startsWith('Streaming_History_Audio') && name.endsWith('.json');
+}
+
+function buildFinalJobState(reports) {
+  const audioReports = (reports || []).filter(isAudioHistoryFile);
+  const failedAudioReports = audioReports.filter((report) => !report.processed || report.error);
+
+  if (!audioReports.length) {
+    return {
+      status: 'failed',
+      error: 'No Spotify audio history files were processed.',
+    };
+  }
+
+  if (failedAudioReports.length) {
+    return {
+      status: 'failed',
+      error: `${failedAudioReports.length} Spotify audio history file(s) failed to process.`,
+    };
+  }
+
+  return {
+    status: 'succeeded',
+    error: null,
+  };
+}
+
+function isRetryableProcessingError(err) {
+  const retryableNames = new Set([
+    'MongoNetworkError',
+    'MongoNetworkTimeoutError',
+    'MongoServerSelectionError',
+    'MongoTopologyClosedError',
+  ]);
+
+  const seen = new Set();
+  const stack = [err];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+
+    const message = String(current.message || '');
+    if (retryableNames.has(current.name)
+      || current.hasErrorLabel?.('RetryableWriteError')
+      || current.code === 'ETIMEDOUT'
+      || /timed out/i.test(message)) {
+      return true;
+    }
+
+    stack.push(current.cause, current.errorResponse, current.result);
+  }
+
+  return false;
 }
 
 class UploadIngestionWorker {
@@ -236,6 +304,13 @@ class UploadIngestionWorker {
         try {
           report = await processStagedUploadFile({ db, file, userId: job.userId });
         } catch (err) {
+          if (isRetryableProcessingError(err)) {
+            if (err.report) {
+              reports[index] = { ...file, ...err.report };
+              summary = await this.persistFileProgress(jobs, job, index, reports[index], reports);
+            }
+            throw err;
+          }
           report = createFailedFileReport(file, err);
           console.error(
             `[UploadWorker] Upload ${job.uploadId} file ${file.originalName || file.stagedName || index} failed:`,
@@ -249,17 +324,18 @@ class UploadIngestionWorker {
 
       const now = new Date();
       summary = buildUploadSummary(job.userId, reports);
+      const finalState = buildFinalJobState(reports);
       const finalUpdate = await jobs.updateOne(
         { _id: job._id, lockedBy: this.workerId },
         {
           $set: {
-            status: 'succeeded',
+            status: finalState.status,
             files: reports,
             summary,
             // Staged files are retained intentionally on the server for local forensics.
             lockedAt: null,
             lockedBy: null,
-            error: null,
+            error: finalState.error,
             updatedAt: now,
             completedAt: now,
           },
@@ -270,7 +346,7 @@ class UploadIngestionWorker {
         return;
       }
 
-      console.log(`[UploadWorker] Upload ${job.uploadId} succeeded for user ${job.userId}`);
+      console.log(`[UploadWorker] Upload ${job.uploadId} ${finalState.status} for user ${job.userId}`);
     } catch (err) {
       if (isLostJobLockError(err)) {
         return;

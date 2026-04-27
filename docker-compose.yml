@@ -24,6 +24,10 @@ services:
       - UPLOAD_WORKER_INTERVAL_MS=3000
       - UPLOAD_JOB_STALE_MS=600000
       - UPLOAD_JOB_MAX_ATTEMPTS=3
+      - UPLOAD_RAW_BULK_BATCH_SIZE=100
+      - MONGO_SOCKET_TIMEOUT_MS=120000
+      - MONGO_CONNECT_TIMEOUT_MS=30000
+      - POLLING_ENABLED=true
     volumes:
       - upload_staging:/var/lib/stat-tracker/uploads
     expose:

@@ -109,7 +109,7 @@ function FileUpload() {
           window.localStorage.removeItem(activeUploadKey(userId));
           setActiveUploadId(null);
           setIsPolling(false);
-          if (job.status === 'succeeded') {
+          if (job.files?.length || job.status === 'succeeded') {
             setResponse(buildSummaryFromJob(job));
           }
           return;

@@ -43,6 +43,11 @@ async function ensureIndexes(dbInstance) {
   if (indexesEnsured) return;
 
   const indexDefs = [
+    {
+      collection: COLLECTIONS.rawStreams,
+      keys: { userId: 1, ts: 1, spotify_track_uri: 1 },
+      options: { name: "raw_streams_user_ts_track_uri" },
+    },
     { collection: COLLECTIONS.streams, keys: { userId: 1, ts: 1 }, options: { name: "streams_user_ts" } },
     { collection: COLLECTIONS.streams, keys: { userId: 1, ts: 1, trackId: 1 }, options: { name: "uniq_stream_per_user", unique: true } },
     {
