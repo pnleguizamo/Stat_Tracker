@@ -35,6 +35,10 @@ export const HitsterHost: FC<HostMinigameProps> = ({
   const stageProgress = round?.stageProgress;
   const results = round?.results;
   const gameWinners = results?.winners || [];
+  const gameWinnerNames = gameWinners.map(id => {
+    const p = players.find(pl => pl.playerId === id);
+    return p?.displayName || p?.name || id;
+  });
 
   const [revealAnim, setRevealAnim] = useState(false);
 
@@ -198,10 +202,7 @@ export const HitsterHost: FC<HostMinigameProps> = ({
       {isRevealed && gameWinners.length > 0 && (
         <HostCard padded className="hitster-winner-card">
           <div className="hitster-winner-text">
-            {gameWinners.map(id => {
-              const p = players.find(pl => pl.playerId === id);
-              return p?.displayName || p?.name || id;
-            }).join(', ')} wins!
+            {gameWinnerNames.join(', ')} {gameWinners.length === 1 ? 'wins' : 'win'}!
           </div>
         </HostCard>
       )}

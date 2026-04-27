@@ -42,22 +42,10 @@ router.get("/track_preview", authenticate, async (req, res) => {
 
         const resp = await getTrackPreview(trackName, artistName || null, limit);
         const tracks = Array.isArray(resp.tracks) ? resp.tracks : [];
-        const firstPreviewUrl = tracks[0]?.previewUrls || null;
-        const selectedTrack = tracks.find((track) => track?.previewUrls) || null;
-        const selectedIndex = selectedTrack
-            ? tracks.findIndex((track) => track?.trackId === selectedTrack.trackId)
-            : -1;
-        const usedFallbackPreview = selectedIndex > 0;
-        console.info('track_preview selection', {
-            trackName,
-            artistName: artistName || null,
-            resultCount: tracks.length,
-            firstResultHasPreview: !!firstPreviewUrl,
-            fallbackPreviewSearchRan: !firstPreviewUrl && tracks.length > 1,
-            selectedIndex,
-            usedFallbackPreview,
-        });
-        const previewUrl = selectedTrack?.previewUrls || null;
+        const previewUrl =
+            resp.previewUrl ||
+            tracks.find((track) => track?.previewUrls)?.previewUrls ||
+            null;
         if (!previewUrl) {
             return res.status(404).json({ ok: false, error: 'no_preview' });
         }

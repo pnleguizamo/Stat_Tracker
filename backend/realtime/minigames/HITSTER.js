@@ -177,7 +177,9 @@ async function resolveSongPreview(stageState, song) {
     : null;
   const resp = await getTrackPreview(song.track_name, primaryArtist || null, 8);
   const previewUrl =
-    resp?.tracks?.find((track) => track?.previewUrls)?.previewUrls || null;
+    resp?.previewUrl ||
+    resp?.tracks?.find((track) => track?.previewUrls)?.previewUrls ||
+    null;
 
   if (song.id) {
     if (previewUrl) {

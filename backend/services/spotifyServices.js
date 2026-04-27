@@ -125,7 +125,25 @@ async function getTrackPreview(songName, artistName, limit = 5) {
     const tracks = data.data || [];
 
     if (!tracks.length) {
-      return { tracks: [], searchQuery };
+      console.info('deezer track preview selection', {
+        songName,
+        artistName: artistName || null,
+        searchQuery,
+        limit,
+        resultCount: 0,
+        firstResultHasPreview: false,
+        fallbackPreviewSearchRan: false,
+        selectedIndex: -1,
+        usedFallbackPreview: false,
+      });
+      return {
+        tracks: [],
+        searchQuery,
+        previewUrl: null,
+        selectedTrack: null,
+        selectedIndex: -1,
+        usedFallbackPreview: false,
+      };
     }
 
     const results = tracks.map((track) => ({
@@ -139,7 +157,49 @@ async function getTrackPreview(songName, artistName, limit = 5) {
       durationMs: track.duration ? track.duration * 1000 : undefined,
     }));
 
-    return { tracks: results, searchQuery };
+    const firstPreviewUrl = results[0]?.previewUrls || null;
+    const selectedIndex = results.findIndex((track) => track?.previewUrls);
+    const selectedTrack = selectedIndex >= 0 ? results[selectedIndex] : null;
+    const usedFallbackPreview = selectedIndex > 0;
+
+    console.info('deezer track preview selection', {
+      songName,
+      artistName: artistName || null,
+      searchQuery,
+      limit,
+      resultCount: results.length,
+      firstResultHasPreview: !!firstPreviewUrl,
+      fallbackPreviewSearchRan: !firstPreviewUrl && results.length > 1,
+      selectedIndex,
+      usedFallbackPreview,
+      selectedTrack: selectedTrack
+        ? {
+            trackId: selectedTrack.trackId,
+            name: selectedTrack.name,
+            albumName: selectedTrack.albumName,
+            releaseDate: selectedTrack.releaseDate,
+            popularity: selectedTrack.popularity,
+          }
+        : null,
+      candidates: results.map((track, index) => ({
+        index,
+        trackId: track.trackId,
+        name: track.name,
+        albumName: track.albumName,
+        releaseDate: track.releaseDate,
+        popularity: track.popularity,
+        hasPreview: !!track.previewUrls,
+      })),
+    });
+
+    return {
+      tracks: results,
+      searchQuery,
+      previewUrl: selectedTrack?.previewUrls || null,
+      selectedTrack,
+      selectedIndex,
+      usedFallbackPreview,
+    };
   } catch (error) {
     console.error('deezer preview search failed', {
       songName,
@@ -147,7 +207,14 @@ async function getTrackPreview(songName, artistName, limit = 5) {
       error: error.message,
       status: error.status,
     });
-    return { tracks: [], searchQuery: null };
+    return {
+      tracks: [],
+      searchQuery: null,
+      previewUrl: null,
+      selectedTrack: null,
+      selectedIndex: -1,
+      usedFallbackPreview: false,
+    };
   }
 }
 

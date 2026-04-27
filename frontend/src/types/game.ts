@@ -90,6 +90,14 @@ export type WhoListenedMostRoundState = {
   };
 };
 
+export type PreviewCandidate = {
+  kind: 'track' | 'artist';
+  trackName?: string | null;
+  artistName?: string | null;
+  key?: string | null;
+  reason?: string | null;
+};
+
 export type HigherLowerDatapoint = {
   id: string;
   metric: string;
@@ -105,6 +113,7 @@ export type HigherLowerDatapoint = {
   previewKind?: 'track' | 'artist' | null;
   previewTrackName?: string | null;
   previewArtistName?: string | null;
+  previewCandidates?: PreviewCandidate[] | null;
   value?: number;
   displayValue?: number;
   contributorPlayerIds?: string[] | null;
