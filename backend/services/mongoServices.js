@@ -211,6 +211,7 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
     try {
         db = await initDb();
         const collection = db.collection(collectionName);
+        const now = new Date();
         const ops = recentTracks.map(track => {
             const tsIso = new Date(track.playedAt).toISOString();
             return {
@@ -231,6 +232,7 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
                             ms_played: track.duration, // This is the full duration since we can't know if it was fully played
                             reason_end: "trackdone", // Assuming completed since it's in recent history
                             source: "recent-playback",
+                            createdAt: now,
                         }
                     },
                     upsert: true
@@ -238,24 +240,38 @@ mongoService.syncRecentStreams = async (recentTracks, userId) => {
             };
         });
 
-        let insertedCount = 0;
+        let rawInserted = 0;
         if (ops.length) {
             const res = await collection.bulkWrite(ops, { ordered: false });
-            insertedCount = res.upsertedCount || 0;
+            rawInserted = res.upsertedCount || 0;
         }
 
-        await ingestNormalizedStreamEvents(
-            recentTracks.map(track => ({
-                ts: track.playedAt,
-                ms_played: track.duration,
-                spotify_track_uri: track.trackUri,
-                reason_end: 'trackdone',
-            })),
-            userId,
-            { source: 'recent-playback' }
-        );
+        const stats = {
+            fetched: recentTracks.length,
+            rawInserted,
+            normalizedInserted: 0,
+            trackStubsCreated: 0,
+        };
 
-        return insertedCount;
+        try {
+            const normalized = await ingestNormalizedStreamEvents(
+                recentTracks.map(track => ({
+                    ts: track.playedAt,
+                    ms_played: track.duration,
+                    spotify_track_uri: track.trackUri,
+                    reason_end: 'trackdone',
+                })),
+                userId,
+                { source: 'recent-playback' }
+            );
+
+            stats.normalizedInserted = normalized.inserted || 0;
+            stats.trackStubsCreated = normalized.trackStubsCreated || 0;
+            return stats;
+        } catch (error) {
+            error.syncRecentStreamsStats = stats;
+            throw error;
+        }
     } catch (error) {
         console.error('Error syncing recent streams:', error);
         throw error;

@@ -5,7 +5,23 @@ const { getRecentlyPlayedSongs } = require('../services/spotifyServices.js');
 const { getAccessToken } = require('./authService.js');
 
 const collectionName = COLLECTIONS.rawStreams;
+const SPOTIFY_RECENTLY_PLAYED_LIMIT = 50;
 let db;
+
+function logSyncStats(displayName, syncStats, suffix = '') {
+    const hitRecentlyPlayedLimit = syncStats.fetched >= SPOTIFY_RECENTLY_PLAYED_LIMIT;
+    const hasNewInserts = syncStats.rawInserted || syncStats.normalizedInserted;
+    if (!hasNewInserts && !hitRecentlyPlayedLimit) return;
+
+    const capWarning = hitRecentlyPlayedLimit
+        ? ' (may have hit Spotify\'s 50-play cap; older plays may be missing)'
+        : '';
+    console.log(
+        `User ${displayName}: fetched ${syncStats.fetched} recent plays, ` +
+        `inserted ${syncStats.rawInserted} raw streams, ` +
+        `inserted ${syncStats.normalizedInserted} normalized streams${capWarning}${suffix}`
+    );
+}
 
 async function createIndex(){
     db = await initDb();
@@ -19,34 +35,35 @@ async function createIndex(){
 cron.schedule('*/10 * * * *', async () => {
     try {
         db = await initDb();
-        
-        const start = Date.now();
-        // console.log("Cron started at:", new Date(start).toISOString());
 
         const users = await db.collection('oauth_tokens').find({}, { projection: { accountId: 1, display_name : 1  } }).toArray();
         const stateCol = db.collection("user_polling_state");
 
         for (const { accountId, display_name } of users) {
-            const state = await stateCol.findOne({ accountId }) || { afterMs: 0 };
-            const token = await getAccessToken(accountId);
-            const { tracks, maxPlayedAtMs } = await getRecentlyPlayedSongs(token, state.afterMs);
-            const newStreamsCount = await syncRecentStreams(tracks, accountId);
-            if (newStreamsCount) console.log(`User ${display_name}: inserted ${newStreamsCount} new streams`);
-            const end = Date.now();
-            const ms = end - start;
-            // console.log(`Cron finished in ${ms} ms (${(ms / 1000).toFixed(2)} seconds)`);
+            try {
+                const state = await stateCol.findOne({ accountId }) || { afterMs: 0 };
+                const token = await getAccessToken(accountId);
+                const { tracks, maxPlayedAtMs } = await getRecentlyPlayedSongs(token, state.afterMs, SPOTIFY_RECENTLY_PLAYED_LIMIT);
+                const syncStats = await syncRecentStreams(tracks, accountId);
+                logSyncStats(display_name, syncStats);
 
-            if (maxPlayedAtMs != null && maxPlayedAtMs > state.afterMs) {
-                await stateCol.updateOne(
-                    { accountId },
-                    {
-                        $set: {
-                            afterMs: maxPlayedAtMs + 1,   // strictly after last ingested play
-                            lastRunAt: new Date()
-                        }
-                    },
-                    { upsert: true }
-                );
+                if (maxPlayedAtMs != null && maxPlayedAtMs > state.afterMs) {
+                    await stateCol.updateOne(
+                        { accountId },
+                        {
+                            $set: {
+                                afterMs: maxPlayedAtMs + 1,   // strictly after last ingested play
+                                lastRunAt: new Date()
+                            }
+                        },
+                        { upsert: true }
+                    );
+                }
+            } catch (e) {
+                if (e.syncRecentStreamsStats) {
+                    logSyncStats(display_name, e.syncRecentStreamsStats, ' before sync failed');
+                }
+                console.error(`cron ingest error for user ${display_name || accountId}`, e);
             }
         }
     } catch (e) {
