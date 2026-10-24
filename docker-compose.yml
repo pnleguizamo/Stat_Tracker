@@ -53,6 +53,11 @@ services:
     restart: unless-stopped
     ports:
       - "80"
+    networks:
+      default:
+      tunnel:
+        aliases:
+          - stat-tracker-web
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -65,11 +70,18 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
+    networks:
+      - tunnel
     depends_on:
       - caddy
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+
+networks:
+  tunnel:
+    external: true
+    name: cloudflare_tunnel
 
 volumes:
   mongo_data:
