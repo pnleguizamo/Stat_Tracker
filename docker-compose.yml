@@ -17,6 +17,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - ENABLE_DEV_BOTS=${ENABLE_DEV_BOTS:-false}
       - MONGO_URI=${MONGO_URI}
       - PORT=8081
       - UPLOAD_STAGING_DIR=/var/lib/stat-tracker/uploads

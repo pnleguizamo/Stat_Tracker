@@ -36,6 +36,14 @@ function socketAuthMiddleware(socket, next) {
     }
 
     const isGuest = !!payload.guest;
+    if (isGuest && (typeof payload.gid !== 'string' || !payload.gid.trim())) {
+      return next(new Error('Authentication error: missing guest id'));
+    }
+    const isBot = payload.devBot === true;
+    if (isBot && (process.env.ENABLE_DEV_BOTS !== 'true' || !isGuest ||
+        typeof payload.spotifyUserId !== 'string' || !payload.spotifyUserId.trim())) {
+      return next(new Error('Authentication error: bots disabled or invalid'));
+    }
     const playerId = isGuest ? `g:${payload.gid}` : `u:${payload.sub}`;
 
     if (!playerId || playerId.endsWith(':')) {
@@ -43,7 +51,8 @@ function socketAuthMiddleware(socket, next) {
       return next(new Error('Authentication error: missing player id'));
     }
 
-    socket.accountId = isGuest ? null : payload.sub;
+    socket.accountId = isBot ? payload.spotifyUserId : (isGuest ? null : payload.sub);
+    socket.isBot = isBot;
     socket.authPayload = payload;
     socket.isGuest = isGuest;
     socket.playerId = playerId;

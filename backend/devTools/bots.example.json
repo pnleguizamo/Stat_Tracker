@@ -1,0 +1,11 @@
+{
+  "count": 4,
+  "seed": "trailer-take-1",
+  "minDelayMs": 3000,
+  "maxDelayMs": 7000,
+  "scripts": {
+    "HIGHER_LOWER": [{ "choice": "LEFT", "delayMs": 4000 }, { "choice": "RIGHT" }],
+    "HEARDLE": [{ "guesses": ["wrong", "skip", "correct"], "delayMs": 4000 }],
+    "HITSTER": [{ "gapIndex": "correct", "songGuess": "correct", "delayMs": 5000 }]
+  }
+}

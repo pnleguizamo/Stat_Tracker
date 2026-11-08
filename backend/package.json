@@ -18,6 +18,7 @@
     "node-cron": "^4.2.1",
     "punycode": "^2.3.1",
     "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.4",
     "sparse-bitfield": "^3.0.3",
     "tr46": "^4.1.1",
     "webidl-conversions": "^7.0.0",
@@ -31,7 +32,9 @@
     "rollups:canonical-backfill": "node scripts/backfillCanonicalIds.js",
     "rollups:stream-counts": "node scripts/rollupStreamCounts.js",
     "rollups:backfill": "node scripts/backfillRollups.js",
-    "higher-lower:simulate": "node scripts/simulateHigherLower.js"
+    "higher-lower:simulate": "node scripts/simulateHigherLower.js",
+    "bots": "node devTools/botRunner.js",
+    "bots:test": "node --test devTools/*.test.js"
   },
   "keywords": [],
   "author": "",
