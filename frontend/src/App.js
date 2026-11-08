@@ -17,6 +17,7 @@ import PlayerVotesSandbox from './pages/PlayerVotesSandbox.tsx';
 import LobbySandbox from './pages/LobbySandbox.tsx';
 import FinalRecapSandbox from './pages/FinalRecapSandbox.tsx';
 import LeaderboardSandbox from './pages/LeaderboardSandbox.tsx';
+import TrailerSandbox from './pages/TrailerSandbox.tsx';
 
 function ProtectedLayout() {
   return (
@@ -42,6 +43,7 @@ function App() {
         <Route path="/sandbox/lobby" element={<LobbySandbox />} />
         <Route path="/sandbox/final-recap" element={<FinalRecapSandbox />} />
         <Route path="/sandbox/leaderboard" element={<LeaderboardSandbox />} />
+        {process.env.NODE_ENV === 'development' && <Route path="/sandbox/trailer" element={<TrailerSandbox />} />}
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<CurrentlyPlaying />} />
           <Route path="/recently_played" element={<RecentlyPlayed />} />

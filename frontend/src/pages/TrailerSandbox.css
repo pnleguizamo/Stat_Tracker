@@ -1,0 +1,50 @@
+.trailer-root { position: relative; width: 100vw; height: 100vh; overflow: hidden; color: #f8fafc; font-family: "Space Grotesk", "Segoe UI", Arial, sans-serif; background: radial-gradient(ellipse 52% 62% at 15% 10%, rgba(34,211,238,.17), transparent), radial-gradient(ellipse 45% 65% at 90% 80%, rgba(168,85,247,.17), transparent), #030712; }
+.trailer-root, .trailer-root * { box-sizing: border-box; }
+.trailer-ambient { position: absolute; width: 480px; height: 480px; border-radius: 50%; filter: blur(90px); pointer-events: none; opacity: .45; animation: trailer-float 6s ease-in-out infinite alternate; }
+.trailer-ambient-a { top: -270px; left: -130px; background: #00d4ff; }
+.trailer-ambient-b { bottom: -310px; right: -100px; background: #b52cff; animation-delay: -3s; }
+.trailer-chrome { position: absolute; z-index: 4; left: 58px; right: 58px; top: 26px; display: flex; justify-content: space-between; align-items: center; letter-spacing: .12em; }
+.trailer-mini-brand { font-weight: 900; font-size: 16px; }
+.trailer-mini-brand span, .trailer-brand span { color: #53e6ff; }
+.trailer-room { font-size: 12px; color: #a8b5cc; font-weight: 800; }
+.trailer-room span { color: #4ade80; margin-left: 10px; }
+.trailer-scene-heading { position: absolute; z-index: 4; top: 66px; left: 58px; display: flex; align-items: center; gap: 18px; animation: trailer-enter .5s both; }
+.trailer-scene-num { font-size: 48px; font-weight: 900; line-height: 1; color: #53e6ff; text-shadow: 0 0 35px rgba(83,230,255,.3); }
+.trailer-scene-eyebrow { color: #94a3b8; font-weight: 800; font-size: 11px; letter-spacing: .35em; }
+.trailer-scene-heading h1 { margin: 3px 0 0; font-size: 30px; line-height: 1.05; letter-spacing: -.025em; }
+.trailer-game-frame { position: absolute; z-index: 2; left: 58px; right: 58px; top: 148px; bottom: 64px; padding: 20px 25px; overflow: hidden; background: linear-gradient(160deg, rgba(12,24,48,.95), rgba(4,10,26,.97)); border: 1px solid rgba(125,211,252,.28); border-radius: 22px; box-shadow: 0 40px 100px rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,.07); animation: trailer-frame-enter .48s both; }
+.trailer-game-frame .host-minigame-stack { width: 100%; max-width: none; }
+.trailer-game-frame .host-minigame-action-row { display: none; }
+.trailer-game-frame .host-minigame-card { background-color: rgba(8,16,34,.75); }
+.trailer-game-frame .wlm-fit-viewport, .trailer-game-frame .hl-fit-viewport, .trailer-game-frame .gw-host-fit-viewport, .trailer-game-frame .heardle-fit-viewport { height: 100%; }
+.trailer-revealed.trailer-scene-who .wlm-prompt-art { width: 85px; height: 85px; }
+.trailer-revealed.trailer-scene-who .wlm-prompt-card { padding: 10px 14px; }
+.trailer-scene-who .player-votes-card { padding: 10px; }
+.trailer-scene-who .player-votes-title { margin-bottom: 4px; }
+.trailer-scene-who .player-votes-bars { min-height: 130px; gap: 8px; }
+.trailer-scene-who .player-votes-bar-wrap { min-height: 80px; }
+.trailer-scene-who .player-votes-bar { max-height: 80px; }
+.trailer-scene-who .player-votes-column-head { font-size: 16px; gap: 0; }
+.trailer-scene-who .player-votes-crown-slot { display: none; }
+.trailer-scene-who .player-votes-column-name span { display: none; }
+.trailer-revealed.trailer-scene-wrapped .gw-host-stack > div:has(> .player-votes-card) { display: none; }
+.trailer-scene-heardle .host-minigame-card:has(.heardle-history-title) { display: none; }
+.trailer-scene-hitster .hitster-preview-error { display: none; }
+.trailer-scene-hitster .hitster-mystery-body { padding: .65rem 0 .8rem; gap: .35rem; }
+.trailer-scene-hitster .hitster-eq-container { height: 60px; }
+.trailer-scene-hitster .hitster-player-grid-card { padding: .65rem 1rem; }
+.trailer-payoff { position: absolute; z-index: 5; bottom: 74px; right: 70px; padding: 10px 17px; border-radius: 999px; background: #53e6ff; color: #00131e; font-size: 13px; font-weight: 900; letter-spacing: .08em; box-shadow: 0 0 40px rgba(83,230,255,.45); opacity: 0; transform: translateY(20px) scale(.9); transition: opacity .3s, transform .3s; }
+.trailer-payoff-show { opacity: 1; transform: translateY(0) scale(1); }
+.trailer-progress { position: absolute; z-index: 10; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(255,255,255,.1); }
+.trailer-progress span { display: block; height: 100%; background: linear-gradient(90deg, #22d3ee, #a855f7, #f472b6); }
+.trailer-title-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: trailer-enter .7s both; }
+.trailer-kicker { font-weight: 900; color: #5eead4; font-size: 16px; letter-spacing: .35em; margin-bottom: 20px; }
+.trailer-brand { font-size: clamp(80px, 10vw, 142px); letter-spacing: -.085em; line-height: 1.05; font-weight: 1000; text-shadow: 0 16px 65px rgba(0,0,0,.55); }
+.trailer-title-sub { font-size: 25px; color: #cbd5e1; margin-top: 23px; letter-spacing: .01em; }
+.trailer-outro-tags { color: #53e6ff; font-size: 15px; letter-spacing: .3em; font-weight: 900; margin-top: 45px; }
+.trailer-equalizer { display: flex; align-items: center; justify-content: center; gap: 7px; height: 80px; margin-top: 36px; }
+.trailer-equalizer span { display: block; width: 7px; height: 40px; background: linear-gradient(#22d3ee, #a855f7); border-radius: 10px; animation: trailer-beat .65s ease-in-out infinite alternate; }
+@keyframes trailer-beat { from { height: 12px; opacity: .5; } to { height: 70px; opacity: 1; } }
+@keyframes trailer-enter { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes trailer-frame-enter { from { opacity: 0; transform: translateY(30px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes trailer-float { to { transform: translate(70px, 50px); } }
