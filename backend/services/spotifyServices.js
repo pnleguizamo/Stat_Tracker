@@ -103,7 +103,7 @@ async function getTrackPreview(songName, artistName, limit = 5) {
       throw new Error('Song name is required');
     }
 
-    const searchQuery = artistName
+    let searchQuery = artistName
       ? `track:"${cleanedSongName}" artist:"${artistName}"`
       : cleanedSongName;
 
@@ -122,7 +122,27 @@ async function getTrackPreview(songName, artistName, limit = 5) {
     }
 
     const data = await response.json();
-    const tracks = data.data || [];
+    if (data.error) throw new Error(`Deezer API error: ${data.error.message || data.error.code}`);
+    let tracks = data.data || [];
+    let usedFallbackQuery = false;
+
+    // Structured queries can return no results for tracks present in free-text search.
+    // Require both metadata fields to match so covers and similarly named songs are excluded.
+    if (!tracks.length && artistName) {
+      usedFallbackQuery = true;
+      searchQuery = `${cleanedSongName} ${artistName}`;
+      url.search = new URLSearchParams({ q: searchQuery, limit: String(limit) }).toString();
+      const fallbackResponse = await fetch(url);
+      if (!fallbackResponse.ok) throw new Error(`Deezer API error ${fallbackResponse.status}`);
+      const fallbackData = await fallbackResponse.json();
+      if (fallbackData.error) throw new Error(`Deezer API error: ${fallbackData.error.message || fallbackData.error.code}`);
+      const normalize = (value) => String(value || '').normalize('NFKD')
+        .replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+      tracks = (fallbackData.data || []).filter((track) =>
+        normalize(track.title) === normalize(cleanedSongName) &&
+        normalize(track.artist?.name) === normalize(artistName)
+      );
+    }
 
     if (!tracks.length) {
       console.info('deezer track preview selection', {
@@ -166,6 +186,7 @@ async function getTrackPreview(songName, artistName, limit = 5) {
       songName,
       artistName: artistName || null,
       searchQuery,
+      usedFallbackQuery,
       limit,
       resultCount: results.length,
       firstResultHasPreview: !!firstPreviewUrl,
